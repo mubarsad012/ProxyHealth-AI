@@ -1,0 +1,883 @@
+# ProxyHealth AI — API Contract (backbone document)
+
+Status: **authoritative**. The Pydantic v2 models in `apps/api/proxyhealth_api/contracts/` are the single source of truth; this document describes them field by field so that WP0 can write them and every other agent can code against them before they exist. `scripts/export_openapi.py` writes `apps/api/openapi.json` (committed; snapshot-tested), and `apps/mobile/src/api/schema.d.ts` is generated from that file with `openapi-typescript`. If this document and the models disagree, fix one and say which.
+
+Decisions this contract implements: `docs/DECISIONS.md` D-01…D-31 (tier gate, consent header, caps, quotation contract, counts-only feedback, JSON-only bodies).
+
+---
+
+## 0. Conventions
+
+- **Base URL**: `EXPO_PUBLIC_API_URL` (dev `http://127.0.0.1:8000`). All versioned routes live under `/v1`; `/health` is unversioned.
+- **Content type**: every request and response body is `application/json; charset=utf-8`, except `POST /v1/quicksheet/pdf` (returns `application/pdf`) and `GET /v1/demo/fixtures/{id}/pages/{n}` (returns `image/png`). Binary inputs are base64 strings inside JSON (`data_base64`). There is **no** multipart endpoint in v1 (D-21).
+- **Contract version**: header `X-Contract-Version: 1` on every response; `ServerConfig.contract_version` carries the same integer. Breaking changes bump it and the `/v2` prefix.
+- **Authentication**: none in v1. Header `X-App-Token` is **reserved**: the server accepts and ignores it today; when `APP_TOKEN` is set in the environment, requests without a matching token receive `401 unauthorized`. Clients send it whenever `EXPO_PUBLIC_APP_TOKEN` is configured.
+- **Request headers**
+
+| Header | Required on | Meaning |
+|---|---|---|
+| `X-Request-Id` | any (optional) | Client-generated UUID v4; echoed. Server generates one if absent. |
+| `X-Install-Id` | any (optional) | Random UUID generated on device; HMAC-hashed server-side for rate limiting only (D-08). |
+| `X-Consent-Version` | `POST /v1/analyze`, `/v1/troubleshoot`, `/v1/chat` | The `consent_version` the user accepted (from `ServerConfig`). Missing/stale → `428 consent_required`. Exempt when `demo_sample_id` is set. |
+| `X-App-Token` | any (reserved) | See Authentication. |
+| `If-None-Match` | `GET /v1/language-packs/{tag}` | ETag revalidation → `304`. |
+| `Accept-Language` | any (optional) | Used only to pick `user_message` language for error copy when the client sends no `target_language`. |
+
+- **Response headers**: `X-Request-Id`, `X-Contract-Version`, `X-Data-Use-Tier` (`paid|unpaid|mixed|demo|none`), `Retry-After` (seconds; on every 429 and 503), `ETag` (language packs).
+- **Timeouts**: clients use 120 s for `/v1/analyze`, 60 s for `/v1/troubleshoot` and `/v1/language-packs` POST, 30 s otherwise.
+- **Idempotency**: all POST endpoints are stateless and safe to retry after a network failure; nothing is stored server-side except language-pack cache, key-pool state and feedback counters.
+- **Nothing is persisted**: request bodies are processed in memory and released; no temp files; access logs strip bodies (D-08).
+
+### 0.1 Error envelope (every non-2xx response)
+
+Model `ErrorResponse { error: ErrorBody }`
+
+| `ErrorBody` field | Type | Description |
+|---|---|---|
+| `code` | `ErrorCode` (enum) | Machine-readable code (table below). |
+| `message` | `str` | English, for developers; never contains user content. |
+| `user_message_key` | `str` | i18n key the client renders from the language pack, e.g. `err.quota_exhausted`. |
+| `retry_after_seconds` | `int \| null` | Present on 429/503; mirrors the `Retry-After` header. |
+| `key_exhausted` | `bool` | `true` only when every upstream key slot for the needed tier is cooling/exhausted (so the client offers offline options and "Try a sample"). |
+| `request_id` | `str` | Correlation id (also in `X-Request-Id`). |
+| `details` | `dict[str, str \| int \| bool] \| null` | Small, content-free extras (e.g. `{"block_reason": "spii"}`, `{"max_pages": 12}`). |
+
+| `ErrorCode` | HTTP | When |
+|---|---|---|
+| `invalid_request` | 400 | Pydantic validation failure, bad base64, unknown tag. |
+| `too_many_pages` | 400 | > `limits.max_pages` images, or images mixed with a PDF. |
+| `pdf_too_long` | 400 | PDF > `limits.max_pdf_pages` pages. |
+| `unauthorized` | 401 | Missing/invalid `X-App-Token` (when enforced) or `X-Admin-Token`. |
+| `unpaid_tier_real_documents_disabled` | 403 | Tier is `unpaid`/`mixed` and the request is not a demo fixture (D-01). |
+| `not_found` | 404 | Unknown resource/fixture/pack tag. |
+| `pack_version_mismatch` | 409 | Client base pack hash ≠ server base pack hash. |
+| `payload_too_large` | 413 | Body > `limits.max_request_bytes`, a page > `limits.max_page_bytes`, or PDF > `limits.max_pdf_bytes`. |
+| `unsupported_media_type` | 415 | MIME not in the allow-list. |
+| `content_blocked` | 422 | Upstream blocked the generation (`details.block_reason ∈ safety, spii, prohibited_content, recitation, blocklist, other`). Never retried on another key. |
+| `language_unresolved` | 422 | Typed language could not be resolved and no `x-` fallback was possible (empty/garbage query). |
+| `consent_required` | 428 | `X-Consent-Version` missing or older than `ServerConfig.consent_version`. |
+| `rate_limited` | 429 | Per-install/IP bucket exceeded (`key_exhausted=false`). |
+| `quota_exhausted` | 429 | All upstream slots for the tier are unavailable (`key_exhausted=true`). |
+| `internal` | 500 | Unexpected server error. |
+| `model_output_invalid` | 502 | Model output failed schema after the single-call → two-call fallback. |
+| `provider_not_configured` | 503 | `AI_PROVIDER=gemini` with no usable slots at boot (only reachable in `ENV=development`). |
+| `upstream_unavailable` | 503 | Upstream 5xx after bounded retries. |
+
+Example:
+```json
+{
+  "error": {
+    "code": "quota_exhausted",
+    "message": "All 3 key slots for tier 'pro' are cooling down; earliest retry in 240 s.",
+    "user_message_key": "err.quota_exhausted",
+    "retry_after_seconds": 240,
+    "key_exhausted": true,
+    "request_id": "5d0d8b3e-3a3f-4b7a-9d8b-0c9e1f2a3b4c",
+    "details": {"tier": "pro", "slots_total": 3, "slots_cooling": 3}
+  }
+}
+```
+
+---
+
+## 1. Enums (`contracts/enums.py`; all `str` Enums)
+
+**`DataUseTier`**: `paid` · `unpaid` · `mixed` · `demo` · `none`
+
+**`Provider`**: `gemini` · `mock`
+
+**`ModelTier`**: `pro` · `fast`
+
+**`ThinkingLevel`**: `minimal` · `low` · `medium` · `high`
+
+**`ModelQuality`**: `full` · `degraded`
+
+**`AnalysisMode`**: `single` · `two_call` · `mock`
+
+**`DocumentCategory`** (domain; drives disclaimers and resource routing): `immigration` · `court` · `medical` · `benefits` · `housing` · `school` · `employment` · `tax` · `civic` · `other`
+
+**`DocumentType`** (fine taxonomy; `docs/DOCUMENT_TAXONOMY.md` has the field/pitfall table per type):
+`uscis_receipt` · `uscis_rfe` · `uscis_noid` · `uscis_biometrics` · `uscis_interview` · `uscis_approval` · `uscis_denial` · `nta` · `hearing_notice` · `ij_decision` · `bia_notice` · `ice_checkin` · `ead_related` · `green_card_related` · `tps_related` · `asylum_fee_notice` · `parole_related` · `medical_bill` · `eob` · `insurance_denial` · `prior_auth` · `lab_result` · `prescription_label` · `discharge_instructions` · `vaccine_record` · `appointment_reminder` · `medicaid_renewal` · `snap_notice` · `wic_notice` · `ssa_letter` · `pay_or_quit` · `eviction_summons` · `lease` · `rent_increase` · `section8_recert` · `utility_shutoff` · `school_enrollment` · `immunization_notice` · `iep_504_notice` · `school_meals` · `report_card` · `w2_1099` · `i9` · `offer_letter` · `pay_stub` · `irs_notice` · `itin` · `jury_summons` · `traffic_court` · `other_notice` · `unknown`
+
+**`SenderKind`**: `federal_agency` · `state_agency` · `local_agency` · `court` · `hospital_or_clinic` · `insurer` · `pharmacy` · `landlord` · `school` · `employer` · `utility` · `bank_or_collector` · `unknown`
+
+**`Legibility`**: `good` · `partial` · `poor`
+
+**`UrgencyLevel`**: `emergency` · `critical` · `high` · `medium` · `info`
+
+**`Confidence`**: `high` · `medium` · `low`
+
+**`DemandKind`**: `deadline` · `relative_deadline` · `amount` · `document_requested` · `appointment` · `action` · `contact`
+
+**`DateKind`**: `stated` · `estimated` · `unresolved`
+
+**`RuleVerification`**: `verified` · `likely`
+
+**`PlanStepKind`**: `call` · `mail` · `bring` · `gather` · `ask` · `visit` · `submit_online` · `wait` · `professional` · `verify`
+
+**`RedFlagKind`**: `scam_payment_method` · `urgency_pressure` · `impersonation` · `notario` · `fee_for_free_form` · `guaranteed_result` · `unusual_contact` · `missing_pages` · `contradiction` · `expired_date` · `jury_citizenship_warning` · `ead_receipt_not_work_authorization` · `not_a_court_order` · `court_date_is_the_deadline` · `no_fee_waiver` · `address_change_multi_agency` · `injection_suspected` · `other`
+
+**`Severity`**: `low` · `medium` · `high`
+
+**`ScamRisk`**: `none` · `possible` · `likely`
+
+**`DisclaimerKind`**: `legal_information_only` · `medical_information_only` · `benefits_information_only` · `housing_information_only` · `general_information` · `machine_translation` · `verify_with_sender` · `ai_generated` · `degraded_model` · `unpaid_tier_warning` · `demo_sample`
+
+**`WarningCode`**: `low_quality_image` · `partial_pages` · `page_edge_crop` · `degraded_model` · `translation_partial` · `blocked_partial` · `unpaid_tier` · `demo_sample` · `phrasing_lint_unavailable` · `emergency_lexicon_unavailable` · `injection_masked` · `contacts_stripped` · `document_language_differs`
+
+**`RefusalKind`**: `none` · `eligibility` · `filing_advice` · `outcome` · `medical_interpretation` · `drafting` · `contact_request` · `out_of_scope`
+
+**`ReferTo`**: `none` · `lawyer_or_accredited_rep` · `clinician` · `housing_counselor` · `benefits_office` · `sender`
+
+**`TroubleshootMode`**: `portal` · `scam_check`
+
+**`PortalHint`**: `benefits_portal` · `uscis_account` · `eoir_portal` · `school_portal` · `hospital_portal` · `insurer_portal` · `irs_portal` · `bank` · `other`
+
+**`Tone`**: `plain` · `formal`  **`DateFormat`**: `auto` · `mdy` · `dmy`
+
+**`Direction`**: `ltr` · `rtl`  **`DigitSystem`**: `western` · `eastern_arabic` · `persian` · `devanagari` · `bengali` · `gurmukhi` · `myanmar` · `ethiopic` · `other`
+
+**`PackTier`**: `1` · `2` · `3` (int Enum)  **`PackSource`**: `bundled` · `generated` · `cache`
+
+**`ResourceTag`** (closed vocabulary shared by prompts, DB and matcher): `immigration_legal_help` · `removal_proceedings` · `asylum` · `daca_tps` · `work_permit` · `green_card` · `naturalization` · `change_of_address` · `fee_waiver` · `afghan_specific` · `refugee_services` · `court_notice` · `jury_summons` · `traffic_court` · `medical_bill` · `charity_care` · `insurance_denial` · `medicare_appeal` · `medicaid_renewal` · `prescription_help` · `primary_care_uninsured` · `lab_results` · `vaccine_records` · `language_access` · `food` · `wic` · `school_meals` · `snap` · `ssa_benefits` · `benefits_navigation` · `housing_counseling` · `eviction` · `rent_assistance` · `utility_shutoff` · `section8` · `school_enrollment` · `special_education` · `homeless_students` · `workers_rights` · `wage_theft` · `discrimination` · `workplace_safety` · `tax_notice` · `itin` · `scam_report` · `crisis` · `domestic_violence` · `trafficking` · `poison`
+
+**`OrgType`**: `government` · `court` · `nonprofit` · `legal_aid_lsc` · `legal_aid_nonlsc` · `doj_accredited` · `hospital_program` · `fqhc` · `hotline` · `directory` · `food_bank` · `resettlement` · `utility_program` · `private_directory`
+
+**`GeoScope`**: `national` · `state` · `county` · `city`  **`Cost`**: `free` · `sliding` · `paid` · `unknown`
+
+**`StatusNoteKey`**: `lsc_restricted` · `residency_required` · `waitlist` · `appointment_required` · `hhs_funded_health` · `not_endorsed` · `manual_verify`
+
+**`LinkHealth`**: `ok` · `unknown_403` · `js_rendered` · `unverified` · `broken`  **`VerificationMethod`**: `fetched` · `browser` · `curl_ua` · `manual_verify`
+
+**`FeedbackKind`**: `clear` · `unclear` · `wrong_word` · `wrong_fact` · `offensive` · `scam_missed` · `resource_problem`
+
+**`FeedbackSurface`**: `summary` · `demands` · `plan` · `details` · `glossary` · `red_flags` · `clerk` · `chat` · `troubleshoot` · `resource` · `language_pack` · `quicksheet`
+
+**`Platform`**: `ios` · `android` · `web`
+
+**Language codes.** `LanguageTag = Annotated[str, StringConstraints(pattern=r"^(x-[a-z0-9-]{1,32}|[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*)$", max_length=40)]`. Standard BCP-47 tags (`en`, `es`, `zh-Hans`, `prs`, `ps`, `rhg`, …) for known languages; a typed language the server cannot map to ISO becomes a private-use tag `x-<slug>` (e.g. `x-hakha-chin`) and the pack carries the typed name in `language_name_en`.
+
+---
+
+## 2. Shared models (`contracts/common.py`)
+
+**`PageInput`** — one uploaded page.
+
+| Field | Type | Description |
+|---|---|---|
+| `mime_type` | `Literal["image/jpeg","image/png","image/webp","image/heic","image/heif","application/pdf"]` | Validated server-side too. |
+| `data_base64` | `str` | Standard base64, no data-URI prefix. |
+| `masks` | `list[MaskRect]` (default `[]`) | Normalized rectangles to black out on the server before inference (D-19). Ignored for PDFs in v1. |
+| `rotation` | `Literal[0,90,180,270]` (default `0`) | Applied server-side in memory. |
+
+**`MaskRect { x0: float, y0: float, x1: float, y1: float }`** — normalized 0–1, `x0<x1`, `y0<y1`.
+
+**`Preferences { tone: Tone = "plain", calendar_notes: list[str] = [] (≤5, ≤40 chars each, e.g. "Ramadan"), date_format: DateFormat = "auto" }`** — cultural/tone settings passed to prompts (never to logs).
+
+**`BBox`** = `list[float]` of exactly 4 items `[x0, y0, x1, y1]` normalized 0–1.
+
+**`TextBlock { id: str, page: int, text: str, bbox: BBox | None, is_handwriting: bool, is_unclear: bool }`**
+
+**`PageText { page: int, width: int | None, height: int | None, blocks: list[TextBlock] }`** — `original_text` element. Width/height are pixel dimensions of the page image the bboxes refer to.
+
+**`TranslatedPage { page: int, text: str }`** — `translated_text` element.
+
+**`ModelMeta`**
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `Provider` | |
+| `tier` | `ModelTier` | Tier the request was routed to. |
+| `model_id` | `str` | Actual model used (e.g. `gemini-3.8-flash`); `mock` for the mock provider. |
+| `thinking_level` | `ThinkingLevel \| null` | |
+| `quality` | `ModelQuality` | `degraded` when the fast model served a pro task. |
+| `analysis_mode` | `AnalysisMode` | |
+| `data_use_tier` | `DataUseTier` | Same value as `X-Data-Use-Tier`. |
+| `demo` | `bool` | `true` when a fixture was used. |
+| `latency_ms` | `int` | |
+
+**`GeoHints { state: str | None (2-letter), county: str | None, city: str | None, zip3: str | None }`** — only what is printed on the paper; zip is truncated to 3 digits by the server.
+
+---
+
+## 3. Endpoints
+
+Model tier per endpoint: **pro** = `MODEL_PRO` (`gemini-3.8-flash`), **fast** = `MODEL_FAST` (`gemini-3.5-flash-lite`), **none** = no model call.
+
+| Method | Path | Tier | Auth | Purpose |
+|---|---|---|---|---|
+| GET | `/health` | none | none | Liveness + provider summary |
+| GET | `/v1/config` | none | none | Capabilities/status for honest banners |
+| GET | `/v1/language-packs/{tag}` | none | none | Fetch a bundled/cached pack (ETag) |
+| POST | `/v1/language-packs` | fast | none | Resolve + generate a pack for a typed language |
+| POST | `/v1/analyze` | pro (degraded: fast) | consent | Document analysis (images or PDF) |
+| POST | `/v1/troubleshoot` | pro (medium thinking) | consent | Screenshot troubleshooting / scam check |
+| POST | `/v1/chat` | fast (low thinking) | consent | Stateless follow-up about an analysis |
+| POST | `/v1/resources/match` | none | none | Vetted resources for tags × location × language |
+| GET | `/v1/resources` | none | none | Browse/search resources |
+| GET | `/v1/resources/{id}` | none | none | One resource |
+| GET | `/v1/rules` | none | none | Deadline rules table with sources |
+| POST | `/v1/quicksheet/pdf` | none | none | Text-only PDF (reportlab), nothing stored |
+| POST | `/v1/feedback` | none | none | "Was this clear?" counts only |
+| GET | `/v1/demo/fixtures` | none | none | Sample papers list |
+| GET | `/v1/demo/fixtures/{id}/pages/{n}` | none | none | Sample page PNG |
+| GET | `/v1/admin/keys` | none | `X-Admin-Token` | Key-pool state (content-free) |
+
+### 3.1 `GET /health` — tier: none
+
+Response `HealthResponse`
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | `Literal["ok","degraded"]` | `degraded` when provider is gemini and no slot is healthy for either tier. |
+| `provider` | `Provider` | |
+| `version` | `str` | API package version. |
+| `contract_version` | `int` | |
+| `keys_configured` | `int` | Slots in `GEMINI_KEYS` (0 for mock). |
+| `keys_healthy` | `int` | Slots currently `healthy` for the pro tier. |
+| `data_use_tier` | `DataUseTier` | |
+| `resources_loaded` | `int` | Resource entries validated at boot. |
+
+```json
+// GET /health
+{"status":"ok","provider":"mock","version":"0.1.0","contract_version":1,"keys_configured":0,"keys_healthy":0,"data_use_tier":"demo","resources_loaded":74}
+```
+
+### 3.2 `GET /v1/config` — tier: none
+
+Response `ServerConfig`
+
+| Field | Type | Description |
+|---|---|---|
+| `api_version` | `str` | |
+| `contract_version` | `int` | |
+| `provider` | `Provider` | |
+| `data_use_tier` | `DataUseTier` | Drives the consent badge (D-02). |
+| `models` | `ModelsInfo { fast: str, pro: str, pro_degraded_thinking: ThinkingLevel }` | Env-resolved IDs. |
+| `features` | `FeatureFlags { real_documents_allowed: bool, demo_samples: bool, dynamic_language_packs: bool, troubleshoot: bool, chat: bool, quicksheet_pdf: bool, degraded_fallback: bool, hide_parts_server_masking: bool }` | `real_documents_allowed` is `false` on `unpaid`/`mixed` unless the dev flag is set; the client disables real scans and shows the amber/red banner. |
+| `limits` | `Limits { max_pages: int, max_page_bytes: int, max_pdf_bytes: int, max_pdf_pages: int, max_request_bytes: int, max_upstream_inline_bytes: int, max_chat_history: int, max_question_chars: int, max_user_goal_chars: int, translate_full_max_pages: int }` | Defaults 12 / 4194304 / 12582912 / 60 / 20971520 / 18874368 / 8 / 1000 / 300 / 4. |
+| `consent_version` | `str` | e.g. `"2026-09-24"`; must be echoed in `X-Consent-Version`. |
+| `privacy_policy_url` | `str` | Public non-PDF URL. |
+| `base_pack_version` | `str` | `sha256(en.json)` hex. |
+| `languages` | `list[LanguageInfo]` | Every bundled/known language (below). |
+| `taxonomy_version` | `str` | |
+| `resource_db_version` | `str` | |
+| `rules_version` | `str` | |
+| `key_slots` | `KeySlotSummary { total: int, healthy: int, cooling: int, rpd_exhausted: int, disabled: int }` | Counts only. |
+| `region_notice` | `Literal["us_only"]` | v1 constant (D-03). |
+| `server_time` | `datetime` | For client clock-skew checks on deadlines. |
+
+**`LanguageInfo { tag: LanguageTag, name_native: str, name_en: str, direction: Direction, script: str | None, digit_system: DigitSystem, font_hint: str | None, tier: PackTier, bundled: bool, machine_translated: bool, tts_tag: str | None, tts_fallback_tag: str | None }`**
+
+```json
+// GET /v1/config  (abbreviated languages list)
+{
+  "api_version": "0.1.0",
+  "contract_version": 1,
+  "provider": "gemini",
+  "data_use_tier": "paid",
+  "models": {"fast": "gemini-3.5-flash-lite", "pro": "gemini-3.8-flash", "pro_degraded_thinking": "medium"},
+  "features": {"real_documents_allowed": true, "demo_samples": true, "dynamic_language_packs": true, "troubleshoot": true, "chat": true, "quicksheet_pdf": true, "degraded_fallback": true, "hide_parts_server_masking": true},
+  "limits": {"max_pages": 12, "max_page_bytes": 4194304, "max_pdf_bytes": 12582912, "max_pdf_pages": 60, "max_request_bytes": 20971520, "max_upstream_inline_bytes": 18874368, "max_chat_history": 8, "max_question_chars": 1000, "max_user_goal_chars": 300, "translate_full_max_pages": 4},
+  "consent_version": "2026-09-24",
+  "privacy_policy_url": "https://proxyhealth.expo.app/privacy",
+  "base_pack_version": "9f2c1e7b4a0d3c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+  "languages": [
+    {"tag": "en", "name_native": "English", "name_en": "English", "direction": "ltr", "script": "Latn", "digit_system": "western", "font_hint": "NotoSans", "tier": 1, "bundled": true, "machine_translated": false, "tts_tag": "en-US", "tts_fallback_tag": null},
+    {"tag": "prs", "name_native": "دری", "name_en": "Dari", "direction": "rtl", "script": "Arab", "digit_system": "persian", "font_hint": "NotoNaskhArabic", "tier": 2, "bundled": true, "machine_translated": true, "tts_tag": "fa-AF", "tts_fallback_tag": "fa-IR"},
+    {"tag": "rhg", "name_native": "𐴌𐴟𐴇𐴥𐴝𐴚𐴒𐴙𐴝", "name_en": "Rohingya", "direction": "rtl", "script": "Rohg", "digit_system": "western", "font_hint": "NotoSansHanifiRohingya", "tier": 3, "bundled": false, "machine_translated": true, "tts_tag": null, "tts_fallback_tag": "my-MM"}
+  ],
+  "taxonomy_version": "2026-09-24",
+  "resource_db_version": "2026-09-23",
+  "rules_version": "2026-09-24",
+  "key_slots": {"total": 3, "healthy": 3, "cooling": 0, "rpd_exhausted": 0, "disabled": 0},
+  "region_notice": "us_only",
+  "server_time": "2026-09-24T14:03:11Z"
+}
+```
+
+### 3.3 `GET /v1/language-packs/{tag}` — tier: none
+
+Path `tag: LanguageTag`. Query `pack_version: str | None` (when given and ≠ server base hash → `409 pack_version_mismatch`). Headers: `If-None-Match` → `304 Not Modified` with `ETag`. `404 not_found` if the tag is neither bundled nor cached (client then POSTs).
+
+Response `LanguagePack`
+
+| Field | Type | Description |
+|---|---|---|
+| `language_tag` | `LanguageTag` | Resolved tag. |
+| `language_name_native` | `str` | |
+| `language_name_en` | `str` | |
+| `direction` | `Direction` | |
+| `script` | `str \| null` | ISO 15924, e.g. `Arab`, `Rohg`, `Mymr`. |
+| `digit_system` | `DigitSystem` | |
+| `font_hint` | `str \| null` | Family name from `data/languages.yaml`. |
+| `tier` | `PackTier` | |
+| `source` | `PackSource` | |
+| `pack_version` | `str` | Base `en.json` hash this pack was built from. |
+| `etag` | `str` | `sha256` of this pack's content (also in the `ETag` header). |
+| `strings` | `dict[str, str]` | Every base key (server converted the model's list to a map; missing keys filled with English). |
+| `fallback_keys` | `list[str]` | Keys left in English. |
+| `coverage` | `float` | `1 - len(fallback_keys)/len(strings)`. |
+| `machine_translated` | `bool` | |
+| `reviewed_by` | `str \| null` | Named reviewer or `null`. |
+| `confidence` | `Confidence` | Model self-assessment plus QA results. |
+| `generated_at` | `datetime` | |
+| `tts_tag` | `str \| null` | |
+| `tts_fallback_tag` | `str \| null` | |
+
+```json
+// GET /v1/language-packs/prs   (strings abbreviated)
+{
+  "language_tag": "prs", "language_name_native": "دری", "language_name_en": "Dari",
+  "direction": "rtl", "script": "Arab", "digit_system": "persian", "font_hint": "NotoNaskhArabic",
+  "tier": 2, "source": "bundled",
+  "pack_version": "9f2c1e7b4a0d3c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+  "etag": "c1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80",
+  "strings": {
+    "home.scan_cta": "از کاغذ عکس بگیرید",
+    "langpack.adapting": "در حال آماده‌سازی برنامه به زبان شما...",
+    "consent.title": "با کاغذ شما چه می‌شود",
+    "err.quota_exhausted": "کمک‌کننده ما حالا خیلی مشغول است. {minutes} دقیقه بعد دوباره کوشش کنید، یا ببینید بدون انترنت چه کار می‌توانید بکنید."
+  },
+  "fallback_keys": ["settings.developer_api_url"],
+  "coverage": 0.997,
+  "machine_translated": true, "reviewed_by": null, "confidence": "medium",
+  "generated_at": "2026-09-24T02:10:00Z",
+  "tts_tag": "fa-AF", "tts_fallback_tag": "fa-IR"
+}
+```
+
+### 3.4 `POST /v1/language-packs` — tier: **fast** (`thinking_level=minimal`, 60-key chunks)
+
+Request `LanguagePackRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `language_query` | `str` (1–60 chars) | What the user typed ("Rohingya", "Hakha Chin", "K'iche'") or a BCP-47 tag. |
+| `pack_version` | `str` | Client's base pack hash; mismatch → `409`. |
+| `hint_tag` | `LanguageTag \| null` | Optional client guess. |
+
+Behaviour: resolve query → tag (ISO table; fast model only for unknown names; unresolvable → `x-<slug>`); serve cache if present; else generate with single-flight, QA, cache, return `LanguagePack` with `source="generated"`. Errors: `409 pack_version_mismatch`, `422 language_unresolved`, `429 quota_exhausted`, `503 upstream_unavailable`. Not gated by tier or consent (UI strings only, no user content). Mock provider returns a pseudo-localized pack.
+
+```json
+// POST /v1/language-packs
+{"language_query": "Rohingya", "pack_version": "9f2c1e7b4a0d3c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e", "hint_tag": null}
+```
+```json
+// 200 (strings abbreviated)
+{
+  "language_tag": "rhg", "language_name_native": "𐴌𐴟𐴇𐴥𐴝𐴚𐴒𐴙𐴝", "language_name_en": "Rohingya",
+  "direction": "rtl", "script": "Rohg", "digit_system": "western", "font_hint": "NotoSansHanifiRohingya",
+  "tier": 3, "source": "generated",
+  "pack_version": "9f2c1e7b4a0d3c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+  "etag": "77aa0b1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e",
+  "strings": {"home.scan_cta": "𐴀𐴝𐴌 𐴑𐴝𐴒𐴡𐴌 𐴀𐴟𐴃𐴝 𐴃𐴟𐴓𐴡", "langpack.adapting": "𐴀𐴝𐴂𐴝𐴌 𐴎𐴡𐴁𐴝𐴕 𐴀𐴝𐴃𐴠 𐴀𐴝𐴂 𐴃𐴠𐴉𐴝𐴌 𐴇𐴡𐴌..."},
+  "fallback_keys": ["settings.developer_api_url", "legal.doj_roster_explained"],
+  "coverage": 0.993,
+  "machine_translated": true, "reviewed_by": null, "confidence": "low",
+  "generated_at": "2026-09-24T14:05:41Z",
+  "tts_tag": null, "tts_fallback_tag": "my-MM"
+}
+```
+
+### 3.5 `POST /v1/analyze` — tier: **pro** (`thinking_level=high` ≤ 8 pages, `medium` 9–12 pages; `MEDIA_RESOLUTION_HIGH` images / `MEDIUM` PDF); degraded → fast
+
+Headers: `X-Consent-Version` required (exempt when `demo_sample_id` set). Gate: `403 unpaid_tier_real_documents_disabled` on `unpaid`/`mixed` tiers without `demo_sample_id` (D-01).
+
+Request `AnalyzeRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `pages` | `list[PageInput]` (1–12) | 1–12 images **or** exactly one PDF. Ignored when `demo_sample_id` is set and the provider is gemini (fixture bytes are loaded from disk); used for perceptual-hash matching by the mock provider. |
+| `target_language` | `LanguageTag` | Language for all user-facing text. |
+| `ui_direction` | `Direction` (default `ltr`) | Lets the server order bilingual strings. |
+| `state` | `str \| null` (2 letters) | User's US state from Settings; never inferred. |
+| `zip3` | `str \| null` (3 digits) | |
+| `document_hint` | `DocumentType \| null` | Optional user hint ("I think this is a hospital bill"). |
+| `preferences` | `Preferences` | Tone / calendar notes / date format. |
+| `demo_sample_id` | `str \| null` | Fixture id from `/v1/demo/fixtures`. |
+| `include_page_thumbnails` | `bool` (default `true` for PDFs, `false` for images) | Server rasterizes PDF pages for crops. |
+| `masks_applied_client_side` | `bool` (default `false`) | Web sets `true` after canvas burn. |
+| `hide_id_numbers` | `bool` (default `false`) | Mask A-numbers/receipt numbers in returned text (SSNs are always masked). |
+| `client_platform` | `Platform` | |
+| `analysis_id` | `str \| null` (UUID) | Client id for the vault; echoed. |
+
+Response `AnalysisResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | `int` | `1`. |
+| `request_id` | `str` | |
+| `analysis_id` | `str` | Echo of the client id or a server UUID (not stored). |
+| `created_at` | `datetime` | |
+| `quality` | `Quality { readable: bool, legibility: Legibility, reason: str \| null, pages_received: int, pages_unreadable: list[int] }` | `readable=false` → the client shows the page with "Try again in brighter light / flatten the page" and does not spend quota again automatically. |
+| `category` | `DocumentCategory` | |
+| `document_type` | `DocumentType` | |
+| `document_type_confidence` | `Confidence` | |
+| `sender_as_written` | `str \| null` | Exactly as printed; never guessed. |
+| `sender_kind` | `SenderKind` | |
+| `detected_language` | `LanguageTag` | Language of the paper. |
+| `target_language` | `LanguageTag` | |
+| `translation_confidence` | `Confidence` | Low for Tier 3 targets or poor legibility. |
+| `is_likely_scam` | `bool` | |
+| `scam_risk` | `ScamRisk` | Code-scored (D-13). |
+| `scam_reasons` | `list[str]` | Fixed reason keys (e.g. `scam.gift_card`, `scam.non_gov_domain`). |
+| `urgency` | `Urgency` (below) | Code-computed (D-12). |
+| `summary` | `SummaryCard { title: str, body: str, body_en: str, span_ids: list[str] }` | Card 1. `body` ≤ 3 sentences at 4th-grade level. |
+| `demands` | `list[Demand]` (below) | Card 2 items, verified only. |
+| `unverified` | `list[Demand]` | Items whose quote failed verification ("I saw these but could not confirm them on the page"). |
+| `plan_steps` | `list[PlanStep { id: str, text: str, kind: PlanStepKind, resource_tags: list[ResourceTag], span_ids: list[str], demand_id: str \| null }]` | Card 3. |
+| `red_flags` | `list[RedFlag { kind: RedFlagKind, text: str, source_quote: str \| null, span_ids: list[str], page: int \| null, severity: Severity, fixed_copy_key: str \| null, verified: bool }]` | Model flags (verified) + code flags (fixed copy). |
+| `glossary` | `list[GlossaryTerm { term_as_written: str, explanation: str }]` | ≤ 8. |
+| `entities` | `Entities { institutions_as_written: list[str], form_numbers: list[str], geo: GeoHints, has_case_number: bool, has_receipt_number: bool }` | Names exactly as printed; no invented organizations. |
+| `clerk_message` | `ClerkMessage { english: str, translated: str, need_line_source: Literal["ai","template"], appended_line_keys: list[str] }` | Full-screen card text (D-18). |
+| `resource_tags` | `list[ResourceTag]` | Validated. |
+| `resource_preview` | `list[ResourceMatch]` | Top 3 from the matcher when `state` was supplied (same shape as §3.8), else `[]`. |
+| `original_text` | `list[PageText]` | Transcript blocks with bboxes; SSN-like patterns replaced by `***-**-1234`. |
+| `translated_text` | `list[TranslatedPage]` | Full when pages ≤ `translate_full_max_pages`, else partial (`warnings` contains `translation_partial`). |
+| `questions_to_ask` | `list[str]` | ≤ 5 questions for the sender (no contacts). |
+| `verification` | `VerificationSummary { facts_checked: int, facts_rejected: int, contacts_stripped: int, phrasing_rewrites: int, injection_masked: bool, verifier_version: str }` | |
+| `safety` | `Safety { emergency: bool, emergency_kinds: list[str], credential_or_payment_request: bool }` | Fixed emergency card when `emergency`. |
+| `disclaimer_kind` | `DisclaimerKind` | Primary, by category. |
+| `disclaimers` | `list[DisclaimerKind]` | Secondary. |
+| `warnings` | `list[WarningCode]` | |
+| `model_meta` | `ModelMeta` | |
+| `page_thumbnails` | `list[PageThumbnail { page: int, mime_type: str, data_base64: str, width: int, height: int }] \| null` | PDF pages rasterized in memory (≤ 1200 px longest edge). |
+
+**`Urgency { level: UrgencyLevel, headline_key: str, headline_params: dict[str,str], driving_demand_id: str | null, nearest_date_iso: str | null, days_until: int | null, past_date: bool, floor_applied: bool, verify_resource_id: str | null }`**
+
+**`Demand`**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `str` | Stable within the result (`d1`, `d2`…). |
+| `kind` | `DemandKind` | |
+| `text` | `str` | Plain explanation in `target_language`. |
+| `value_verbatim` | `str` | Value exactly as printed (LTR-isolated by the client). |
+| `source_quote` | `str` | Verbatim sentence/line containing the value. |
+| `span_ids` | `list[str]` | Block ids into `original_text`. |
+| `page` | `int` | |
+| `confidence` | `Confidence` | |
+| `verified` | `bool` | `true` in `demands`, `false` in `unverified`. |
+| `verification_note` | `str \| null` | e.g. `"fuzzy match 0.94"`, `"not found on page"`. |
+| `date` | `DateInfo \| null` | For `deadline`/`relative_deadline`/`appointment`. |
+| `amount` | `AmountInfo { amount_minor: int, currency: str } \| null` | For `amount`. |
+| `documents` | `list[str]` | For `document_requested` (each item as printed). |
+| `role` | `str \| null` | Semantic role: `hearing_date`, `response_due`, `payment_due`, `appointment`, `notice_date`, `decision_date`, `move_date`, `expiry`, `other`. |
+| `reminder_eligible` | `bool` | `verified && date.kind=="stated" && value_iso set`. |
+| `ambiguity_note` | `str \| null` | |
+
+**`DateInfo { value_iso: str | None (YYYY-MM-DD), time_text: str | None, kind: DateKind, formula: str | None, anchor_quote: str | None, anchor_demand_id: str | None, rule_id: str | None, rule_source_url: str | None, rule_verification: RuleVerification | None, localized_line: str | None }`**
+
+Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real_documents_disabled`, `413 payload_too_large`, `415 unsupported_media_type`, `422 content_blocked`, `428 consent_required`, `429 rate_limited|quota_exhausted`, `502 model_output_invalid`, `503 upstream_unavailable`. An unreadable page is a `200` with `quality.readable=false`, not an error.
+
+```json
+// POST /v1/analyze   (base64 truncated)
+{
+  "pages": [
+    {"mime_type": "image/jpeg", "data_base64": "/9j/4AAQSkZJRgABAQAAAQABAAD...", "masks": [{"x0": 0.62, "y0": 0.08, "x1": 0.95, "y1": 0.12}], "rotation": 0}
+  ],
+  "target_language": "prs",
+  "ui_direction": "rtl",
+  "state": "VA",
+  "zip3": "220",
+  "document_hint": null,
+  "preferences": {"tone": "plain", "calendar_notes": [], "date_format": "auto"},
+  "demo_sample_id": null,
+  "include_page_thumbnails": false,
+  "masks_applied_client_side": false,
+  "hide_id_numbers": false,
+  "client_platform": "android",
+  "analysis_id": "a3f1c9e2-7b4d-4e0a-9c2b-5d6e7f8a9b0c"
+}
+```
+```json
+// 200 AnalysisResult (Medicaid address-confirmation letter, Dari target; original_text abbreviated)
+{
+  "schema_version": 1,
+  "request_id": "5d0d8b3e-3a3f-4b7a-9d8b-0c9e1f2a3b4c",
+  "analysis_id": "a3f1c9e2-7b4d-4e0a-9c2b-5d6e7f8a9b0c",
+  "created_at": "2026-09-24T14:06:02Z",
+  "quality": {"readable": true, "legibility": "good", "reason": null, "pages_received": 1, "pages_unreadable": []},
+  "category": "benefits",
+  "document_type": "medicaid_renewal",
+  "document_type_confidence": "high",
+  "sender_as_written": "Virginia Department of Medical Assistance Services",
+  "sender_kind": "state_agency",
+  "detected_language": "en",
+  "target_language": "prs",
+  "translation_confidence": "medium",
+  "is_likely_scam": false,
+  "scam_risk": "none",
+  "scam_reasons": [],
+  "urgency": {"level": "high", "headline_key": "urgency.high.date_soon", "headline_params": {"date": "October 14, 2026"}, "driving_demand_id": "d1", "nearest_date_iso": "2026-10-14", "days_until": 20, "past_date": false, "floor_applied": false, "verify_resource_id": null},
+  "summary": {
+    "title": "این نامه از مدیکید ویرجینیا است",
+    "body": "این نامه از مدیکید ویرجینیا است. بیمه صحی شما قطع نشده است. آنها می‌خواهند آدرس خود را تأیید کنید.",
+    "body_en": "This is a letter from Virginia Medicaid. Your health coverage is not cancelled. They need you to confirm your address.",
+    "span_ids": ["p1b2", "p1b5"]
+  },
+  "demands": [
+    {"id": "d1", "kind": "deadline", "text": "تا ۱۴ اکتبر ۲۰۲۶ جواب بدهید.", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": "۱۴ اکتبر ۲۰۲۶"}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null},
+    {"id": "d2", "kind": "document_requested", "text": "یک کاپی از بل برق، آب یا گاز بفرستید.", "value_verbatim": "a copy of a recent utility bill (electric, water, or gas)", "source_quote": "Acceptable proof of address includes a copy of a recent utility bill (electric, water, or gas).", "span_ids": ["p1b6"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": null, "amount": null, "documents": ["utility bill (electric, water, or gas)"], "role": "other", "reminder_eligible": false, "ambiguity_note": null}
+  ],
+  "unverified": [],
+  "plan_steps": [
+    {"id": "s1", "text": "یک بل برق، آب یا گاز به نام خود پیدا کنید.", "kind": "gather", "resource_tags": [], "span_ids": ["p1b6"], "demand_id": "d2"},
+    {"id": "s2", "text": "فورم داخل پاکت را با کاپی بل قبل از ۱۴ اکتبر پست کنید.", "kind": "mail", "resource_tags": [], "span_ids": ["p1b5"], "demand_id": "d1"},
+    {"id": "s3", "text": "اگر سوال دارید، به دفتر مدیکید ایالت خود زنگ بزنید (ببینید: کمک در نزدیکی شما).", "kind": "call", "resource_tags": ["medicaid_renewal", "benefits_navigation"], "span_ids": [], "demand_id": null}
+  ],
+  "red_flags": [],
+  "glossary": [
+    {"term_as_written": "Medicaid", "explanation": "بیمه صحی دولتی برای خانواده‌های با درآمد کم."},
+    {"term_as_written": "proof of address", "explanation": "کاغذی که نشان می‌دهد شما کجا زندگی می‌کنید، مثل بل برق."}
+  ],
+  "entities": {"institutions_as_written": ["Virginia Department of Medical Assistance Services"], "form_numbers": [], "geo": {"state": "VA", "county": null, "city": "Richmond", "zip3": "232"}, "has_case_number": true, "has_receipt_number": false},
+  "clerk_message": {
+    "english": "Hello. I speak Dari. I am here about: a Virginia Medicaid letter asking me to confirm my address. I need help with: returning the address form with a utility bill before October 14, 2026. Please speak slowly or write it down. Thank you. I may ask for a free interpreter.",
+    "translated": "سلام. من دری صحبت می‌کنم. من برای نامه مدیکید ویرجینیا آمده‌ام...",
+    "need_line_source": "ai",
+    "appended_line_keys": ["clerk.interpreter_hhs"]
+  },
+  "resource_tags": ["medicaid_renewal", "benefits_navigation"],
+  "resource_preview": [
+    {"resource": {"id": "medicaid_state", "name": "Medicaid.gov — state agency finder", "org_type": "government", "what_it_does": {"en": "Find your state Medicaid office to ask about your renewal.", "prs": "دفتر مدیکید ایالت خود را پیدا کنید."}, "url": "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": []}, "tags": ["medicaid_renewal"], "status_note_key": null, "eligibility_plain": {"en": "Anyone with Medicaid or CHIP."}, "prepare_checklist_keys": ["bring_notice", "bring_case_number"], "verified_on": "2026-09-23", "verification_method": "browser", "link_health": "unknown_403", "warnings": [], "priority": 50, "never_show_with_tags": []}, "score": 2.9, "why_keys": ["why.for_medicaid_letters"], "why": ["For Medicaid letters"], "eligibility_note_key": null, "checklist": [{"key": "bring_notice", "text_en": "This letter"}, {"key": "bring_case_number", "text_en": "Your case number (printed on the letter)"}]}
+  ],
+  "original_text": [
+    {"page": 1, "width": 1600, "height": 2133, "blocks": [
+      {"id": "p1b1", "page": 1, "text": "Virginia Department of Medical Assistance Services", "bbox": [0.10, 0.05, 0.70, 0.08], "is_handwriting": false, "is_unclear": false},
+      {"id": "p1b2", "page": 1, "text": "Notice: Address Confirmation Required", "bbox": [0.10, 0.14, 0.62, 0.17], "is_handwriting": false, "is_unclear": false},
+      {"id": "p1b5", "page": 1, "text": "Please return the enclosed form with proof of address by October 14, 2026.", "bbox": [0.10, 0.31, 0.90, 0.35], "is_handwriting": false, "is_unclear": false},
+      {"id": "p1b6", "page": 1, "text": "Acceptable proof of address includes a copy of a recent utility bill (electric, water, or gas).", "bbox": [0.10, 0.36, 0.90, 0.40], "is_handwriting": false, "is_unclear": false}
+    ]}
+  ],
+  "translated_text": [{"page": 1, "text": "اداره خدمات کمک طبی ویرجینیا\nاطلاعیه: تأیید آدرس لازم است\n..."}],
+  "questions_to_ask": ["آیا می‌توانم فورم را آنلاین بفرستم؟", "اگر بل به نام من نباشد چه کنم؟"],
+  "verification": {"facts_checked": 2, "facts_rejected": 0, "contacts_stripped": 0, "phrasing_rewrites": 0, "injection_masked": false, "verifier_version": "1.0"},
+  "safety": {"emergency": false, "emergency_kinds": [], "credential_or_payment_request": false},
+  "disclaimer_kind": "benefits_information_only",
+  "disclaimers": ["machine_translation", "verify_with_sender", "ai_generated"],
+  "warnings": [],
+  "model_meta": {"provider": "gemini", "tier": "pro", "model_id": "gemini-3.8-flash", "thinking_level": "high", "quality": "full", "analysis_mode": "single", "data_use_tier": "paid", "demo": false, "latency_ms": 18420},
+  "page_thumbnails": null
+}
+```
+
+### 3.6 `POST /v1/troubleshoot` — tier: **pro** (`thinking_level=medium`, `MEDIA_RESOLUTION_HIGH`)
+
+Headers/gate as `/v1/analyze`. Request `TroubleshootRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `screenshot` | `PageInput` | Exactly one image (no PDF). |
+| `user_goal` | `str \| null` (≤ 300) | "What were you trying to do?" |
+| `mode` | `TroubleshootMode` (default `portal`) | `scam_check` for "Is this a scam?" |
+| `portal_hint` | `PortalHint \| null` | |
+| `target_language` | `LanguageTag` | |
+| `demo_sample_id` | `str \| null` | |
+| `client_platform` | `Platform` | |
+
+Response `TroubleshootResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `request_id` | `str` | |
+| `screen_summary` | `str` | What this screen is asking for. |
+| `error_text_quoted` | `str \| null` | Exact on-screen error text (verified against the model's own screen transcript). |
+| `error_meaning` | `str` | Plain explanation. |
+| `steps` | `list[TroubleshootStep { order: int, text: str, ui_target_as_written: str \| null }]` | 1–6 taps naming buttons exactly as written. |
+| `cautions` | `list[str]` | e.g. "This button submits the form." |
+| `asks_for_credentials_or_payment` | `bool` | Triggers the fixed credential-guard banner. |
+| `is_likely_scam` | `bool` | |
+| `scam_risk` | `ScamRisk` | |
+| `scam_reasons` | `list[str]` | Fixed keys. |
+| `needs_human_help` | `bool` | "Ask a person" CTA (211 / agency from DB). |
+| `red_flags` | `list[RedFlag]` | |
+| `resource_tags` | `list[ResourceTag]` | `scam_report` forced first when `scam_risk=="likely"`. |
+| `screen_text` | `list[str]` | Quoted UI strings the answer relies on (contact-filtered). |
+| `confidence` | `Confidence` | |
+| `disclaimer_kind` | `DisclaimerKind` | `general_information`. |
+| `warnings` | `list[WarningCode]` | |
+| `model_meta` | `ModelMeta` | |
+
+```json
+// POST /v1/troubleshoot
+{"screenshot": {"mime_type": "image/png", "data_base64": "iVBORw0KGgoAAAANSUhEUgAA...", "masks": [], "rotation": 0}, "user_goal": "Upload my electric bill to CommonHelp", "mode": "portal", "portal_hint": "benefits_portal", "target_language": "prs", "demo_sample_id": null, "client_platform": "android"}
+```
+```json
+// 200
+{
+  "request_id": "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+  "screen_summary": "این صفحه از شما می‌خواهد یک فایل را آپلود کنید.",
+  "error_text_quoted": "File exceeds the maximum size of 5 MB",
+  "error_meaning": "متن سرخ می‌گوید فایل شما خیلی بزرگ است. حد آن ۵ مگابایت است.",
+  "steps": [
+    {"order": 1, "text": "دکمه «Back» را بزنید.", "ui_target_as_written": "Back"},
+    {"order": 2, "text": "یک عکس کوچکتر انتخاب کنید یا عکس تازه با کیفیت پایین بگیرید.", "ui_target_as_written": "Choose File"},
+    {"order": 3, "text": "دوباره «Upload» را بزنید.", "ui_target_as_written": "Upload"}
+  ],
+  "cautions": ["دکمه «Submit Application» فورم کامل را می‌فرستد. فعلاً آن را نزنید."],
+  "asks_for_credentials_or_payment": false,
+  "is_likely_scam": false, "scam_risk": "none", "scam_reasons": [],
+  "needs_human_help": false,
+  "red_flags": [],
+  "resource_tags": ["benefits_navigation"],
+  "screen_text": ["File exceeds the maximum size of 5 MB", "Back", "Choose File", "Upload"],
+  "confidence": "high",
+  "disclaimer_kind": "general_information",
+  "warnings": [],
+  "model_meta": {"provider": "gemini", "tier": "pro", "model_id": "gemini-3.8-flash", "thinking_level": "medium", "quality": "full", "analysis_mode": "single", "data_use_tier": "paid", "demo": false, "latency_ms": 6210}
+}
+```
+
+### 3.7 `POST /v1/chat` — tier: **fast** (`thinking_level=low`, text only; images are never re-sent)
+
+Headers/gate as `/v1/analyze`. Stateless: the client re-sends the stored analysis context and the last ≤ 8 messages.
+
+Request `ChatRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `analysis` | `AnalysisContext` | Subset of `AnalysisResult`: `analysis_id, category, document_type, detected_language, sender_as_written, summary (SummaryCard), demands (list[Demand]), unverified (list[Demand]), plan_steps, red_flags, glossary, original_text (list[PageText]), urgency`. Sizes are capped: `original_text` ≤ 60 000 chars (client truncates oldest pages). |
+| `messages` | `list[ChatMessage { role: Literal["user","assistant"], text: str (≤ 1000) }]` (≤ 8) | Prior turns. |
+| `question` | `str` (1–1000) | |
+| `target_language` | `LanguageTag` | |
+| `demo_sample_id` | `str \| null` | |
+
+Response `ChatAnswer`
+
+| Field | Type | Description |
+|---|---|---|
+| `request_id` | `str` | |
+| `answer` | `str` | ≤ 4 short sentences unless a list was asked for; contact-filtered and phrasing-linted. |
+| `grounded_span_ids` | `list[str]` | Block ids used. |
+| `grounded_quotes` | `list[Quote { span_id: str, text: str, page: int }]` | Verified quotes for chips. |
+| `not_in_document` | `bool` | "The paper does not say." |
+| `refusal_kind` | `RefusalKind` | `none` when answered. |
+| `refer_to_professional` | `ReferTo` | |
+| `distress_acknowledged` | `bool` | |
+| `suggested_questions` | `list[str]` (≤ 3) | |
+| `resource_tags` | `list[ResourceTag]` | |
+| `safety` | `Safety` | Emergency lexicon also runs on the question. |
+| `disclaimer_kind` | `DisclaimerKind` | |
+| `warnings` | `list[WarningCode]` | |
+| `model_meta` | `ModelMeta` | |
+
+```json
+// POST /v1/chat  (analysis abbreviated to the fields the server reads)
+{
+  "analysis": {"analysis_id": "a3f1c9e2-7b4d-4e0a-9c2b-5d6e7f8a9b0c", "category": "benefits", "document_type": "medicaid_renewal", "detected_language": "en", "sender_as_written": "Virginia Department of Medical Assistance Services", "summary": {"title": "...", "body": "...", "body_en": "This is a letter from Virginia Medicaid...", "span_ids": ["p1b2","p1b5"]}, "demands": [{"id": "d1", "kind": "deadline", "text": "...", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": null}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null}], "unverified": [], "plan_steps": [], "red_flags": [], "glossary": [], "original_text": [{"page": 1, "width": 1600, "height": 2133, "blocks": [{"id": "p1b5", "page": 1, "text": "Please return the enclosed form with proof of address by October 14, 2026.", "bbox": [0.1,0.31,0.9,0.35], "is_handwriting": false, "is_unclear": false}]}], "urgency": {"level": "high", "headline_key": "urgency.high.date_soon", "headline_params": {"date": "October 14, 2026"}, "driving_demand_id": "d1", "nearest_date_iso": "2026-10-14", "days_until": 20, "past_date": false, "floor_applied": false, "verify_resource_id": null}},
+  "messages": [],
+  "question": "آیا پسرم مدیکید خود را از دست می‌دهد؟",
+  "target_language": "prs",
+  "demo_sample_id": null
+}
+```
+```json
+// 200
+{
+  "request_id": "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9",
+  "answer": "می‌فهمم که این نگران‌کننده است. این نامه نمی‌گوید که بیمه کسی قطع می‌شود. می‌گوید که آدرس را تا ۱۴ اکتبر ۲۰۲۶ تأیید کنید. اگر می‌خواهید بدانید بیمه پسرتان چه می‌شود، از دفتر مدیکید بپرسید.",
+  "grounded_span_ids": ["p1b5"],
+  "grounded_quotes": [{"span_id": "p1b5", "text": "Please return the enclosed form with proof of address by October 14, 2026.", "page": 1}],
+  "not_in_document": true,
+  "refusal_kind": "none",
+  "refer_to_professional": "benefits_office",
+  "distress_acknowledged": true,
+  "suggested_questions": ["اگر تا ۱۴ اکتبر نتوانم بفرستم چه می‌شود؟", "چه کاغذهایی به عنوان ثبوت آدرس قبول است؟"],
+  "resource_tags": ["medicaid_renewal"],
+  "safety": {"emergency": false, "emergency_kinds": [], "credential_or_payment_request": false},
+  "disclaimer_kind": "benefits_information_only",
+  "warnings": [],
+  "model_meta": {"provider": "gemini", "tier": "fast", "model_id": "gemini-3.5-flash-lite", "thinking_level": "low", "quality": "full", "analysis_mode": "single", "data_use_tier": "paid", "demo": false, "latency_ms": 1840}
+}
+```
+
+### 3.8 `POST /v1/resources/match` — tier: none (deterministic matcher)
+
+Request `ResourceMatchRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `tags` | `list[ResourceTag]` (1–12) | From the analysis or the Help tiles. |
+| `document_type` | `DocumentType \| null` | Adds `prepare.yaml` checklist items. |
+| `category` | `DocumentCategory \| null` | |
+| `state` | `str \| null` | |
+| `county` | `str \| null` | |
+| `zip3` | `str \| null` | |
+| `language` | `LanguageTag` | |
+| `institutions_as_written` | `list[str]` (≤ 10) | Fuzzy bonus (e.g. "Inova"). |
+| `scam_risk` | `ScamRisk` (default `none`) | `likely` forces `scam_report` resources first. |
+| `emergency` | `bool` (default `false`) | Crisis lines forced first. |
+| `limit` | `int` (1–12, default 8) | |
+
+Response `ResourceMatchResponse`
+
+| Field | Type | Description |
+|---|---|---|
+| `results` | `list[ResourceMatch]` | Scored, diversity-capped (≤ 2 per `org_type`). |
+| `national_fallbacks` | `list[Resource]` | Always includes `211`; `immlawhelp` for any immigration tag; `hrsa_fqhc` for any health tag. |
+| `notes_keys` | `list[str]` | e.g. `notes.set_region_for_local_help`, `notes.lsc_restricted_explained`. |
+| `disclaimer_kind` | `DisclaimerKind` | `general_information`. |
+| `resource_db_version` | `str` | |
+
+**`ResourceMatch { resource: Resource, score: float, why_keys: list[str], why: list[str], eligibility_note_key: StatusNoteKey | null, checklist: list[ChecklistItem { key: str, text_en: str }] }`**
+
+**`Resource`** (`contracts/resources.py`; also the YAML schema)
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `str` (slug) | |
+| `name` | `str` | |
+| `name_note` | `str \| null` | e.g. "a Justicia Lab project (formerly Immigration Advocates Network)". |
+| `org_type` | `OrgType` | |
+| `what_it_does` | `dict[str, str]` | i18n; `en` required. |
+| `url` | `str` | |
+| `alt_urls` | `list[str]` | |
+| `phone` | `str \| null` (E.164) | |
+| `tty` | `str \| null` | |
+| `text_line` | `str \| null` | |
+| `hours` | `str \| null` | |
+| `languages` | `list[str]` | BCP-47 or `interpreters_200+`. |
+| `cost` | `Cost` | |
+| `serves` | `Serves { scope: GeoScope, states: list[str], counties: list[str], cities: list[str], zip3: list[str] }` | |
+| `tags` | `list[ResourceTag]` | |
+| `status_note_key` | `StatusNoteKey \| null` | e.g. `lsc_restricted`, `hhs_funded_health`. |
+| `eligibility_plain` | `dict[str, str]` | i18n. |
+| `prepare_checklist_keys` | `list[str]` | i18n keys (`bring_proof_income`…). |
+| `verified_on` | `date` | |
+| `verification_method` | `VerificationMethod` | |
+| `link_health` | `LinkHealth` | |
+| `warnings` | `list[str]` | Fixed warning keys (e.g. `warn.jury_never_check_citizen`). |
+| `priority` | `int` (0–100) | |
+| `never_show_with_tags` | `list[ResourceTag]` | |
+
+```json
+// POST /v1/resources/match
+{"tags": ["medical_bill", "charity_care"], "document_type": "medical_bill", "category": "medical", "state": "VA", "county": "Fairfax", "zip3": "220", "language": "fr", "institutions_as_written": ["Inova Health System"], "scam_risk": "none", "emergency": false, "limit": 4}
+```
+```json
+// 200 (second result and fallbacks abbreviated)
+{
+  "results": [
+    {"resource": {"id": "inova_fa", "name": "Inova Financial Assistance", "name_note": null, "org_type": "hospital_program", "what_it_does": {"en": "Helps people who cannot pay an Inova hospital bill apply for free or reduced-cost care.", "fr": "Aide les personnes qui ne peuvent pas payer une facture d'hôpital Inova à demander des soins gratuits ou à prix réduit."}, "url": "https://www.inova.org/patient-and-visitor-information/financial-assistance", "alt_urls": [], "phone": "+15714725880", "tty": null, "text_line": null, "hours": "Mon–Fri 8:00–4:30", "languages": ["en", "es", "am", "ar", "prs", "fa", "ko", "zh-Hans", "ur", "vi"], "cost": "free", "serves": {"scope": "county", "states": ["VA"], "counties": ["Fairfax", "Loudoun", "Arlington", "Alexandria City", "Fairfax City", "Falls Church City"], "cities": [], "zip3": ["220", "221", "222", "201"]}, "tags": ["medical_bill", "charity_care"], "status_note_key": "residency_required", "eligibility_plain": {"en": "You must live in the Inova service area in Virginia. Uninsured households under about 400% of the poverty level usually pay nothing."}, "prepare_checklist_keys": ["bring_proof_income", "bring_proof_va_address", "bring_the_bill", "bring_household_ids"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": ["warn.ask_for_plain_language_summary"], "priority": 80, "never_show_with_tags": []},
+     "score": 6.4, "why_keys": ["why.institution_match", "why.for_hospital_bills", "why.serves_your_county"], "why": ["Named on your bill (Inova)", "For hospital bills", "Serves Fairfax County"], "eligibility_note_key": "residency_required",
+     "checklist": [{"key": "bring_proof_income", "text_en": "Proof of income (pay stubs or tax return)"}, {"key": "bring_proof_va_address", "text_en": "Proof of your Virginia address"}, {"key": "bring_the_bill", "text_en": "The bill or account number"}, {"key": "bring_household_ids", "text_en": "ID for household members"}, {"key": "bring_itemized_bill_request", "text_en": "Ask for an itemized bill"}]},
+    {"resource": {"id": "dollarfor", "name": "Dollar For", "org_type": "nonprofit", "what_it_does": {"en": "Free help applying for hospital charity care."}, "url": "https://dollarfor.org/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["charity_care", "medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone with a nonprofit hospital bill."}, "prepare_checklist_keys": ["bring_the_bill", "bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 60, "never_show_with_tags": [], "name_note": null}, "score": 3.8, "why_keys": ["why.for_hospital_bills", "why.anywhere_in_us"], "why": ["For hospital bills", "Anywhere in the U.S."], "eligibility_note_key": null, "checklist": [{"key": "bring_the_bill", "text_en": "The bill or account number"}, {"key": "bring_proof_income", "text_en": "Proof of income (pay stubs or tax return)"}]}
+  ],
+  "national_fallbacks": [{"id": "cms_nosurprises", "name": "Medical Bill Rights / No Surprises Help Desk", "org_type": "government", "what_it_does": {"en": "Explains your rights about surprise medical bills; 350+ languages."}, "url": "https://www.cms.gov/initiatives/your-patient-rights/medical-bill-rights", "alt_urls": [], "phone": "+18009853059", "tty": null, "text_line": null, "hours": null, "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": ["bring_the_bill"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 50, "never_show_with_tags": [], "name_note": null}, {"id": "211", "name": "211", "org_type": "hotline", "what_it_does": {"en": "Free help finding local services. Dial 211."}, "url": "https://www.211.org/", "alt_urls": [], "phone": "211", "tty": null, "text_line": null, "hours": "24/7", "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["benefits_navigation", "food", "rent_assistance", "utility_shutoff", "crisis"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": [], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}, {"id": "hrsa_fqhc", "name": "HRSA Find a Health Center", "org_type": "directory", "what_it_does": {"en": "Find a low-cost community health center near you."}, "url": "https://findahealthcenter.hrsa.gov/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "sliding", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["primary_care_uninsured"], "status_note_key": null, "eligibility_plain": {"en": "Anyone; fees depend on income."}, "prepare_checklist_keys": ["bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "browser", "link_health": "js_rendered", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}],
+  "notes_keys": [],
+  "disclaimer_kind": "general_information",
+  "resource_db_version": "2026-09-23"
+}
+```
+
+### 3.9 `GET /v1/resources` and `GET /v1/resources/{id}` — tier: none
+
+Query: `tag: ResourceTag | None`, `state: str | None`, `language: LanguageTag | None`, `q: str | None` (name substring), `limit: int = 50`, `offset: int = 0`. Response `ResourceList { items: list[Resource], total: int, resource_db_version: str }`. `GET /v1/resources/{id}` → `Resource` or `404 not_found`.
+
+```json
+// GET /v1/resources?tag=jury_summons
+{"items": [{"id": "uscourts_jury", "name": "U.S. Courts — juror qualifications", "name_note": null, "org_type": "court", "what_it_does": {"en": "Explains who can serve on a federal jury and how to answer the qualification form."}, "url": "https://www.uscourts.gov/court-programs/jury-service/juror-qualifications-exemptions-and-excuses", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["jury_summons"], "status_note_key": null, "eligibility_plain": {"en": "Anyone who received a jury summons."}, "prepare_checklist_keys": ["bring_the_summons"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": ["warn.jury_never_check_citizen", "warn.jury_never_register_to_vote"], "priority": 70, "never_show_with_tags": []}], "total": 1, "resource_db_version": "2026-09-23"}
+```
+
+### 3.10 `GET /v1/rules` — tier: none
+
+Response `RulesResponse { rules_version: str, rules: list[DeadlineRule] }` where **`DeadlineRule { id: str, label_en: str, applies_to_doc_types: list[DocumentType], pattern: str (regex on relative_rule_text), days: int, count_basis: Literal["calendar","business"], anchor_role: str, receipt_based: bool, mail_days: int, source_url: str, source_verified_on: date, verification: RuleVerification, valid_until: date | None, notes_en: str | None }`**.
+
+```json
+{"rules_version": "2026-09-24", "rules": [{"id": "ar11_10d", "label_en": "Report a move to USCIS within 10 days", "applies_to_doc_types": ["uscis_receipt", "uscis_rfe", "uscis_biometrics", "uscis_interview", "uscis_approval", "ead_related", "green_card_related", "tps_related"], "pattern": "within (10|ten) days of (moving|your move|the move)", "days": 10, "count_basis": "calendar", "anchor_role": "move_date", "receipt_based": false, "mail_days": 0, "source_url": "https://www.uscis.gov/addresschange", "source_verified_on": "2026-09-23", "verification": "verified", "valid_until": null, "notes_en": "USPS forwarding does not update USCIS."}, {"id": "bia_appeal_30d", "label_en": "Appeal to the BIA within 30 calendar days (must be received)", "applies_to_doc_types": ["ij_decision"], "pattern": "(within|no later than) (30|thirty) (calendar )?days", "days": 30, "count_basis": "calendar", "anchor_role": "decision_date", "receipt_based": true, "mail_days": 0, "source_url": "https://www.justice.gov/eoir/policy-manual-eoir/part-III/bia/chapter-3-5", "source_verified_on": "2026-09-23", "verification": "likely", "valid_until": "2027-03-31", "notes_en": "Treat as likely until the page is re-fetched; the Board cannot extend this deadline."}]}
+```
+
+### 3.11 `POST /v1/quicksheet/pdf` — tier: none (reportlab; Noto fonts embedded; nothing stored)
+
+Request `QuickSheetRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | `str` (≤ 120) | |
+| `language_tag` | `LanguageTag` | |
+| `direction` | `Direction` | |
+| `font_hint` | `str \| null` | From the pack. |
+| `sections` | `list[QuickSheetSection { heading: str, heading_en: str, lines: list[str] (≤ 40) }]` (≤ 8) | Three cards, dates, checklist. |
+| `resources` | `list[QuickSheetResource { name: str, phone: str \| null, url: str \| null }]` (≤ 8) | Must be resource-DB entries; the server re-validates ids/phones against the DB and drops anything else. |
+| `footer` | `str` | Fixed disclaimer text (client passes the localized string). |
+| `generated_on` | `date` | |
+
+Response: `200 application/pdf` (≤ ~200 KB; A4/Letter auto by `language_tag` region default Letter). Header `Content-Disposition: attachment; filename="proxyhealth-quick-sheet.pdf"`. Errors: `400 invalid_request`, `413 payload_too_large`.
+
+```json
+// POST /v1/quicksheet/pdf
+{"title": "نامه مدیکید ویرجینیا — برگه سریع", "language_tag": "prs", "direction": "rtl", "font_hint": "NotoNaskhArabic", "sections": [{"heading": "این چیست؟", "heading_en": "What is this?", "lines": ["این نامه از مدیکید ویرجینیا است. بیمه شما قطع نشده است."]}, {"heading": "چه می‌خواهد؟", "heading_en": "What is it asking for?", "lines": ["تا October 14, 2026 جواب بدهید.", "یک بل برق، آب یا گاز بفرستید."]}, {"heading": "قدم‌های شما", "heading_en": "Your steps", "lines": ["۱. بل را پیدا کنید", "۲. فورم را پست کنید"]}], "resources": [{"name": "211", "phone": "211", "url": "https://www.211.org/"}], "footer": "ساخته شده با هوش مصنوعی از کاغذ شما. می‌تواند اشتباه باشد. تاریخ‌ها را با فرستنده تأیید کنید.", "generated_on": "2026-09-24"}
+```
+Response: binary PDF bytes.
+
+### 3.12 `POST /v1/feedback` — tier: none (counts only; D-31)
+
+Request `FeedbackRequest`
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `FeedbackKind` | |
+| `surface` | `FeedbackSurface` | |
+| `language_tag` | `LanguageTag` | |
+| `document_category` | `DocumentCategory \| null` | |
+| `document_type` | `DocumentType \| null` | |
+| `card_id` | `str \| null` (≤ 32, `^[a-z0-9_.-]+$`) | Stable card/step id (e.g. `d1`, `s2`, `summary`), never text. |
+| `resource_id` | `str \| null` | |
+| `app_version` | `str` | |
+| `platform` | `Platform` | |
+| `model_id` | `str \| null` | |
+
+Response `FeedbackResponse { received: bool, id: str }`. The server increments a counter keyed by `(kind, surface, language_tag, document_type, resource_id, app_version, model_id)` in `var/feedback_counts.sqlite`; no other field is stored.
+
+```json
+// POST /v1/feedback
+{"kind": "unclear", "surface": "demands", "language_tag": "prs", "document_category": "benefits", "document_type": "medicaid_renewal", "card_id": "d2", "resource_id": null, "app_version": "1.0.0", "platform": "android", "model_id": "gemini-3.8-flash"}
+```
+```json
+{"received": true, "id": "fb_01J8Y6Q3ZK9R2W4T6V8X0A1C3E"}
+```
+
+### 3.13 `GET /v1/demo/fixtures` and `GET /v1/demo/fixtures/{id}/pages/{n}` — tier: none
+
+Response `list[DemoFixture]` where **`DemoFixture { id: str, title_key: str, title_en: str, document_type: DocumentType, category: DocumentCategory, language_of_document: LanguageTag, pages: int, available_target_languages: list[LanguageTag], thumbnail_url: str, kind: Literal["document","screenshot"] }`**. Page endpoint returns `image/png` (`404 not_found` for unknown id/page). Fixtures are synthetic and watermarked "SAMPLE".
+
+```json
+[{"id": "medicaid_address_confirmation", "title_key": "fixture.medicaid_address_confirmation", "title_en": "Medicaid letter asking to confirm your address", "document_type": "medicaid_renewal", "category": "benefits", "language_of_document": "en", "pages": 1, "available_target_languages": ["en", "es", "prs", "ar"], "thumbnail_url": "/v1/demo/fixtures/medicaid_address_confirmation/pages/1", "kind": "document"},
+ {"id": "scam_gift_card_letter", "title_key": "fixture.scam_gift_card_letter", "title_en": "Letter claiming to be USCIS and demanding gift cards", "document_type": "other_notice", "category": "immigration", "language_of_document": "en", "pages": 1, "available_target_languages": ["en", "es", "prs", "ar"], "thumbnail_url": "/v1/demo/fixtures/scam_gift_card_letter/pages/1", "kind": "document"},
+ {"id": "portal_file_too_large", "title_key": "fixture.portal_file_too_large", "title_en": "Benefits portal: file too large", "document_type": "unknown", "category": "benefits", "language_of_document": "en", "pages": 1, "available_target_languages": ["en", "es", "prs", "ar"], "thumbnail_url": "/v1/demo/fixtures/portal_file_too_large/pages/1", "kind": "screenshot"}]
+```
+
+### 3.14 `GET /v1/admin/keys` — tier: none; auth `X-Admin-Token` (401 otherwise; endpoint absent when `ADMIN_TOKEN` is unset)
+
+Response `AdminKeysResponse { data_use_tier: DataUseTier, slots: list[KeySlotState { index: int, project: str, billing: bool, key_last4: str, tiers: dict[str, TierState] }] }` where **`TierState { state: Literal["healthy","cooling","rpd_exhausted","disabled"], cooldown_until: datetime | None, consecutive_429: int, rpm_last_minute: int, rpd_count: int, rpd_reset_at: datetime, last_error_code: int | None, last_used_at: datetime | None }`**.
+
+```json
+{"data_use_tier": "paid", "slots": [{"index": 0, "project": "proxyhealth-prod-a", "billing": true, "key_last4": "Qx7A", "tiers": {"pro": {"state": "cooling", "cooldown_until": "2026-09-24T14:08:00Z", "consecutive_429": 1, "rpm_last_minute": 4, "rpd_count": 61, "rpd_reset_at": "2026-09-25T07:00:00Z", "last_error_code": 429, "last_used_at": "2026-09-24T14:07:30Z"}, "fast": {"state": "healthy", "cooldown_until": null, "consecutive_429": 0, "rpm_last_minute": 2, "rpd_count": 210, "rpd_reset_at": "2026-09-25T07:00:00Z", "last_error_code": null, "last_used_at": "2026-09-24T14:07:41Z"}}}]}
+```
+
+---
+
+## 4. Model-output schemas (internal; `contracts/model_out.py`; never exposed in OpenAPI responses)
+
+These are what Gemini returns (`response_schema=<class>`). They obey D-06: depth ≤ 3, no dicts, no `Any`, `X | None` only, ≤ 64 enum values, `bbox: list[float]`.
+
+- **`AnalysisModelOut`**: `document_type: DocumentType`, `category: DocumentCategory`, `document_type_confidence: Confidence`, `sender_as_written: str | None`, `sender_kind: SenderKind`, `detected_language: str`, `legibility: Legibility`, `readable_reason: str | None`, `blocks: list[TextBlock]`, `translated_pages: list[TranslatedPage]`, `summary_title: str`, `summary_body: str`, `summary_body_en: str`, `summary_span_ids: list[str]`, `demands: list[DemandOut]`, `plan_steps: list[PlanStepOut]`, `glossary: list[GlossaryTerm]`, `red_flags: list[RedFlagOut]`, `questions_to_ask: list[str]`, `clerk_need_en: str`, `emergency_terms_found: list[str]`, `is_likely_scam: bool`, `scam_signals: list[str]`, `resource_tags: list[str]`, `institutions_as_written: list[str]`, `form_numbers: list[str]`, `geo_state: str | None`, `geo_county: str | None`, `geo_city: str | None`, `geo_zip: str | None`.
+  - **`DemandOut`**: `id, kind: DemandKind, text, value_verbatim, source_quote, span_ids: list[str], page: int, date_text: str | None, time_text: str | None, relative_rule_text: str | None, anchor_span_id: str | None, amount_text: str | None, currency: str | None, documents: list[str], role: str | None, confidence: Confidence, ambiguity_note: str | None`.
+  - **`PlanStepOut`**: `id, text, kind: PlanStepKind, resource_tags: list[str], span_ids: list[str], demand_id: str | None`.
+  - **`RedFlagOut`**: `kind: RedFlagKind, text, source_quote: str | None, span_ids: list[str], page: int | None`.
+- **`TranscriptOut`** (two-call mode, call 1): `blocks: list[TextBlock]`, `detected_language: str`, `legibility: Legibility`, `readable_reason: str | None`.
+- **`ExplainOut`** (two-call mode, call 2): `AnalysisModelOut` minus `blocks`/`translated_pages`/`legibility`/`readable_reason`, plus `translated_pages`.
+- **`TroubleshootModelOut`**: `screen_summary, screen_text: list[str], error_text_quoted: str | None, error_meaning, steps: list[TroubleshootStep], cautions: list[str], asks_for_credentials_or_payment: bool, is_likely_scam: bool, scam_signals: list[str], needs_human_help: bool, red_flags: list[RedFlagOut], resource_tags: list[str], confidence: Confidence`.
+- **`ChatModelOut`**: `answer, grounded_span_ids: list[str], not_in_document: bool, refusal_kind: RefusalKind, refer_to_professional: ReferTo, distress_acknowledged: bool, suggested_questions: list[str], resource_tags: list[str]`.
+- **`LanguagePackModelOut`**: `language_tag, language_name_native, language_name_en, direction: Direction, script: str | None, digit_system: DigitSystem, strings: list[KeyValue{key, value}], fallback_keys: list[str], confidence: Confidence, notes_for_reviewer: str | None`.
+- **`TaggingModelOut`**: `tags: list[str], geo_state, geo_county, geo_city, geo_zip: str | None, institutions_as_written: list[str], emergency: bool`.
+
+---
+
+## 5. OpenAPI and TypeScript generation
+
+- `apps/api/.venv/bin/python apps/api/scripts/export_openapi.py` → `apps/api/openapi.json` (deterministic key order). `tests/contract/test_openapi_snapshot.py` fails if the committed file is stale.
+- `apps/mobile`: `npm run gen:types` is changed to `openapi-typescript ../api/openapi.json -o src/api/schema.d.ts` (file input; no server needed). The client (`src/api/client.ts`) imports `components["schemas"]["AnalysisResult"]` etc.; no hand-written duplicates of contract types are allowed.
+- `ErrorResponse` is declared as the response model for every 4xx/5xx in `responses={...}` so the generated types include it.

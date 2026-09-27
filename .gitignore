@@ -1,0 +1,44 @@
+# --- Node / Expo ---
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.tsbuildinfo
+.metro-health-check*
+npm-debug.log*
+yarn-error.log*
+apps/mobile/ios/
+apps/mobile/android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# --- Secrets & env ---
+.env
+.env.*
+!.env.example
+secrets.toml
+*.pem
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+coverage/
+htmlcov/

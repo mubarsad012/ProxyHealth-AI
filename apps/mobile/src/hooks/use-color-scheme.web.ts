@@ -1,0 +1,25 @@
+import { useSyncExternalStore } from 'react';
+import { useColorScheme as useRNColorScheme } from 'react-native';
+
+const subscribeNoop = () => () => {};
+
+/**
+ * To support static rendering, this value needs to be re-calculated on the client side for web.
+ * useSyncExternalStore returns `false` during server rendering / hydration and `true` on the client,
+ * without calling setState inside an effect.
+ */
+export function useColorScheme() {
+  const hasHydrated = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
+
+  const colorScheme = useRNColorScheme();
+
+  if (hasHydrated) {
+    return colorScheme;
+  }
+
+  return 'light';
+}
