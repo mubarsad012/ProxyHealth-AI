@@ -4,6 +4,8 @@ Status: **authoritative**. The Pydantic v2 models in `apps/api/proxyhealth_api/c
 
 Decisions this contract implements: `docs/DECISIONS.md` D-01…D-31 (tier gate, consent header, caps, quotation contract, counts-only feedback, JSON-only bodies).
 
+Revision 2026-09-27 (consistency pass; WP0 implements these in the models before M0): `AnalyzeRequest.pages` is 0–12 with a model validator requiring ≥ 1 page unless `demo_sample_id` is set; `include_page_thumbnails` defaults to `false` (client sets `true` for PDFs); `TroubleshootResult` gains `safety: Safety`; `Resource.phone`/`tty` accept E.164 or N11/short codes; model-output schemas gain `LanguageResolveOut` and `RewriteOut` (§4). Example values (`resources_loaded`, versions, `why_keys`) were aligned with `docs/RESOURCE_DB.md` and `docs/DOCUMENT_TAXONOMY.md`.
+
 ---
 
 ## 0. Conventions
@@ -240,7 +242,7 @@ Response `HealthResponse`
 
 ```json
 // GET /health
-{"status":"ok","provider":"mock","version":"0.1.0","contract_version":1,"keys_configured":0,"keys_healthy":0,"data_use_tier":"demo","resources_loaded":74}
+{"status":"ok","provider":"mock","version":"0.1.0","contract_version":1,"keys_configured":0,"keys_healthy":0,"data_use_tier":"demo","resources_loaded":101}
 ```
 
 ### 3.2 `GET /v1/config` — tier: none
@@ -287,8 +289,8 @@ Response `ServerConfig`
     {"tag": "prs", "name_native": "دری", "name_en": "Dari", "direction": "rtl", "script": "Arab", "digit_system": "persian", "font_hint": "NotoNaskhArabic", "tier": 2, "bundled": true, "machine_translated": true, "tts_tag": "fa-AF", "tts_fallback_tag": "fa-IR"},
     {"tag": "rhg", "name_native": "𐴌𐴟𐴇𐴥𐴝𐴚𐴒𐴙𐴝", "name_en": "Rohingya", "direction": "rtl", "script": "Rohg", "digit_system": "western", "font_hint": "NotoSansHanifiRohingya", "tier": 3, "bundled": false, "machine_translated": true, "tts_tag": null, "tts_fallback_tag": "my-MM"}
   ],
-  "taxonomy_version": "2026-09-24",
-  "resource_db_version": "2026-09-23",
+  "taxonomy_version": "2026-09-27",
+  "resource_db_version": "2026-09-27",
   "rules_version": "2026-09-24",
   "key_slots": {"total": 3, "healthy": 3, "cooling": 0, "rpd_exhausted": 0, "disabled": 0},
   "region_notice": "us_only",
@@ -388,7 +390,7 @@ Request `AnalyzeRequest`
 
 | Field | Type | Description |
 |---|---|---|
-| `pages` | `list[PageInput]` (1–12) | 1–12 images **or** exactly one PDF. Ignored when `demo_sample_id` is set and the provider is gemini (fixture bytes are loaded from disk); used for perceptual-hash matching by the mock provider. |
+| `pages` | `list[PageInput]` (0–12) | 1–12 images **or** exactly one PDF. **May be `[]` only when `demo_sample_id` is set** (model validator: `len(pages) >= 1 or demo_sample_id`); otherwise `400 invalid_request`. When `demo_sample_id` is set the server ignores any client pages on gemini (fixture bytes are loaded from disk) and the mock provider resolves by id; the mock uses `pages` for perceptual-hash matching only when `demo_sample_id` is null. |
 | `target_language` | `LanguageTag` | Language for all user-facing text. |
 | `ui_direction` | `Direction` (default `ltr`) | Lets the server order bilingual strings. |
 | `state` | `str \| null` (2 letters) | User's US state from Settings; never inferred. |
@@ -396,7 +398,7 @@ Request `AnalyzeRequest`
 | `document_hint` | `DocumentType \| null` | Optional user hint ("I think this is a hospital bill"). |
 | `preferences` | `Preferences` | Tone / calendar notes / date format. |
 | `demo_sample_id` | `str \| null` | Fixture id from `/v1/demo/fixtures`. |
-| `include_page_thumbnails` | `bool` (default `true` for PDFs, `false` for images) | Server rasterizes PDF pages for crops. |
+| `include_page_thumbnails` | `bool` (default `false`) | Server rasterizes PDF pages for crops when `true`. A Pydantic default cannot depend on the page type, so the **client always sets it explicitly**: `true` when `pages[0]` is a PDF, `false` for images. Ignored for image uploads. |
 | `masks_applied_client_side` | `bool` (default `false`) | Web sets `true` after canvas burn. |
 | `hide_id_numbers` | `bool` (default `false`) | Mask A-numbers/receipt numbers in returned text (SSNs are always masked). |
 | `client_platform` | `Platform` | |
@@ -541,7 +543,7 @@ Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real
   },
   "resource_tags": ["medicaid_renewal", "benefits_navigation"],
   "resource_preview": [
-    {"resource": {"id": "medicaid_state", "name": "Medicaid.gov — state agency finder", "org_type": "government", "what_it_does": {"en": "Find your state Medicaid office to ask about your renewal.", "prs": "دفتر مدیکید ایالت خود را پیدا کنید."}, "url": "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": []}, "tags": ["medicaid_renewal"], "status_note_key": null, "eligibility_plain": {"en": "Anyone with Medicaid or CHIP."}, "prepare_checklist_keys": ["bring_notice", "bring_case_number"], "verified_on": "2026-09-23", "verification_method": "browser", "link_health": "unknown_403", "warnings": [], "priority": 50, "never_show_with_tags": []}, "score": 2.9, "why_keys": ["why.for_medicaid_letters"], "why": ["For Medicaid letters"], "eligibility_note_key": null, "checklist": [{"key": "bring_notice", "text_en": "This letter"}, {"key": "bring_case_number", "text_en": "Your case number (printed on the letter)"}]}
+    {"resource": {"id": "medicaid_state", "name": "Medicaid.gov — state agency finder", "name_note": null, "org_type": "government", "what_it_does": {"en": "Find your state Medicaid office to ask about your renewal.", "prs": "دفتر مدیکید ایالت خود را پیدا کنید."}, "url": "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["medicaid_renewal"], "status_note_key": "hhs_funded_health", "eligibility_plain": {"en": "Anyone with Medicaid or CHIP."}, "prepare_checklist_keys": ["bring_notice", "bring_case_number"], "verified_on": "2026-09-27", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 50, "never_show_with_tags": []}, "score": 5.65, "why_keys": ["why.for_this_paper", "why.for_medicaid_renewal", "why.anywhere_in_us"], "why": ["Made for this kind of paper", "For Medicaid letters", "Anywhere in the U.S."], "eligibility_note_key": "hhs_funded_health", "checklist": [{"key": "bring_notice", "text_en": "This letter or notice"}, {"key": "bring_case_number", "text_en": "Your case number (printed on the letter)"}]}
   ],
   "original_text": [
     {"page": 1, "width": 1600, "height": 2133, "blocks": [
@@ -596,6 +598,7 @@ Response `TroubleshootResult`
 | `resource_tags` | `list[ResourceTag]` | `scam_report` forced first when `scam_risk=="likely"`. |
 | `screen_text` | `list[str]` | Quoted UI strings the answer relies on (contact-filtered). |
 | `confidence` | `Confidence` | |
+| `safety` | `Safety` | Same shape as `AnalysisResult.safety`. The emergency lexicon (D-14) runs in code over `screen_text` and `user_goal`; `credential_or_payment_request` mirrors `asks_for_credentials_or_payment`. The client shows the fixed emergency card first when `emergency` is true. |
 | `disclaimer_kind` | `DisclaimerKind` | `general_information`. |
 | `warnings` | `list[WarningCode]` | |
 | `model_meta` | `ModelMeta` | |
@@ -624,6 +627,7 @@ Response `TroubleshootResult`
   "resource_tags": ["benefits_navigation"],
   "screen_text": ["File exceeds the maximum size of 5 MB", "Back", "Choose File", "Upload"],
   "confidence": "high",
+  "safety": {"emergency": false, "emergency_kinds": [], "credential_or_payment_request": false},
   "disclaimer_kind": "general_information",
   "warnings": [],
   "model_meta": {"provider": "gemini", "tier": "pro", "model_id": "gemini-3.8-flash", "thinking_level": "medium", "quality": "full", "analysis_mode": "single", "data_use_tier": "paid", "demo": false, "latency_ms": 6210}
@@ -716,12 +720,14 @@ Response `ResourceMatchResponse`
 | Field | Type | Description |
 |---|---|---|
 | `results` | `list[ResourceMatch]` | Scored, diversity-capped (≤ 2 per `org_type`). |
-| `national_fallbacks` | `list[Resource]` | Always includes `211`; `immlawhelp` for any immigration tag; `hrsa_fqhc` for any health tag. |
+| `national_fallbacks` | `list[Resource]` | Ordered, de-duplicated against `results`: always `211`; `immlawhelp` for any immigration-group tag; `hrsa_fqhc` for any health-group tag; `ftc_reportfraud` + `dhs_oig` when `scam_risk != none`; `988` when `emergency`. Tag groups and ids are defined in `docs/RESOURCE_DB.md` §3.1 / §6.9. |
 | `notes_keys` | `list[str]` | e.g. `notes.set_region_for_local_help`, `notes.lsc_restricted_explained`. |
 | `disclaimer_kind` | `DisclaimerKind` | `general_information`. |
 | `resource_db_version` | `str` | |
 
 **`ResourceMatch { resource: Resource, score: float, why_keys: list[str], why: list[str], eligibility_note_key: StatusNoteKey | null, checklist: list[ChecklistItem { key: str, text_en: str }] }`**
+
+`score` is for ordering only (the client never displays it); the numeric values in the examples below are illustrative — the deterministic formula and the tests that assert *order* live in `docs/RESOURCE_DB.md` §6. `why_keys` are pack keys of the form `why.for_<ResourceTag>` plus the fixed set `why.institution_match`, `why.serves_your_county`, `why.serves_your_area`, `why.serves_your_state`, `why.check_service_area`, `why.anywhere_in_us`, `why.speaks_your_language`, `why.for_this_paper`, `why.report_scam`, `why.crisis_line` (RESOURCE_DB §4.2). `ChecklistItem.key` is the unprefixed checklist id (e.g. `bring_notice`); the client renders it from the pack as `prepare.<key>`. `eligibility_note_key` renders as `status_note.<value>`.
 
 **`Resource`** (`contracts/resources.py`; also the YAML schema)
 
@@ -734,7 +740,7 @@ Response `ResourceMatchResponse`
 | `what_it_does` | `dict[str, str]` | i18n; `en` required. |
 | `url` | `str` | |
 | `alt_urls` | `list[str]` | |
-| `phone` | `str \| null` (E.164) | |
+| `phone` | `str \| null` | E.164 (`+15714725880`) **or** a bare N11 / short code (`211`, `311`, `911`, `988`, `711`); regex `^(\+[1-9]\d{6,14}\|211\|311\|911\|988\|711)$`. Same rule for `tty`. |
 | `tty` | `str \| null` | |
 | `text_line` | `str \| null` | |
 | `hours` | `str \| null` | |
@@ -748,7 +754,7 @@ Response `ResourceMatchResponse`
 | `verified_on` | `date` | |
 | `verification_method` | `VerificationMethod` | |
 | `link_health` | `LinkHealth` | |
-| `warnings` | `list[str]` | Fixed warning keys (e.g. `warn.jury_never_check_citizen`). |
+| `warnings` | `list[str]` | Fixed pack keys, prefixed on the wire (e.g. `warn.jury_never_check_citizen`). The YAML seed stores the unprefixed registry key and the loader prefixes it (`docs/RESOURCE_DB.md` §2.1, §4.3). |
 | `priority` | `int` (0–100) | |
 | `never_show_with_tags` | `list[ResourceTag]` | |
 
@@ -761,14 +767,14 @@ Response `ResourceMatchResponse`
 {
   "results": [
     {"resource": {"id": "inova_fa", "name": "Inova Financial Assistance", "name_note": null, "org_type": "hospital_program", "what_it_does": {"en": "Helps people who cannot pay an Inova hospital bill apply for free or reduced-cost care.", "fr": "Aide les personnes qui ne peuvent pas payer une facture d'hôpital Inova à demander des soins gratuits ou à prix réduit."}, "url": "https://www.inova.org/patient-and-visitor-information/financial-assistance", "alt_urls": [], "phone": "+15714725880", "tty": null, "text_line": null, "hours": "Mon–Fri 8:00–4:30", "languages": ["en", "es", "am", "ar", "prs", "fa", "ko", "zh-Hans", "ur", "vi"], "cost": "free", "serves": {"scope": "county", "states": ["VA"], "counties": ["Fairfax", "Loudoun", "Arlington", "Alexandria City", "Fairfax City", "Falls Church City"], "cities": [], "zip3": ["220", "221", "222", "201"]}, "tags": ["medical_bill", "charity_care"], "status_note_key": "residency_required", "eligibility_plain": {"en": "You must live in the Inova service area in Virginia. Uninsured households under about 400% of the poverty level usually pay nothing."}, "prepare_checklist_keys": ["bring_proof_income", "bring_proof_va_address", "bring_the_bill", "bring_household_ids"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": ["warn.ask_for_plain_language_summary"], "priority": 80, "never_show_with_tags": []},
-     "score": 6.4, "why_keys": ["why.institution_match", "why.for_hospital_bills", "why.serves_your_county"], "why": ["Named on your bill (Inova)", "For hospital bills", "Serves Fairfax County"], "eligibility_note_key": "residency_required",
+     "score": 6.1, "why_keys": ["why.institution_match", "why.for_medical_bill", "why.serves_your_county"], "why": ["Named on your paper (Inova Health System)", "For hospital and doctor bills", "Serves Fairfax County"], "eligibility_note_key": "residency_required",
      "checklist": [{"key": "bring_proof_income", "text_en": "Proof of income (pay stubs or tax return)"}, {"key": "bring_proof_va_address", "text_en": "Proof of your Virginia address"}, {"key": "bring_the_bill", "text_en": "The bill or account number"}, {"key": "bring_household_ids", "text_en": "ID for household members"}, {"key": "bring_itemized_bill_request", "text_en": "Ask for an itemized bill"}]},
-    {"resource": {"id": "dollarfor", "name": "Dollar For", "org_type": "nonprofit", "what_it_does": {"en": "Free help applying for hospital charity care."}, "url": "https://dollarfor.org/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["charity_care", "medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone with a nonprofit hospital bill."}, "prepare_checklist_keys": ["bring_the_bill", "bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 60, "never_show_with_tags": [], "name_note": null}, "score": 3.8, "why_keys": ["why.for_hospital_bills", "why.anywhere_in_us"], "why": ["For hospital bills", "Anywhere in the U.S."], "eligibility_note_key": null, "checklist": [{"key": "bring_the_bill", "text_en": "The bill or account number"}, {"key": "bring_proof_income", "text_en": "Proof of income (pay stubs or tax return)"}]}
+    {"resource": {"id": "dollarfor", "name": "Dollar For", "org_type": "nonprofit", "what_it_does": {"en": "Free help applying for hospital charity care."}, "url": "https://dollarfor.org/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["charity_care", "medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone with a nonprofit hospital bill."}, "prepare_checklist_keys": ["bring_the_bill", "bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 60, "never_show_with_tags": [], "name_note": null}, "score": 5.55, "why_keys": ["why.for_this_paper", "why.for_medical_bill", "why.anywhere_in_us"], "why": ["Made for this kind of paper", "For hospital and doctor bills", "Anywhere in the U.S."], "eligibility_note_key": null, "checklist": [{"key": "bring_the_bill", "text_en": "The bill or account number"}, {"key": "bring_proof_income", "text_en": "Proof of income (pay stubs or tax return)"}]}
   ],
-  "national_fallbacks": [{"id": "cms_nosurprises", "name": "Medical Bill Rights / No Surprises Help Desk", "org_type": "government", "what_it_does": {"en": "Explains your rights about surprise medical bills; 350+ languages."}, "url": "https://www.cms.gov/initiatives/your-patient-rights/medical-bill-rights", "alt_urls": [], "phone": "+18009853059", "tty": null, "text_line": null, "hours": null, "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": ["bring_the_bill"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 50, "never_show_with_tags": [], "name_note": null}, {"id": "211", "name": "211", "org_type": "hotline", "what_it_does": {"en": "Free help finding local services. Dial 211."}, "url": "https://www.211.org/", "alt_urls": [], "phone": "211", "tty": null, "text_line": null, "hours": "24/7", "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["benefits_navigation", "food", "rent_assistance", "utility_shutoff", "crisis"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": [], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}, {"id": "hrsa_fqhc", "name": "HRSA Find a Health Center", "org_type": "directory", "what_it_does": {"en": "Find a low-cost community health center near you."}, "url": "https://findahealthcenter.hrsa.gov/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "sliding", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["primary_care_uninsured"], "status_note_key": null, "eligibility_plain": {"en": "Anyone; fees depend on income."}, "prepare_checklist_keys": ["bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "browser", "link_health": "js_rendered", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}],
-  "notes_keys": [],
+  "national_fallbacks": [{"id": "cms_nosurprises", "name": "Medical Bill Rights / No Surprises Help Desk", "org_type": "government", "what_it_does": {"en": "Explains your rights about surprise medical bills; 350+ languages."}, "url": "https://www.cms.gov/initiatives/your-patient-rights/medical-bill-rights", "alt_urls": [], "phone": "+18009853059", "tty": null, "text_line": null, "hours": null, "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["medical_bill"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": ["bring_the_bill"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 50, "never_show_with_tags": [], "name_note": null}, {"id": "211", "name": "211", "org_type": "hotline", "what_it_does": {"en": "Free help finding local services. Dial 211."}, "url": "https://www.211.org/", "alt_urls": [], "phone": "211", "tty": null, "text_line": null, "hours": "Varies by area; many lines are 24/7", "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["benefits_navigation", "food", "rent_assistance", "utility_shutoff", "crisis"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": [], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}, {"id": "hrsa_fqhc", "name": "HRSA Find a Health Center", "org_type": "directory", "what_it_does": {"en": "Find a low-cost community health center near you."}, "url": "https://findahealthcenter.hrsa.gov/", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en", "es"], "cost": "sliding", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["primary_care_uninsured"], "status_note_key": null, "eligibility_plain": {"en": "Anyone; fees depend on income."}, "prepare_checklist_keys": ["bring_proof_income"], "verified_on": "2026-09-23", "verification_method": "browser", "link_health": "js_rendered", "warnings": [], "priority": 40, "never_show_with_tags": [], "name_note": null}],
+  "notes_keys": ["notes.verify_before_going"],
   "disclaimer_kind": "general_information",
-  "resource_db_version": "2026-09-23"
+  "resource_db_version": "2026-09-27"
 }
 ```
 
@@ -778,7 +784,15 @@ Query: `tag: ResourceTag | None`, `state: str | None`, `language: LanguageTag | 
 
 ```json
 // GET /v1/resources?tag=jury_summons
-{"items": [{"id": "uscourts_jury", "name": "U.S. Courts — juror qualifications", "name_note": null, "org_type": "court", "what_it_does": {"en": "Explains who can serve on a federal jury and how to answer the qualification form."}, "url": "https://www.uscourts.gov/court-programs/jury-service/juror-qualifications-exemptions-and-excuses", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["jury_summons"], "status_note_key": null, "eligibility_plain": {"en": "Anyone who received a jury summons."}, "prepare_checklist_keys": ["bring_the_summons"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": ["warn.jury_never_check_citizen", "warn.jury_never_register_to_vote"], "priority": 70, "never_show_with_tags": []}], "total": 1, "resource_db_version": "2026-09-23"}
+{"items": [{"id": "uscourts_jury", "name": "U.S. Courts — juror qualifications", "name_note": null, "org_type": "court", "what_it_does": {"en": "Explains who can serve on a federal jury and how to answer the qualification form."}, "url": "https://www.uscourts.gov/court-programs/jury-service/juror-qualifications-exemptions-and-excuses", "alt_urls": [], "phone": null, "tty": null, "text_line": null, "hours": null, "languages": ["en"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["jury_summons"], "status_note_key": null, "eligibility_plain": {"en": "Anyone who received a jury summons."}, "prepare_checklist_keys": ["bring_the_summons"], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": ["warn.jury_never_check_citizen", "warn.jury_never_register_to_vote"], "priority": 70, "never_show_with_tags": []}], "total": 1, "resource_db_version": "2026-09-27"}
+```
+```json
+// GET /v1/resources/211   (a bare Resource; same shape as an `items[]` element)
+{"id": "211", "name": "211", "name_note": null, "org_type": "hotline", "what_it_does": {"en": "Free help finding local services. Dial 211."}, "url": "https://www.211.org/", "alt_urls": [], "phone": "211", "tty": null, "text_line": null, "hours": "Varies by area; many lines are 24/7", "languages": ["interpreters_200+"], "cost": "free", "serves": {"scope": "national", "states": [], "counties": [], "cities": [], "zip3": []}, "tags": ["benefits_navigation", "food", "rent_assistance", "utility_shutoff", "crisis"], "status_note_key": null, "eligibility_plain": {"en": "Anyone."}, "prepare_checklist_keys": [], "verified_on": "2026-09-23", "verification_method": "fetched", "link_health": "ok", "warnings": [], "priority": 40, "never_show_with_tags": []}
+```
+```json
+// GET /v1/resources/does_not_exist → 404
+{"error": {"code": "not_found", "message": "No resource with id 'does_not_exist'.", "user_message_key": "err.not_found", "retry_after_seconds": null, "key_exhausted": false, "request_id": "0f1e2d3c-4b5a-4968-8776-655443322110", "details": null}}
 ```
 
 ### 3.10 `GET /v1/rules` — tier: none
@@ -841,7 +855,7 @@ Response `FeedbackResponse { received: bool, id: str }`. The server increments a
 
 ### 3.13 `GET /v1/demo/fixtures` and `GET /v1/demo/fixtures/{id}/pages/{n}` — tier: none
 
-Response `list[DemoFixture]` where **`DemoFixture { id: str, title_key: str, title_en: str, document_type: DocumentType, category: DocumentCategory, language_of_document: LanguageTag, pages: int, available_target_languages: list[LanguageTag], thumbnail_url: str, kind: Literal["document","screenshot"] }`**. Page endpoint returns `image/png` (`404 not_found` for unknown id/page). Fixtures are synthetic and watermarked "SAMPLE".
+Response `list[DemoFixture]` where **`DemoFixture { id: str, title_key: str, title_en: str, document_type: DocumentType, category: DocumentCategory, language_of_document: LanguageTag, pages: int, available_target_languages: list[LanguageTag], thumbnail_url: str, kind: Literal["document","screenshot"] }`**. Page endpoint returns `image/png` (`404 not_found` for unknown id/page). Fixtures are synthetic and watermarked "SAMPLE". `available_target_languages` lists the languages that have a recorded `out.<lang>.json`: `["en", "es", "prs", "ar"]` for the eight demo fixtures named in `docs/BUILD_PLAN.md` §4.5, `["en"]` for the rest (the mock serves other targets from the `en` output with a `⟦xx⟧` pseudo-translation marker, D-29).
 
 ```json
 [{"id": "medicaid_address_confirmation", "title_key": "fixture.medicaid_address_confirmation", "title_en": "Medicaid letter asking to confirm your address", "document_type": "medicaid_renewal", "category": "benefits", "language_of_document": "en", "pages": 1, "available_target_languages": ["en", "es", "prs", "ar"], "thumbnail_url": "/v1/demo/fixtures/medicaid_address_confirmation/pages/1", "kind": "document"},
@@ -872,6 +886,8 @@ These are what Gemini returns (`response_schema=<class>`). They obey D-06: depth
 - **`TroubleshootModelOut`**: `screen_summary, screen_text: list[str], error_text_quoted: str | None, error_meaning, steps: list[TroubleshootStep], cautions: list[str], asks_for_credentials_or_payment: bool, is_likely_scam: bool, scam_signals: list[str], needs_human_help: bool, red_flags: list[RedFlagOut], resource_tags: list[str], confidence: Confidence`.
 - **`ChatModelOut`**: `answer, grounded_span_ids: list[str], not_in_document: bool, refusal_kind: RefusalKind, refer_to_professional: ReferTo, distress_acknowledged: bool, suggested_questions: list[str], resource_tags: list[str]`.
 - **`LanguagePackModelOut`**: `language_tag, language_name_native, language_name_en, direction: Direction, script: str | None, digit_system: DigitSystem, strings: list[KeyValue{key, value}], fallback_keys: list[str], confidence: Confidence, notes_for_reviewer: str | None`.
+- **`LanguageResolveOut`** (task `resolve_language`, used by `packs/resolve.py` only for names not in `data/languages.yaml`): `language_tag: str | None` (BCP-47 or `null` when unknown), `language_name_en: str`, `language_name_native: str | None`, `script: str | None`, `direction: Direction`, `digit_system: DigitSystem`, `confidence: Confidence`. A `null`/invalid tag resolves to `x-<slug>` of the typed name.
+- **`RewriteOut`** (task `phrasing_rewrite`): `sentence: str` (max_length 400). Every model call goes through `generate_structured` with a schema; there is no plain-text task.
 - **`TaggingModelOut`**: `tags: list[str], geo_state, geo_county, geo_city, geo_zip: str | None, institutions_as_written: list[str], emergency: bool`.
 
 ---
@@ -881,3 +897,4 @@ These are what Gemini returns (`response_schema=<class>`). They obey D-06: depth
 - `apps/api/.venv/bin/python apps/api/scripts/export_openapi.py` → `apps/api/openapi.json` (deterministic key order). `tests/contract/test_openapi_snapshot.py` fails if the committed file is stale.
 - `apps/mobile`: `npm run gen:types` is changed to `openapi-typescript ../api/openapi.json -o src/api/schema.d.ts` (file input; no server needed). The client (`src/api/client.ts`) imports `components["schemas"]["AnalysisResult"]` etc.; no hand-written duplicates of contract types are allowed.
 - `ErrorResponse` is declared as the response model for every 4xx/5xx in `responses={...}` so the generated types include it.
+- **Field-name rule (buildability pass 2026-09-27).** Every Pydantic field name in `contracts/**` is a valid Python identifier in `snake_case` exactly as written in the tables above; no `alias`, `populate_by_name` or camelCase conversion anywhere, so the JSON wire names, the generated TypeScript property names and the Python attribute names are identical. Request models use `model_config = ConfigDict(extra="forbid")` (an unknown field is a `400 invalid_request`, which catches client typos early); response models keep Pydantic's default. Enum *values* are the lowercase snake_case strings listed in §1 (`PackTier` is an `IntEnum`). `tests/contract/test_openapi_snapshot.py` also asserts that no property name in `openapi.json` contains an uppercase letter or a hyphen.

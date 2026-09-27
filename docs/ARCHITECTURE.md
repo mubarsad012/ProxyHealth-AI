@@ -35,6 +35,7 @@ Trust boundary = the device. The server holds nothing a subpoena could return.
 apps/api/
   .venv/                              (exists) Python 3.13 venv with all deps; run everything through it
   pyproject.toml                      package metadata `proxyhealth_api`, ruff/mypy/pytest config (deps already installed; no pip install)
+  requirements.txt                    `.venv/bin/pip freeze` output for the Dockerfile (WP1; regenerated only in an install window)
   .env.example                        every variable in §6 with comments; committed. `.env` is git-ignored
   openapi.json                        committed OpenAPI snapshot written by scripts/export_openapi.py; CI diff-tested
   Dockerfile                          python:3.13-slim, non-root, `uvicorn proxyhealth_api.main:app --workers 1 --limit-concurrency 32 --timeout-keep-alive 5`
@@ -63,7 +64,7 @@ apps/api/
       feedback.py                     FeedbackRequest, FeedbackResponse
       demo.py                         DemoFixture
       admin.py                        AdminKeysResponse, KeySlotState, TierState
-      model_out.py                    AnalysisModelOut, TranscriptOut, ExplainOut, DemandOut, PlanStepOut, RedFlagOut, TroubleshootModelOut, ChatModelOut, LanguagePackModelOut, KeyValue, TaggingModelOut
+      model_out.py                    AnalysisModelOut, TranscriptOut, ExplainOut, DemandOut, PlanStepOut, RedFlagOut, TroubleshootModelOut, ChatModelOut, LanguagePackModelOut, KeyValue, LanguageResolveOut, RewriteOut, TaggingModelOut (API_CONTRACT §4)
     ai/
       provider.py                     `AIProvider` Protocol: `generate_structured(task, tier, parts, system, schema, thinking, media_resolution, max_output_tokens, request_id) -> StructuredResult(parsed, model_id, usage, blocked_reason, finish_reason)`; `Part` (text | bytes+mime); `Task`/`Tier` enums
       gemini.py                       `GeminiProvider`: one `genai.Client` per slot, `client.aio.models.generate_content` with GenerateContentConfig (D-05); blocked-response detection; upstream status extraction
@@ -83,7 +84,9 @@ apps/api/
         langpack.md                   UI-string translation
         tag.md                        resource tagging
         phrasing_rewrite.md           one-pass neutral rewrite template
-      prompt_loader.py                loads prompts, fills `{target_language}`, `{direction}`, `{state_or_unknown}`, `{today}`, `{tone}`, `{calendar_notes}`, `{tag_list}`, `{taxonomy_ids}`
+        user/<task>_user.md           user-prompt templates, one per Task (analyze_user.md, transcribe_user.md, explain_user.md, troubleshoot_user.md, chat_user.md, langpack_user.md, tag_user.md, phrasing_rewrite_user.md, resolve_language_user.md)
+        VERSION                       single line `prompts_version = <date>.<n>`; bumped on any prompt edit; recorded in golden `out.<lang>.json` `_meta.prompts_version` (AI_PROMPTS §1)
+      prompt_loader.py                loads prompts, fills `{target_language}`, `{direction}`, `{state_or_unknown}`, `{today}`, `{tone}`, `{calendar_notes}`, `{tag_list}`, `{taxonomy_ids}` and the rest of the placeholder table in AI_PROMPTS §2; `untrusted()` wraps user-typed text
     analysis/
       pipeline.py                     `run_analysis(req, ctx)`: validate → redact → (single | two_call) → verify → contacts → deadlines → urgency → scam → emergency → phrasing → injection re-run → clerk → tags/resources → disclaimers → AnalysisResult
       uploads.py                      MIME allow-list, base64 decode, size caps, image/PDF sniffing (magic bytes), PDF page count via pypdfium2 (all in memory)
@@ -102,7 +105,7 @@ apps/api/
       fixed_notices.py                doc-type → fixed RedFlag cards (jury, EAD receipt, not-a-court-order, …) (D-20)
       disclaimers.py                  category → DisclaimerKind + secondary disclaimers
       tagging.py                      validate model resource_tags; FAST re-tag when empty/invalid
-      troubleshoot_pipeline.py        screenshot flow: contacts filter on steps, credential guard, scam scorer, quote check against screen_text
+      troubleshoot_pipeline.py        screenshot flow: contacts filter on steps, credential guard, scam scorer, quote check against screen_text, emergency lexicon over screen_text + user_goal → `TroubleshootResult.safety` (D-14)
       chat_pipeline.py                context compaction (≤ 60k chars), FAST call, grounding check of span ids against original_text, refusal templates, emergency lexicon on question
     packs/
       base.py                         loads data/langpacks/en.json, computes pack_version = sha256, key list with contexts
@@ -111,7 +114,7 @@ apps/api/
       qa.py                           placeholder equality, non-empty, length ratio, no HTML, no phone-like digit runs → fallback_keys
       cache.py                        `var/langpacks/<tag>--<pack_version>.json`, ETag, single-flight `asyncio.Lock` per tag, in-memory LRU
     resources/
-      loader.py                       loads data/resources/*.yaml at boot into `Resource` models; refuses to boot on invalid file (prints path/line); unique ids; verified_on ≤ 120 days or manual_verify
+      loader.py                       loads data/resources/**/*.yaml (excluding `_*.yaml`) at boot into `Resource` models; strips the YAML-only `x_meta` block, applies defaults, prefixes `warnings` with `warn.`; refuses to boot on an invalid file (prints path/line) or duplicate id; freshness is a boot *warning* (`verified_on` > 120 days) and a CI *failure* (`scripts/check_links.py --freshness`); entries > 365 days old are excluded from matching (RESOURCE_DB §8)
       matcher.py                      deterministic scoring (tags, geo, language, institution bonus, status/health penalties), crisis/scam forcing, ≤ 2 per org_type, national fallbacks (user-first §7 + builder-first §7.3)
       checklist.py                    prepare_checklist_keys + data/rules/prepare.yaml doc-type items → ChecklistItem list
       rules_repo.py                   loads data/rules/deadlines.yaml, fixed_notices.yaml, clerk_needs.yaml
@@ -145,11 +148,12 @@ apps/api/
     resources/
       national_immigration.yaml       ImmigrationLawHelp, EOIR lists, USCIS contact/scams, DHS OIG, FTC, ASAP, Afghan/ORR …
       national_health.yaml            HealthCare.gov, Medicaid finder, InsureKidsNow, Dollar For, 501(r), No Surprises, Medicare appeals, MedlinePlus, CDC IIS, HHS OCR LEP (status_note_key hhs_funded_health) …
-      national_benefits_food.yaml     211, SNAP directory, WIC, school meals, Feeding America, USA.gov Benefit Finder, SSA appeals …
-      national_housing.yaml           HUD counselors, PHA contacts, LSC eviction DB (staff reference), LIHEAP, LawHelp/LSC (lsc_restricted) …
+      national_benefits_food.yaml     211, SNAP directory, WIC, school meals, Feeding America, USA.gov Benefit Finder, SSA appeals/scams, LIHEAP …
+      national_housing.yaml           HUD counselors, PHA contacts, USA.gov housing, LSC eviction DB (staff reference), LawHelp/LSC (lsc_restricted) …
       national_crisis.yaml            988, DV hotline, Poison Control, Trafficking hotline
       national_school_work_tax.yaml   NCHE, Plyler explainer, PTI centers, DOL WHD, EEOC, OSHA, IRS notices/ITIN, US Courts jury (warnings: never check citizen / never register to vote)
-      regional/va_nova.yaml           Inova FA, Fairfax CHCN, Neighborhood Health, LAJC, Ayuda, Just Neighbors, Tahirih, CAFB, NVFS, Fairfax CSP, VA eviction self-help (1-833-NOEVICT manual_verify)
+      regional/va_nova.yaml           Inova FA, Fairfax CHCN, Neighborhood Health, LAJC, Ayuda, Just Neighbors, Tahirih, CAFB, NVFS, Fairfax CSP, VA courts/sheriff eviction pages, VA eviction self-help (`va_eviction_helpline`: phone withheld until a human verifies it; `status_note_key: manual_verify`)
+      _meta.yaml                      resource_db_version, checklist vocabulary, why/notes templates, warning-key registry, doc_type_pins, urgent_doc_boost, well_known_ids (RESOURCE_DB §4)
     rules/
       deadlines.yaml                  12 seeded rules with source_url/source_verified_on/verification/valid_until (D-11; no eviction periods)
       prepare.yaml                    doc_type → extra checklist items (e.g. uscis_rfe → "the RFE notice itself on top of your response")
@@ -164,9 +168,9 @@ apps/api/
       <fixture_id>/manifest.yaml      id, title_en, document_type, category, language_of_document, pages, expected facts (for precision/recall), kind
       <fixture_id>/page-1.png …       synthetic pages watermarked SAMPLE (thumbnail served by /v1/demo)
       <fixture_id>/transcript.txt     canonical transcript used by the mock provider
-      <fixture_id>/out.en.json        expected AnalysisModelOut per target language (en, es, prs, ar)
+      <fixture_id>/out.<lang>.json    expected AnalysisModelOut (TroubleshootModelOut for the screenshot) per target language: `out.en.json` for every fixture; `out.es.json`, `out.prs.json`, `out.ar.json` only for the eight demo fixtures listed in BUILD_PLAN §4.5
       (17 fixtures: medicaid_address_confirmation, uscis_i797c_receipt_i765, uscis_rfe_87d, nta_hearing_date, inova_final_notice, insurance_denial_180d, prescription_label, school_immunization_notice, va_pay_or_quit_14d, snap_interview_notice, irs_cp_notice, jury_summons, scam_gift_card_letter, blurry_unreadable_page, spanish_lease, w2_form, traffic_court_notice; plus screenshot portal_file_too_large)
-    fonts/                            Noto subsets used by reportlab (same files as mobile assets/fonts)
+    fonts/                            (exists) static Noto TTFs, Regular + Bold, for the nine `font_hint` families + OFL.txt, used by reportlab; same files as mobile assets/fonts (DECISIONS §14: subsetting is LATER)
   scripts/
     export_openapi.py                 writes openapi.json deterministically from create_app()
     gen_packs.py                      generates/refreshes bundled packs with MODEL_FAST (requires keys; run by one agent, never in CI)
@@ -178,7 +182,7 @@ apps/api/
     smoke.py                          used by scripts/smoke.sh: posts fixtures to every endpoint against a running mock API
   tests/
     conftest.py                       app fixture with AI_PROVIDER=mock, tmp VAR_DIR, frozen clock
-    unit/                             test_keypool.py test_failover.py test_routing.py test_schema_guard.py test_verify.py test_contacts_filter.py test_deadline_rules.py test_urgency.py test_scam.py test_emergency.py test_phrasing.py test_injection.py test_clerk.py test_redaction.py test_uploads.py test_packs_qa.py test_packs_cache.py test_resolve.py test_matcher.py test_loader.py test_checklist.py test_quicksheet.py test_feedback_store.py test_privacy_claims.py test_readability.py
+    unit/                             test_keypool.py test_failover.py test_routing.py test_gemini_timeout_unit.py test_logging_allowlist.py test_schema_guard.py test_keys_exist.py test_prompts_match_doc.py test_verify.py test_contacts_filter.py test_deadline_rules.py test_urgency.py test_scam.py test_emergency.py test_phrasing.py test_injection.py test_clerk.py test_redaction.py test_uploads.py test_packs_qa.py test_packs_cache.py test_resolve.py test_matcher.py test_loader.py test_checklist.py test_quicksheet.py test_feedback_store.py test_privacy_claims.py test_readability.py (owner per §4 "Test ownership")
     contract/                         test_openapi_snapshot.py test_health.py test_config.py test_langpacks.py test_analyze.py test_troubleshoot.py test_chat.py test_resources.py test_rules.py test_quicksheet_pdf.py test_feedback.py test_demo.py test_admin.py test_errors.py (error envelope, MIME/size rejections, 428, 403 gate, 429 shape)
     golden/                           test_fixtures_golden.py (mock output == out.<lang>.json; every validator passes; urgency/date kinds asserted)
     live/                             test_live_gemini.py (skipped unless RUN_LIVE=1 and keys)
@@ -205,9 +209,9 @@ apps/api/
 
 **Language-pack cache (`packs/cache.py`).** Path `var/langpacks/<tag>--<pack_version>.json`; `ETag = sha256(bytes)`; in-memory LRU(256); single-flight lock per tag; `GET` serves bundled files from `data/langpacks/` first; `LANGPACK_CACHE_TTL_DAYS` (default 180) prunes stale generated packs.
 
-**Resource DB (`resources/`).** YAML → `Resource` models at boot; `matcher.match(req) -> ResourceMatchResponse` with the scoring in user-first §7 (tag Jaccard ×2 for primary tag, geo 1.0/0.9/0.7/0.5, language 1.0/0.8, institution bonus 0.5, `lsc_restricted` −0.2 shown not hidden, link-health −0.1), builder-first's diversity cap (≤ 2 per `org_type`) and forced ordering for crisis/scam; `national_fallbacks` always appended.
+**Resource DB (`resources/`).** YAML → `Resource` models at boot; `matcher.match(req, repo, meta, today) -> ResourceMatchResponse` is deterministic and fully specified in `docs/RESOURCE_DB.md` §6: `score = 2·Jaccard(tags) + 1 (primary tag) + geo (1.0 county/zip3 · 0.9 state-only-known · 0.7 state · 0.5 national) + language (1.0 / 0.9 same family / 0.8) + institution 0.5 + priority/100 + pin 0.5 + urgent-doc boost 0.5 − penalties (lsc_restricted −0.2 shown not hidden, manual_verify −0.2, unknown_403/js_rendered −0.1, unverified −0.3, stale > 120 d −0.3)`; forced ordering for crisis/scam; diversity cap ≤ 2 per `org_type`; `national_fallbacks` always appended. Scores order results only; tests assert order.
 
-**Quick sheet (`quicksheet/render.py`).** reportlab `SimpleDocTemplate`, registered Noto TTF per `font_hint`, right-aligned paragraphs for `rtl`, English section headers under localized ones (for the clerk), resource phones only after re-validation against the DB, footer disclaimer; returns bytes.
+**Quick sheet (`quicksheet/render.py`).** reportlab `SimpleDocTemplate`, registered Noto TTF per `font_hint` from `data/fonts/`; every Arabic-script line (`ar`, `prs`, `ps`, `ur`, `fa`) is shaped with `arabic_reshaper.reshape()` then `bidi.algorithm.get_display()` before reportlab draws it (both packages installed 2026-09-27, DECISIONS §14); right-aligned paragraphs for `rtl`, English section headers under localized ones (for the clerk), resource phones only after re-validation against the DB (RESOURCE_DB §7), footer disclaimer; returns bytes ≤ ~200 KB.
 
 **Upload validation (`analysis/uploads.py`).** Decode base64 → sniff magic bytes → compare with declared MIME → enforce per-page and total caps → for PDF count pages with `pypdfium2.PdfDocument(bytes)`; reject mixed images+PDF; compute total inline bytes ≤ `MAX_UPSTREAM_INLINE_BYTES` before calling the provider.
 
@@ -234,8 +238,11 @@ apps/mobile/
     images/icon.png, splash-icon.png, favicon.png, android-icon-*.png   (exists) replaced with ProxyHealth artwork by WP8 (same file names)
     images/expo-*.png, react-logo*.png, logo-glow.png, tutorial-web.png, tabIcons/   (delete) template artwork
     expo.icon                          (exists) iOS icon composer file; replaced by WP8
-    fonts/NotoSans-*.ttf NotoNaskhArabic-*.ttf NotoNastaliqUrdu-*.ttf NotoSansEthiopic-*.ttf NotoSansMyanmar-*.ttf NotoSansDevanagari-*.ttf NotoSansBengali-*.ttf NotoSansGurmukhi-*.ttf NotoSansHanifiRohingya-*.ttf   subsetted fonts loaded with expo-font
-    fixtures/manifest.json, <id>.png   synced thumbnails for the offline sample list
+    fonts/NotoSans-*.ttf NotoNaskhArabic-*.ttf NotoNastaliqUrdu-*.ttf NotoSansEthiopic-*.ttf NotoSansMyanmar-*.ttf NotoSansDevanagari-*.ttf NotoSansBengali-*.ttf NotoSansGurmukhi-*.ttf NotoSansHanifiRohingya-*.ttf OFL.txt   (exists) static Regular + Bold TTFs mirrored from apps/api/data/fonts by sync_to_mobile.py; loaded with expo-font (subsetting LATER)
+    fixtures/manifest.json, <id>.png, <id>.result.<lang>.json   synced by sync_to_mobile.py (WP7): thumbnails ≤ 600 px for the offline sample list and full `AnalysisResult`/`TroubleshootResult` JSON per fixture × recorded language for offline sample mode (`api/offline.ts`)
+    resources/national_fallbacks.json  synced by sync_to_mobile.py (WP7): `list[Resource]` for `_meta.yaml.well_known_ids.offline_subset` (English-only text) — the bundled resource seed the Help tab shows offline
+  locales/<tag>.json                   synced by sync_to_mobile.py (WP7): permission-string translations (`perm.*` pack keys) referenced by `app.json` `locales`
+  public/privacy/index.html            (WP8) the public privacy policy served at `/privacy` on the web host (`PRIVACY_POLICY_URL`); copied into `dist/` by `expo export`
   src/
     app/                               Expo Router routes ONLY (no non-route code)
       _layout.tsx                      (replace) root Stack + providers (ThemeProvider, I18nProvider, DirectionProvider, ApiConfigProvider, StorageProvider, SplashScreen gate); Stack.Screen for (tabs) and modal groups
@@ -261,7 +268,7 @@ apps/mobile/
         index.tsx                      S7 result: emergency card, urgency banner, disclaimer header, three cards, details & quotes, glossary, red flags, help preview, footer, action bar
         source.tsx                     S8 side-by-side original/translation with tappable highlight boxes
         chat.tsx                       S9 grounded follow-up chat
-        clerk.tsx                      S10 hand-the-phone clerk card (LTR, brightness up, long-press exit)
+        clerk.tsx                      S10 hand-the-phone clerk card (LTR, high contrast, `clerk.brightness_tip` line — expo-brightness is not installed, long-press exit); the reserved id `generic` renders the no-analysis card from PRODUCT_SPEC §8.4 (no separate route)
         quicksheet.tsx                 S15 quick sheet preview + share/print/copy/read aloud
         help.tsx                       S11 Action Hub for this document
       troubleshoot.tsx                 S16 Stuck on a website? / Is this a scam? (mode chips)
@@ -317,11 +324,11 @@ apps/mobile/
       migrations.ts                    schema versions for the sqlite vault
       wipe.ts                          "Delete everything": DB + files + kv + secure + consent + install id
     features/
-      onboarding/                      language grid data, locale preselect, consent view-model (tier badge, record {consent_version, accepted_at, tier_seen, platform})
+      onboarding/                      language grid data, locale preselect, consent view-model (tier badge, record {consent_version, accepted_at, tier_seen, platform}), PrivacyNotice.tsx (the in-app `privacy.notice.*` sheet opened by `consent.read_more` and by Settings → "How your paper is handled"; links to `privacy_policy_url`)
       scan/                            useCapture (camera/picker), compress.ts (expo-image-manipulator resize 1600 px, JPEG 0.8, EXIF stripped), masks.ts (rect drawing; web canvas burn), pdfPick.ts (expo-document-picker, size/page pre-checks), pageQueue.ts, blurHint.web.ts (canvas variance; web only)
       analysis/                        useAnalyze (build AnalyzeRequest, progress, error mapping), cards/ (Summary, Demands, Plan, Details, Glossary, RedFlags), unverifiedSection.tsx ("I saw these but could not confirm…"), urgencyCopy.ts, disclaimers.ts (fixed copy keys), hearItMode.ts (auto-play cards)
       chat/                            useChat (context compaction, history ≤ 8), refusalTemplates.ts, suggestedQuestions
-      clerk/                           clerk card view-model, brightness (expo-brightness NOT installed → uses `Brightness` no-op; documented), long-press exit, vault navigation hidden flag
+      clerk/                           clerk card view-model (analysis card + generic card presets), `clerk.brightness_tip` line (expo-brightness is NOT installed, so brightness is never changed and never claimed), long-press exit, vault navigation hidden flag
       help/                            resource matching hooks, need tiles, LSC note + "If that is not you" link, checklist, national fallbacks, "Verified on" chips
       vault/                           members, save flow ("Whose paper is this?"), document detail from storage, move/delete, per-member wipe
       reminders/                       schedule 7/3/1-day 9 am reminders (native), generic bodies, .ics generation (web + native "Add to calendar" via share), permission explanations
@@ -375,7 +382,7 @@ apps/mobile/
 
 **API client.** `client.ts` wraps `fetch` with `AbortController` timeouts per endpoint, adds headers from `kv` (install id) and `session` (consent version), parses `ErrorResponse` into `ApiError`, and exposes typed functions `getConfig`, `getPack`, `postPack`, `analyze`, `troubleshoot`, `chat`, `matchResources`, `listResources`, `quicksheetPdf`, `feedback`, `listFixtures`. Demo mode: `demo_sample_id` set on requests; if the API is unreachable, `offline.ts` serves bundled sample results (`assets/fixtures`) for sample papers only and shows the sample-mode banner; real scans are never faked.
 
-**Storage layer.** Interface `Vault` in `storage/index.ts`; Metro resolves `.native.ts`/`.web.ts` automatically. Native: sqlite tables `members(id, name, color, created_at)`, `documents(id, member_id, title, category, document_type, analysis_json, created_at, next_date_iso, keep_pages)`, `pages(document_id, page, file_path, thumb_path)`, `checklist_state(document_id, step_id, checked)`, `reminders(id, document_id, demand_id, fire_at, notification_id, detail_opt_in)`, `meta(key, value)`; files under `Paths.document/vault/<doc_id>/`. Web: memory Map by default; IndexedDB (`proxyhealth` DB, object stores mirroring the tables) when opted in; `clearOnClose` via `pagehide`. Secrets: `secure.native.ts` only; web has none.
+**Storage layer.** Interface `Vault` in `storage/index.ts`; Metro resolves `.native.ts`/`.web.ts` automatically. Native: sqlite tables `members(id, name, color, created_at)`, `documents(id, member_id, title, category, document_type, analysis_json, created_at, next_date_iso, keep_pages)`, `pages(document_id, page, file_path, thumb_path)`, `checklist_state(document_id, step_id, checked)`, `reminders(id, document_id, demand_id, fire_at, notification_id, detail_opt_in)`, `meta(key, value)` (schema version; chat history per document as `chat:<doc_id>`); files under `Paths.document/vault/<doc_id>/`. There is **no** `consent` table: the consent record `{consent_version, accepted_at, tier_seen, platform}` lives in `kv` (AsyncStorage) so it exists before the vault does and works on web; `Vault.consent` in BUILD_PLAN §4.2 is a thin wrapper over `kv` (D-22). Web: memory Map by default; IndexedDB (`proxyhealth` DB, object stores mirroring the tables) when opted in; `clearOnClose` via `pagehide`. Secrets: `secure.native.ts` only; web has none.
 
 **TTS wrapper.** `lib/tts.ts` builds the voice map once, chooses `Enhanced` voices, chunks by sentence under `Speech.maxSpeechInputLength`, exposes `speak(text, lang)`, `stop()`, `useSpeaking()`; `features/speech/fallback.ts` maps `tts_fallback_tag` and produces the honest message ("No Rohingya voice on this phone. Hear it in Burmese or English?").
 
@@ -395,17 +402,19 @@ apps/mobile/
 
 | WP | Owner scope (exclusive write) | Reads | Definition of done |
 |---|---|---|---|
-| **WP0 Contract & tokens** (first) | `apps/api/proxyhealth_api/contracts/**`, `apps/api/openapi.json`, `apps/api/scripts/export_openapi.py`, `apps/mobile/src/api/schema.d.ts`, `apps/mobile/src/api/types.ts`, `apps/mobile/src/design/tokens.ts`, `apps/api/data/langpacks/en.json`, `apps/api/data/languages.yaml`, `apps/api/proxyhealth_api/ai/provider.py`, `apps/api/proxyhealth_api/ai/mock.py` (hour-one single fixture), `docs/API_CONTRACT.md` | DECISIONS | `export_openapi.py` runs; `npm run gen:types` produces types; `tests/contract/test_openapi_snapshot.py` passes; `schema_guard` passes; MockProvider returns a valid `AnalysisModelOut` for any input |
-| **WP1 API core + AI** | `main.py settings.py errors.py middleware.py ratelimit.py logging_.py deps.py`, `ai/**` except `provider.py`/`mock.py`, `packs/**`, `routers/{health,config,langpacks,admin}.py`, `Dockerfile`, `.env.example`, `pyproject.toml` | contracts | keypool tests (429 rotation, Retry-After, RPD detection, persistence, distinct projects); tier gate 403 + consent 428 tests; `/health`, `/v1/config` correct per tier; langpack cache/ETag tests |
-| **WP2 Analysis pipelines + safety** | `analysis/**`, `routers/{analyze,troubleshoot,chat}.py`, `data/rules/**`, `data/safety/**`, `ai/prompts/**`, `ai/prompt_loader.py`, `docs/AI_PROMPTS.md`, `docs/DOCUMENT_TAXONOMY.md` | contracts, `ai/provider.py` | validator unit tests; pipeline tests against mock; urgency/deadline/scam/emergency/phrasing/injection/redaction tests |
-| **WP3 Resources & quick sheet** | `resources/**`, `quicksheet/**`, `routers/{resources,rules,quicksheet}.py`, `data/resources/**`, `data/fonts/**`, `scripts/check_links.py`, `docs/RESOURCE_DB.md` | contracts | YAML validates at boot; ≥ 70 entries with verified URLs; matcher tests; PDF renders RTL fixtures |
-| **WP4 Mobile foundation** | `src/app/_layout.tsx`, `src/app/index.tsx`, `src/app/(tabs)/_layout.tsx`, `src/app/onboarding/**`, `src/app/(tabs)/settings.tsx`, `src/design/theme.tsx`, `src/design/components/**`, `src/i18n/**` (except `packs/en.json`), `src/storage/**`, `src/api/{client,errors,config,offline}.ts`, `src/lib/{network,ids,platform,tts}.ts`, `src/store/**`, `app.json`, `eas.json`, deletions of template files | tokens, schema.d.ts, en.json | tsc + jest + lint + web export green; RTL flip on web and native; consent tier badge; storage adapter tests both platforms |
+| **WP0 Contract & tokens** (first) | `apps/api/proxyhealth_api/contracts/**`, `apps/api/openapi.json`, `apps/api/scripts/export_openapi.py`, `apps/api/tests/conftest.py`, `apps/api/tests/contract/test_openapi_snapshot.py`, `apps/api/tests/unit/{test_schema_guard,test_keys_exist}.py`, `apps/mobile/src/api/schema.d.ts`, `apps/mobile/src/api/types.ts`, `apps/mobile/src/design/tokens.ts`, `apps/mobile/package.json` (scripts only), `apps/mobile/tsconfig.json`, `apps/mobile/eslint.config.js`, `apps/api/data/langpacks/en.json`, `apps/api/data/langpacks/_contexts.json`, `apps/api/data/languages.yaml`, `apps/api/proxyhealth_api/ai/provider.py`, `apps/api/proxyhealth_api/ai/mock.py` (hour-one single fixture), `docs/API_CONTRACT.md`; day-0 skeletons handed off at M0 (BUILD_PLAN §5.0) | DECISIONS | `export_openapi.py` runs; `npm run gen:types` produces types; `tests/contract/test_openapi_snapshot.py` passes; `schema_guard` passes; MockProvider returns a valid `AnalysisModelOut` for any input |
+| **WP1 API core + AI** | `main.py settings.py errors.py middleware.py ratelimit.py logging_.py deps.py __init__.py`, `ai/**` except `provider.py`, `mock.py`, `recording.py`, `prompts/**`, `prompt_loader.py`; `packs/**`, `routers/{health,config,langpacks,admin}.py`, `Dockerfile`, `requirements.txt`, `.env.example`, `pyproject.toml`, `scripts/{gen_packs,spike_schema}.py`, `data/langpacks/<tag>.json` for tags ≠ `en` | contracts | keypool tests (429 rotation, Retry-After, RPD detection, persistence, distinct projects); tier gate 403 + consent 428 tests; `/health`, `/v1/config` correct per tier; langpack cache/ETag tests |
+| **WP2 Analysis pipelines + safety** | `analysis/**`, `routers/{analyze,troubleshoot,chat}.py`, `data/rules/**` **except `prepare.yaml`**, `data/safety/**`, `ai/prompts/**`, `ai/prompt_loader.py`, `scripts/eval_golden.py`, `tests/live/**`, `docs/AI_PROMPTS.md`, `docs/DOCUMENT_TAXONOMY.md` | contracts, `ai/provider.py` | validator unit tests; pipeline tests against mock; urgency/deadline/scam/emergency/phrasing/injection/redaction tests |
+| **WP3 Resources & quick sheet** | `resources/**`, `quicksheet/**`, `routers/{resources,rules,quicksheet}.py`, `data/resources/**`, `data/rules/prepare.yaml` (its keys must exist in `data/resources/_meta.yaml.checklist`), `data/fonts/**`, `scripts/check_links.py`, `docs/RESOURCE_DB.md` | contracts | YAML validates at boot; ≥ 70 entries with verified URLs; matcher tests; PDF renders RTL fixtures |
+| **WP4 Mobile foundation** | `src/app/{_layout,index,+not-found,+html}.tsx`, `src/app/(tabs)/_layout.tsx`, `src/app/onboarding/**`, `src/app/(tabs)/settings.tsx`, `src/design/theme.tsx`, `src/design/components/**`, `src/i18n/**` (except generated `packs/*.json` and `languages.ts`), `src/storage/**`, `src/api/{client,errors,config,offline}.ts`, `src/lib/{network,ids,platform,tts}.ts`, `src/store/**`, `src/features/onboarding/**`, `src/hooks/**`, `src/global.css`, `app.json`, `eas.json`, deletions of template files | tokens, schema.d.ts, en.json | tsc + jest + lint + web export green; RTL flip on web and native; consent tier badge; storage adapter tests both platforms |
 | **WP5 Scan → Result → Chat → Clerk** | `src/app/scan/**`, `src/app/result/**`, `src/app/emergency.tsx`, `src/features/{scan,analysis,chat,clerk,speech,feedback,emergency}/**`, `src/lib/{image,pdf,dates}.ts` | WP4 components/store, contracts | full flow with mock API on web + dev build; cards/Bidi/crop tests; a11y labels |
 | **WP6 Vault, Help, Reminders, Quick sheet, Troubleshoot** | `src/app/(tabs)/{index,papers,help}.tsx`, `src/app/papers/**`, `src/app/reminders.tsx`, `src/app/troubleshoot.tsx`, `src/features/{vault,help,reminders,quicksheet,troubleshoot,demo,settings}/**`, `src/lib/{notifications.*,ics}.ts` | WP4, contracts | opt-in save + members + wipe; reminders native + .ics web; quick sheet share/print/server PDF; troubleshoot modes |
-| **WP7 Fixtures, mock, demo** | `data/fixtures/**`, `scripts/{make_fixtures,sync_to_mobile}.py`, `ai/mock.py` (after hour one), `ai/recording.py`, `demo/**`, `routers/demo.py`, `feedback/**`, `routers/feedback.py`, `tests/golden/**`, `apps/mobile/assets/fixtures/**`, `docs/DEMO_SCRIPT.md` | contracts, validators | 17 fixtures × 4 languages; goldens pass validators; dHash match works; demo runs offline |
-| **WP8 DevOps, CI, store** | `Makefile`, `scripts/{dev,smoke,gen-types,ci}.sh`, `.github/workflows/ci.yml`, `apps/mobile/assets/images/**`, `docs/{DEPLOYMENT,RUNBOOK,STORE_LISTING,COMPLIANCE_PRIVACY}.md`, `.gitignore` (`var/`, `.env`, `dist/`) | everything | `make dev` boots API + web; CI runs pytest, tsc, jest, lint, contract diff, YAML validation, pack sync check, readability, web export |
+| **WP7 Fixtures, mock, demo** | `data/fixtures/**`, `scripts/{make_fixtures,sync_to_mobile}.py`, `ai/mock.py` (after hour one), `ai/recording.py`, `demo/**`, `routers/demo.py`, `feedback/**`, `routers/feedback.py`, `tests/golden/**`, generated mobile copies `apps/mobile/assets/fixtures/**`, `apps/mobile/assets/resources/**`, `apps/mobile/locales/**`, `apps/mobile/src/i18n/packs/*.json`, `apps/mobile/src/i18n/languages.ts` (written only by `sync_to_mobile.py`), `docs/DEMO_SCRIPT.md` | contracts, validators | 17 fixtures + 1 screenshot with `out.en.json`, plus `es`/`prs`/`ar` outputs for the eight demo fixtures (BUILD_PLAN §4.5); goldens pass validators; dHash match works; demo runs offline; `sync_to_mobile.py --check` green |
+| **WP8 DevOps, CI, store** | `Makefile`, `scripts/{dev,smoke,gen-types,ci}.sh`, `apps/api/scripts/smoke.py`, `.github/workflows/ci.yml`, `.gitignore` (`var/`, `.env`, `dist/`), `README.md`, `apps/mobile/assets/images/**`, `apps/mobile/assets/expo.icon`, `apps/mobile/public/**` (privacy policy HTML), `apps/api/tests/unit/{test_privacy_claims,test_readability}.py`, `docs/{DEPLOYMENT,RUNBOOK,STORE_LISTING,COMPLIANCE_PRIVACY}.md` | everything | `make dev` boots API + web; CI runs pytest, tsc, jest, lint, contract diff, YAML validation, pack sync check, privacy claims, readability, web export; privacy policy served at `/privacy` |
 
-Cross-WP needs are filed as one line in `docs/DECISIONS.md` §14 "Change log" (append-only) and resolved by WP0.
+**Test ownership** (BUILD_PLAN Appendix B mirrors this; until that appendix exists this row is the rule): a test file belongs to the package that owns the module it exercises. API `tests/unit/test_<module>.py` → owner of `<module>` (keypool/failover/routing/gemini_timeout_unit/logging_allowlist/packs_qa/packs_cache/resolve → WP1; schema_guard/keys_exist → WP0; prompts_match_doc/verify/contacts_filter/deadline_rules/urgency/scam/emergency/phrasing/injection/clerk/redaction/uploads → WP2; matcher/loader/checklist/quicksheet → WP3; feedback_store → WP7; privacy_claims/readability → WP8). `tests/contract/test_<router>.py` → owner of the router (health/config/langpacks/admin/errors → WP1; analyze/troubleshoot/chat → WP2; resources/rules/quicksheet_pdf → WP3; demo/feedback → WP7; openapi_snapshot → WP0). `tests/golden/**` → WP7; `tests/live/**` → WP2; `tests/conftest.py` → WP0 (WP-specific fixtures go in that WP's own modules, never a new `conftest.py`). Mobile `src/__tests__/`: smoke, i18n, bidi, storage.*, api-client, consent → WP4; result-cards, urgency-banner → WP5; reminders, quicksheet → WP6.
+
+Files not named in any scope are unowned: an agent that needs one files a change-log line first (BUILD_PLAN §1.2). Cross-WP needs are filed as one line in `docs/DECISIONS.md` §14 "Change log" (append-only) and resolved by WP0.
 
 ---
 
@@ -432,7 +441,7 @@ Jobs: **api** (ruff, mypy, pytest incl. contract snapshot, golden, privacy-claim
 
 **API host.** Recommended: Google Cloud Run in the same Google account as the billed Gemini project (auditability of the paid-tier invariant): container from `apps/api/Dockerfile`, 1 vCPU / 1 GiB, min instances 0 (or 1 for demos), **request timeout 120 s**, concurrency 32, secrets from Secret Manager into env (`GEMINI_KEYS`, `INSTALL_HASH_SECRET`, `ADMIN_TOKEN`), no persistent disk (key-pool state is re-learned after a cold start; optional small volume for `var/`). Alternatives with the same image: Fly.io, Render. A separate **demo instance** runs `AI_PROVIDER=mock` permanently for judges. Health probe `/health`. Alert: `keys_healthy == 0` for 5 min.
 
-**Web.** `npx expo export --platform web` (`web.output: "static"`, already set) → `dist/` → `eas deploy` on EAS Hosting (`https://proxyhealth.expo.app`; `--prod` for production; free plan 100k requests/month) or Vercel/Netlify static with the documented rewrites. `EXPO_PUBLIC_API_URL` is baked at export; the web origin is added to `CORS_ORIGINS`. No COOP/COEP headers needed (no sqlite-wasm). Privacy policy served at `/privacy` (HTML, not PDF) from `public/`.
+**Web.** `npx expo export --platform web` (`web.output: "static"`, already set) → `dist/` → `eas deploy` on EAS Hosting (`https://proxyhealth.expo.app`; `--prod` for production; free plan 100k requests/month) or Vercel/Netlify static with the documented rewrites. `EXPO_PUBLIC_API_URL` is baked at export; the web origin is added to `CORS_ORIGINS`. No COOP/COEP headers needed (no sqlite-wasm). The privacy policy is served at `/privacy` (HTML, not PDF) from `apps/mobile/public/privacy/index.html` (WP8; `expo export` copies `public/` into `dist/`), which is what `PRIVACY_POLICY_URL` points at.
 
 **Mobile builds (`eas.json`).**
 ```json
@@ -525,7 +534,7 @@ No secrets ever live in the mobile app.
 ## 7. Invariants every agent must keep (quick checklist)
 
 1. No user document, image, transcript or model prose is written to disk or logs on the server; `var/` holds only key-pool state, packs and feedback counters.
-2. `unpaid`/`mixed` tiers cannot analyze real documents (403) — enforced in middleware, tested in `tests/contract/test_errors.py`.
+2. `unpaid`/`mixed` tiers cannot analyze real documents (403) — enforced server-side by the `consent_and_tier_gate` FastAPI dependency exported from `middleware.py` (a dependency rather than pure middleware because the gate must read `demo_sample_id` from the body; BUILD_PLAN §4.1), tested in `tests/contract/test_errors.py`.
 3. Every fact shown carries `source_quote` + `span_ids` + `confidence` + `verified`; unverified facts never drive urgency or reminders.
 4. Contacts and organization names come only from the paper or `data/resources/*.yaml`.
 5. Dates are computed only by `deadline_rules.py` from a printed relative phrase + a verified anchor + a cited rule; printed dates win.
