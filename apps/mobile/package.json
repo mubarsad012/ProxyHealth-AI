@@ -62,14 +62,13 @@
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "gen:types": "openapi-typescript http://127.0.0.1:8000/openapi.json -o src/api/schema.d.ts",
+    "gen:types": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
     "export:web": "expo export --platform web"
   },
   "private": true,

@@ -1,0 +1,27 @@
+[project]
+name = "proxyhealth_api"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["live: needs RUN_LIVE=1 and keys"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["var", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["^var/", "^\\.venv/"]
+
+[[tool.mypy.overrides]]
+module = ["pypdfium2.*", "reportlab.*", "slowapi.*", "arabic_reshaper.*", "bidi.*"]
+ignore_missing_imports = true

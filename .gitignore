@@ -42,3 +42,6 @@ Thumbs.db
 !.vscode/extensions.json
 coverage/
 htmlcov/
+
+# --- API runtime state (keypool.json, langpacks cache, feedback counters) ---
+apps/api/var/

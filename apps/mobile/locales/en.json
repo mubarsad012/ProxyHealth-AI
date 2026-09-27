@@ -1,0 +1,5 @@
+{
+  "NSCameraUsageDescription": "ProxyHealth AI uses the camera only to photograph the paper you want explained. Photos are not saved on our servers.",
+  "NSPhotoLibraryUsageDescription": "ProxyHealth AI lets you choose a photo of a paper to explain. We do not access your other photos.",
+  "perm_notifications": "ProxyHealth AI reminds you about dates it found on your papers. Reminder text is generic unless you choose otherwise."
+}
