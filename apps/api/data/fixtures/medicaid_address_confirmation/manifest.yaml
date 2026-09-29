@@ -1,0 +1,31 @@
+id: medicaid_address_confirmation
+title_key: fixture.medicaid_address_confirmation
+title_en: Medicaid letter asking to confirm your address
+document_type: medicaid_renewal
+category: benefits
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/medicaid_address_confirmation/pages/1
+dhash: 00a0a850c410d001c00a8018400007401c0160016008006801800a000c01d406
+page_dhashes:
+- 00a0a850c410d001c00a8018400007401c0160016008006801800a000c01d406
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - high
+  nearest_date_iso: '2026-10-14'
+  date_kinds:
+    d1: stated
+  demands_count: 2
+  scam_risk: none
+  readable: true
+  clerk_appended_keys:
+  - clerk.interpreter_hhs
+  state: VA

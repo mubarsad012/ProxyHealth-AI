@@ -1,0 +1,83 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional pharmacy and prescriber; a common antibiotic so the label reads like a real one.
+id: prescription_label
+kind: document
+title_en: "Prescription label from a pharmacy"
+document_type: prescription_label
+category: medical
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [0, 110, 60], band_height: 120, watermark_angle: 44, font_scale: 1.15}
+pages:
+  - - {text: "Sample Street Pharmacy", style: band, ref: sender}
+    - {text: "Rx# 0012345", style: right, ref: rx}
+    - {text: "SAMPLE PATIENT", style: bold, ref: patient}
+    - {text: "AMOXICILLIN 500 MG CAPSULE", style: heading, ref: drug}
+    - {text: "Take 1 capsule by mouth three times daily until all taken.", style: bold, ref: directions}
+    - {text: "Qty: 30 | Refills: 0", style: row, ref: qty}
+    - {text: "Prescriber: Dr. A. Sample", style: body, ref: prescriber}
+    - {text: "Date filled: 09/28/2026", style: body, ref: filled}
+    - {text: "Discard after: 03/15/2027", style: body, ref: discard}
+    - {text: "Take with food if it upsets your stomach.", style: note, ref: aux}
+    - {text: "Pharmacist questions? Call (571) 555-0163.", style: body, ref: phone}
+expected:
+  urgency_level: [info]
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: medical_information_only
+  clerk_appended_keys: [clerk.interpreter_hhs]
+  glossary_terms: [Refills, Discard]
+out:
+  base:
+    sender_as_written: "Sample Street Pharmacy"
+    sender_kind: pharmacy
+    summary_title: "Medicine label for amoxicillin from Sample Street Pharmacy"
+    summary_body: "This is the label for AMOXICILLIN 500 MG CAPSULE. It says: 'Take 1 capsule by mouth three times daily until all taken.' It shows 0 refills."
+    summary_span_ids: ["@drug", "@directions", "@qty"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "The label says to discard the medicine after 03/15/2027."
+        value_verbatim: "03/15/2027"
+        source_quote: "Discard after: 03/15/2027"
+        span_ids: ["@discard"]
+        date_text: "03/15/2027"
+        role: expiry
+        confidence: high
+      - id: d2
+        kind: action
+        text: "The label shows 0 refills. Ask the pharmacist or the prescriber if you have questions about more medicine."
+        value_verbatim: "Refills: 0"
+        source_quote: "Qty: 30 | Refills: 0"
+        span_ids: ["@qty"]
+        role: other
+        confidence: high
+      - id: d3
+        kind: contact
+        text: "Pharmacy phone, from your paper: (571) 555-0163."
+        value_verbatim: "(571) 555-0163"
+        source_quote: "Pharmacist questions? Call (571) 555-0163."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Ask the pharmacist to explain the directions in your language. You can ask for an interpreter.", kind: ask, resource_tags: [language_access], span_ids: ["@directions"], demand_id: null}
+      - {id: s2, text: "Keep all your medicine bottles together and bring them to your next visit.", kind: gather, resource_tags: [], span_ids: ["@drug"], demand_id: null}
+      - {id: s3, text: "Your doctor, nurse or pharmacist can answer questions about this medicine.", kind: professional, resource_tags: [prescription_help], span_ids: ["@prescriber"], demand_id: null}
+    glossary:
+      - {term_as_written: "Refills", explanation: "How many more times the pharmacy can fill this without a new prescription."}
+      - {term_as_written: "Qty", explanation: "Quantity: how many capsules are in the bottle."}
+      - {term_as_written: "by mouth", explanation: "Swallow it."}
+      - {term_as_written: "Discard", explanation: "Throw away."}
+    red_flags: []
+    questions_to_ask:
+      - "Can you explain these directions in my language?"
+      - "What should I do if I forget a capsule?"
+      - "Can I get this label printed in my language?"
+    clerk_need_en: "my medicine label - how to take it, and a label in my language"
+    resource_tags: [prescription_help, language_access]
+    institutions_as_written: ["Sample Street Pharmacy"]
+    form_numbers: []
+    legibility: good

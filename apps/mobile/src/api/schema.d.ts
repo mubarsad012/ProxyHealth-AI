@@ -183,7 +183,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Quicksheet Pdf */
+        /**
+         * Quicksheet Pdf
+         * @description Resources are re-validated against the DB inside ``render`` (RESOURCE_DB §7).
+         */
         post: operations["quicksheet_pdf_v1_quicksheet_pdf_post"];
         delete?: never;
         options?: never;
@@ -198,7 +201,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Resources */
+        /**
+         * List Resources
+         * @description Browse the DB: ``tag`` exact; ``state`` keeps national + serving entries; ``q`` substring.
+         */
         get: operations["list_resources_v1_resources_get"];
         put?: never;
         post?: never;
@@ -217,7 +223,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Match Resources */
+        /**
+         * Match Resources
+         * @description Deterministic matcher (RESOURCE_DB §6); 200 always — an empty ``results`` is fine.
+         */
         post: operations["match_resources_v1_resources_match_post"];
         delete?: never;
         options?: never;

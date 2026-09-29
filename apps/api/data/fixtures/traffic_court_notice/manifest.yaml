@@ -1,0 +1,31 @@
+id: traffic_court_notice
+title_key: fixture.traffic_court_notice
+title_en: Traffic court notice with a court date
+document_type: traffic_court
+category: court
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/traffic_court_notice/pages/1
+dhash: 0281a1121406b888e110c010808002010600080c3014607000e0018003011107
+page_dhashes:
+- 0281a1121406b888e110c010808002010600080c3014607000e0018003011107
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - high
+  - critical
+  nearest_date_iso: '2026-10-09'
+  date_kinds:
+    d1: stated
+    d3: stated
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  fixed_keys:
+  - fixed.traffic_court_immigration
+  disclaimer_kind: legal_information_only
+  state: VA

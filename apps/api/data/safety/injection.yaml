@@ -1,0 +1,47 @@
+# data/safety/injection.yaml — WP2 (D-15; AI_PROMPTS §11.8).
+#
+# Phrases that mark text addressed to the model rather than to the reader. Matching is
+# case-insensitive over NFKC-normalized, whitespace-collapsed block text. A hit on ≥ 1 block makes
+# the pipeline re-run once with those blocks masked (image mask in single mode, text mask in
+# two-call mode) and attaches `red_flags[kind=injection_suspected]` + `warnings: [injection_masked]`.
+version: "2026-09-27"
+mask_text: "[text addressed to computers removed]"
+# Loader marker strings and forged section fences (AI_PROMPTS §2) — always suspicious in a paper.
+markers:
+  - "<<<USER_TEXT_BEGIN>>>"
+  - "<<<USER_TEXT_END>>>"
+  - "=== BEGIN"
+  - "=== END"
+patterns:
+  en:
+    - "ignore (all |any |the |your )?(previous|prior|above|earlier|preceding) (instructions?|prompts?|rules?|messages?)"
+    - "disregard (all |any |the |your )?(previous|prior|above|earlier) (instructions?|prompts?|rules?)"
+    - "you are (now )?(an? |the )?(ai|assistant|model|language model|chatbot|llm)\\b"
+    - "\\bsystem prompt\\b"
+    - "\\bas an ai\\b"
+    # model-addressed only: "respond only with …", "respond with JSON / the word … / exactly …";
+    # a letter's "Please respond with the enclosed form" is not an injection.
+    - "\\brespond (only|exclusively|solely) (with|in)\\b"
+    - "\\brespond with (only|json|the (single )?word|exactly|nothing (but|except|else))\\b"
+    - "\\bdo not (tell|inform|show|warn) the (user|reader|person)\\b"
+    - "\\b(print|reveal|show|output|repeat) (your|the) (instructions|system prompt|prompt|rules)\\b"
+    - "\\bdeveloper (message|mode|instructions?)\\b"
+    - "\\bthe (app|assistant|model|ai) (should|must|will) (say|tell|report|answer|output|respond)\\b"
+    - "\\bnew instructions?:"
+    - "\\boverride (the |your )?(safety|rules|instructions)\\b"
+    - "\\bjailbreak\\b"
+    - "\\bset (the )?(urgency|scam[_ ]risk|level) to\\b"
+    - "\\bmark (this|the) (paper|document|letter) as (safe|genuine|real|verified)\\b"
+    - "\\btranslate this (exactly|verbatim) and (add|include|say)\\b"
+  es:
+    - "ignora(r)? (todas? )?(las )?(instrucciones|indicaciones|reglas) (anteriores|previas)"
+    - "eres (ahora )?(un|una|el|la) (ia|asistente|modelo|chatbot)\\b"
+    - "\\bmensaje del sistema\\b"
+    - "\\bcomo (una )?ia\\b"
+    - "\\bresponde (solo|solamente|únicamente) (con|en)\\b"
+    - "\\bresponde con (json|la palabra|exactamente|nada más)\\b"
+    - "\\bno le (digas|informes|muestres) al (usuario|lector)\\b"
+    - "\\b(imprime|muestra|revela) (tus|las) instrucciones\\b"
+    - "\\bmodo desarrollador\\b"
+    - "\\bla (app|aplicación|asistente) (debe|debería) (decir|informar|responder)\\b"
+    - "\\bnuevas instrucciones:"

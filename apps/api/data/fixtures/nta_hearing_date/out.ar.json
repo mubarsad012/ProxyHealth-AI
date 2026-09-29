@@ -1,0 +1,359 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "nta",
+  "category": "court",
+  "document_type_confidence": "high",
+  "sender_as_written": "Executive Office for Immigration Review - Immigration Court",
+  "sender_kind": "court",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "وزارة العدل الأمريكية\nالمكتب التنفيذي لمراجعة قضايا الهجرة - محكمة الهجرة\nالنموذج I-862\nإشعار بالحضور\nفي إجراءات الترحيل بموجب المادة ٢٤٠ من قانون الهجرة والجنسية\nالمدعى عليه: SAMPLE RESPONDENT\nتدّعي وزارة الأمن الداخلي أن:\n١. أنت لست مواطنًا أو من رعايا الولايات المتحدة.\n٢. دخلت الولايات المتحدة من مكان غير معروف في تاريخ غير معروف.\nيُطلب منك الحضور أمام قاضي هجرة في 100 Sample Plaza, Suite 200, Fairfax, VA 22030 في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا.\nيمكن أن يمثلك في هذه الإجراءات، دون تكلفة على الحكومة، محامٍ أو شخص آخر مخوّل.\nعدم الحضور: إذا لم تحضر الجلسة في الوقت والمكان المحددين، قد يصدر أمر ترحيل في غيابك.\nيجب أن تُبلغ محكمة الهجرة بأي تغيير في العنوان خلال خمسة أيام عمل، باستخدام النموذج EOIR-33."
+    }
+  ],
+  "summary_title": "إشعار بالحضور أمام محكمة الهجرة في ٧ أكتوبر ٢٠٢٦",
+  "summary_body": "هذه الورقة تبدأ قضية في محكمة الهجرة. تذكر ما تقوله الحكومة عنك وتطلب منك الحضور أمام قاضٍ في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا. لم يُحسم شيء بعد.",
+  "summary_body_en": "This paper starts a case in immigration court. It lists what the government says about you and tells you to appear before a judge on October 7, 2026 at 8:30 AM. Nothing is decided yet.",
+  "summary_span_ids": [
+    "p1b4",
+    "p1b7",
+    "p1b10"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "اذهب إلى محكمة الهجرة في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا.",
+      "value_verbatim": "October 7, 2026",
+      "source_quote": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1,
+      "date_text": "October 7, 2026",
+      "time_text": "8:30 AM",
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "hearing_date",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "contact",
+      "text": "عنوان المحكمة مطبوع على ورقتك.",
+      "value_verbatim": "100 Sample Plaza, Suite 200, Fairfax, VA 22030",
+      "source_quote": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "action",
+      "text": "تقول الورقة أن تُبلغ المحكمة بأي عنوان جديد خلال خمسة أيام عمل، باستخدام النموذج EOIR-33.",
+      "value_verbatim": "within five working days, using Form EOIR-33",
+      "source_quote": "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33.",
+      "span_ids": [
+        "p1b13"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": "within five working days",
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "تحقق من موعد الجلسة عبر خط معلومات القضايا في المحكمة. قد تتغير التواريخ على هذه الورقة.",
+      "kind": "verify",
+      "resource_tags": [
+        "court_notice"
+      ],
+      "span_ids": [
+        "p1b10"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s2",
+      "text": "تحدث مع محامٍ مرخّص أو ممثل معتمد من وزارة العدل قبل الجلسة. لدى المحكمة قائمة بالمساعدة القانونية المجانية.",
+      "kind": "professional",
+      "resource_tags": [
+        "removal_proceedings",
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b11"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s3",
+      "text": "احتفظ بهذه الورقة مع أوراق الهجرة الأخرى.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b4"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s4",
+      "text": "اذهب إلى كل جلسة، حتى لو لم يكن لديك محامٍ بعد.",
+      "kind": "visit",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12"
+      ],
+      "demand_id": "d1"
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Respondent",
+      "explanation": "الشخص الذي تدور عنه القضية في المحكمة."
+    },
+    {
+      "term_as_written": "removal proceedings",
+      "explanation": "قضية في محكمة الهجرة حول ما إذا كان الشخص يستطيع البقاء في أمريكا."
+    },
+    {
+      "term_as_written": "alleges",
+      "explanation": "يقول إن شيئًا ما صحيح. لم يقرر القاضي ذلك بعد."
+    },
+    {
+      "term_as_written": "EOIR-33",
+      "explanation": "نموذج المحكمة لإبلاغها بعنوانك الجديد."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "هل ما زالت جلستي في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا؟",
+    "أين أجد مساعدة قانونية مجانية قبل الجلسة؟",
+    "كيف أرسل النموذج EOIR-33 إذا انتقلت؟"
+  ],
+  "clerk_need_en": "a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "removal_proceedings",
+    "court_notice",
+    "change_of_address"
+  ],
+  "institutions_as_written": [
+    "U.S. Department of Justice",
+    "Executive Office for Immigration Review",
+    "Department of Homeland Security"
+  ],
+  "form_numbers": [
+    "I-862",
+    "EOIR-33"
+  ],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": "Fairfax",
+  "geo_zip": "22030",
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "U.S. Department of Justice",
+      "bbox": [
+        0.075,
+        0.058,
+        0.4031,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Executive Office for Immigration Review - Immigration Court",
+      "bbox": [
+        0.075,
+        0.086,
+        0.5606,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Form I-862",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.1681,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "NOTICE TO APPEAR",
+      "bbox": [
+        0.075,
+        0.1493,
+        0.3731,
+        0.1816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "In removal proceedings under section 240 of the Immigration and Nationality Act",
+      "bbox": [
+        0.075,
+        0.1981,
+        0.8256,
+        0.2179
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Respondent: SAMPLE RESPONDENT",
+      "bbox": [
+        0.075,
+        0.2256,
+        0.925,
+        0.2633
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "The Department of Homeland Security alleges that:",
+      "bbox": [
+        0.075,
+        0.2768,
+        0.61,
+        0.2981
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "1. You are not a citizen or national of the United States.",
+      "bbox": [
+        0.1125,
+        0.3048,
+        0.6206,
+        0.3246
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "2. You entered the United States at an unknown place on an unknown date.",
+      "bbox": [
+        0.1125,
+        0.3304,
+        0.81,
+        0.3502
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
+      "bbox": [
+        0.075,
+        0.3589,
+        0.8812,
+        0.3986
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "You may be represented in this proceeding, at no expense to the Government, by an attorney or other person authorized to practice.",
+      "bbox": [
+        0.075,
+        0.4101,
+        0.8581,
+        0.4498
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "Failure to appear: If you fail to attend the hearing at the time and place designated, an order of removal may be entered in your absence.",
+      "bbox": [
+        0.075,
+        0.4614,
+        0.8725,
+        0.501
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33.",
+      "bbox": [
+        0.075,
+        0.5126,
+        0.9044,
+        0.5522
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

@@ -1,4 +1,7 @@
-"""``GET /v1/config`` (API_CONTRACT §3.2)."""
+"""``GET /v1/config`` (API_CONTRACT §3.2; D-01 tier matrix; D-25 pack flags).
+
+The route function has no docstring on purpose (it would become the frozen OpenAPI description).
+"""
 
 from datetime import UTC, datetime
 from typing import Annotated
@@ -11,19 +14,22 @@ from proxyhealth_api.contracts.config import KeySlotSummary, Limits, ModelsInfo,
 from proxyhealth_api.deps import (
     get_keypool,
     get_languages,
+    get_pack_cache,
     get_packs,
     get_resources,
     get_rules,
     get_settings,
 )
 from proxyhealth_api.packs.base import BasePack, LanguageTable
+from proxyhealth_api.packs.cache import PackCache
 from proxyhealth_api.resources.loader import ResourceRepo
 from proxyhealth_api.resources.rules_repo import RulesRepo
 from proxyhealth_api.settings import CONTRACT_VERSION, Settings
 
 router = APIRouter(prefix="/v1", tags=["status"])
 
-TAXONOMY_VERSION = "0"  # WP2 owns docs/DOCUMENT_TAXONOMY.md and bumps this
+# docs/DOCUMENT_TAXONOMY.md header (WP2 owns the doc; bump together with it).
+TAXONOMY_VERSION = "2026-09-27"
 
 
 @router.get("/config", response_model=ServerConfig)
@@ -32,6 +38,7 @@ async def config(
     keypool: Annotated[KeyPool | None, Depends(get_keypool)],
     packs: Annotated[BasePack, Depends(get_packs)],
     languages: Annotated[LanguageTable, Depends(get_languages)],
+    cache: Annotated[PackCache, Depends(get_pack_cache)],
     resources: Annotated[ResourceRepo, Depends(get_resources)],
     rules: Annotated[RulesRepo, Depends(get_rules)],
 ) -> ServerConfig:
@@ -66,7 +73,7 @@ async def config(
         consent_version=settings.consent_version,
         privacy_policy_url=settings.privacy_policy_url,
         base_pack_version=packs.version,
-        languages=languages.infos(),
+        languages=languages.infos(cache.machine_translated),
         taxonomy_version=TAXONOMY_VERSION,
         resource_db_version=resources.version,
         rules_version=rules.version,

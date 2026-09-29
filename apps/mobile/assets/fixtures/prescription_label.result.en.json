@@ -1,0 +1,396 @@
+{
+  "analysis_id": "sample-prescription_label-en",
+  "category": "medical",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "my medicine label - how to take it, and a label in my language",
+    "need_line_source": "ai",
+    "translated": "my medicine label - how to take it, and a label in my language"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "03/15/2027",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d1",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "expiry",
+      "source_quote": "Discard after: 03/15/2027",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "The label says to discard the medicine after 03/15/2027.",
+      "value_verbatim": "03/15/2027",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d2",
+      "kind": "action",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Qty: 30 | Refills: 0",
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "The label shows 0 refills. Ask the pharmacist or the prescriber if you have questions about more medicine.",
+      "value_verbatim": "Refills: 0",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d3",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Pharmacist questions? Call (571) 555-0163.",
+      "span_ids": [
+        "p1b11"
+      ],
+      "text": "Pharmacy phone, from your paper: (571) 555-0163.",
+      "value_verbatim": "(571) 555-0163",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "medical_information_only",
+  "disclaimers": [
+    "medical_information_only",
+    "ai_generated",
+    "demo_sample"
+  ],
+  "document_type": "prescription_label",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": null,
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "Sample Street Pharmacy"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "How many more times the pharmacy can fill this without a new prescription.",
+      "term_as_written": "Refills"
+    },
+    {
+      "explanation": "Quantity: how many capsules are in the bottle.",
+      "term_as_written": "Qty"
+    },
+    {
+      "explanation": "Swallow it.",
+      "term_as_written": "by mouth"
+    },
+    {
+      "explanation": "Throw away.",
+      "term_as_written": "Discard"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.075,
+            0.0145,
+            0.4225,
+            0.0444
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Sample Street Pharmacy"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.0802,
+            0.2,
+            0.1014
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Rx# 0012345"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1101,
+            0.2644,
+            0.1333
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "SAMPLE PATIENT"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1536,
+            0.4969,
+            0.1821
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "AMOXICILLIN 500 MG CAPSULE"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1928,
+            0.7244,
+            0.2159
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Take 1 capsule by mouth three times daily until all taken."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2246,
+            0.925,
+            0.2643
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Qty: 30 | Refills: 0"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2729,
+            0.3362,
+            0.2961
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Prescriber: Dr. A. Sample"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3077,
+            0.315,
+            0.3309
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date filled: 09/28/2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3425,
+            0.3456,
+            0.3657
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Discard after: 03/15/2027"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3783,
+            0.925,
+            0.4179
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Take with food if it upsets your stomach."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4304,
+            0.5275,
+            0.4536
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Pharmacist questions? Call (571) 555-0163."
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": null,
+      "id": "s1",
+      "kind": "ask",
+      "resource_tags": [
+        "language_access"
+      ],
+      "span_ids": [
+        "p1b5"
+      ],
+      "text": "Ask the pharmacist to explain the directions in your language. You can ask for an interpreter."
+    },
+    {
+      "demand_id": null,
+      "id": "s2",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b4"
+      ],
+      "text": "Keep all your medicine bottles together and bring them to your next visit."
+    },
+    {
+      "demand_id": null,
+      "id": "s3",
+      "kind": "professional",
+      "resource_tags": [
+        "prescription_help"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "Your doctor, nurse or pharmacist can answer questions about this medicine."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "Can you explain these directions in my language?",
+    "What should I do if I forget a capsule?",
+    "Can I get this label printed in my language?"
+  ],
+  "red_flags": [],
+  "request_id": "offline-prescription_label-en",
+  "resource_preview": [],
+  "resource_tags": [
+    "prescription_help",
+    "language_access"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Sample Street Pharmacy",
+  "sender_kind": "pharmacy",
+  "summary": {
+    "body": "This is the label for AMOXICILLIN 500 MG CAPSULE. It says: 'Take 1 capsule by mouth three times daily until all taken.' It shows 0 refills.",
+    "body_en": "This is the label for AMOXICILLIN 500 MG CAPSULE. It says: 'Take 1 capsule by mouth three times daily until all taken.' It shows 0 refills.",
+    "span_ids": [
+      "p1b4",
+      "p1b5",
+      "p1b6"
+    ],
+    "title": "Medicine label for amoxicillin from Sample Street Pharmacy"
+  },
+  "target_language": "en",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "Sample Street Pharmacy\nRx# 0012345\nSAMPLE PATIENT\nAMOXICILLIN 500 MG CAPSULE\nTake 1 capsule by mouth three times daily until all taken.\nQty: 30 | Refills: 0\nPrescriber: Dr. A. Sample\nDate filled: 09/28/2026\nDiscard after: 03/15/2027\nTake with food if it upsets your stomach.\nPharmacist questions? Call (571) 555-0163."
+    }
+  ],
+  "translation_confidence": "high",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 3,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

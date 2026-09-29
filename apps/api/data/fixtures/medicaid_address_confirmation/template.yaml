@@ -1,0 +1,138 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+id: medicaid_address_confirmation
+kind: document
+title_en: "Medicaid letter asking to confirm your address"
+document_type: medicaid_renewal
+category: benefits
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [31, 71, 136], logo: seal, watermark_angle: 32}
+pages:
+  - - {text: "Virginia Department of Medical Assistance Services", style: letterhead, ref: sender}
+    - {text: "Cover Virginia - Medicaid and FAMIS", style: letterhead_sub, ref: program}
+    - {text: "Date: September 10, 2026", style: right, ref: notice_date}
+    - {text: "Case number: ******1234", style: right, ref: case}
+    - {text: "IMPORTANT: Please confirm your address", style: heading, ref: heading}
+    - {text: "We need your correct mailing address so you do not miss letters about your Medicaid coverage.", style: body, ref: why}
+    - {text: "Please confirm or update your address by October 14, 2026.", style: bold, ref: due}
+    - {text: "You can confirm your address online, by phone using the number on your Medicaid card, or by mailing the enclosed form.", style: body, ref: how}
+    - {text: "If we do not hear from you, we may not be able to send you your renewal packet.", style: body, ref: consequence}
+    - {text: "This letter does not change your coverage today.", style: body, ref: no_change}
+    - {text: "Enclosed: Address confirmation form", style: small, ref: enclosed}
+expected:
+  urgency_level: [high]
+  nearest_date_iso: "2026-10-14"
+  date_kinds: {d1: stated}
+  demands_count: 2
+  scam_risk: none
+  readable: true
+  clerk_appended_keys: [clerk.interpreter_hhs]
+  state: VA
+out:
+  base:
+    document_type_confidence: high
+    sender_as_written: "Virginia Department of Medical Assistance Services"
+    sender_kind: state_agency
+    summary_title: "Medicaid asks you to confirm your address"
+    summary_body: "This letter is from Virginia Medicaid. It asks you to confirm your mailing address by October 14, 2026. If you do not, you may miss your renewal papers."
+    summary_span_ids: ["@sender", "@due", "@consequence"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "Confirm or update your address by October 14, 2026."
+        value_verbatim: "October 14, 2026"
+        source_quote: "Please confirm or update your address by October 14, 2026."
+        span_ids: ["@due"]
+        date_text: "October 14, 2026"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d2
+        kind: action
+        text: "Confirm your address online, by phone, or by mailing the enclosed form."
+        value_verbatim: "confirm your address online, by phone"
+        source_quote: "You can confirm your address online, by phone using the number on your Medicaid card, or by mailing the enclosed form."
+        span_ids: ["@how"]
+        documents: ["the enclosed form"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Check the address printed on the letter. If it is right, confirm it.", kind: verify, resource_tags: [medicaid_renewal], span_ids: ["@why"], demand_id: d2}
+      - {id: s2, text: "Go online, call, or mail the enclosed form before October 14, 2026.", kind: submit_online, resource_tags: [change_of_address], span_ids: ["@how", "@due"], demand_id: d1}
+      - {id: s3, text: "If you need help, ask a benefits office. You can ask for a free interpreter.", kind: ask, resource_tags: [benefits_navigation], span_ids: ["@consequence"], demand_id: null}
+    glossary:
+      - {term_as_written: "Medicaid", explanation: "Free or low-cost health coverage from the state."}
+      - {term_as_written: "renewal packet", explanation: "The forms the state sends each year to keep your coverage."}
+      - {term_as_written: "FAMIS", explanation: "Virginia's health coverage program for children."}
+    red_flags: []
+    questions_to_ask:
+      - "Is the address you have for me correct?"
+      - "What happens if my form arrives after October 14?"
+      - "Can I confirm my address by phone?"
+    clerk_need_en: "a Medicaid letter asking me to confirm my address by October 14, 2026"
+    resource_tags: [medicaid_renewal, change_of_address, benefits_navigation]
+    institutions_as_written: ["Virginia Department of Medical Assistance Services", "Cover Virginia"]
+    form_numbers: []
+    geo_state: VA
+    legibility: good
+  es:
+    summary_title: "Medicaid le pide confirmar su dirección"
+    summary_body: "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del 14 de octubre de 2026. Si no lo hace, puede perder los papeles de su renovación."
+    demands:
+      d1: {text: "Confirme o actualice su dirección antes del 14 de octubre de 2026."}
+      d2: {text: "Confirme su dirección por internet, por teléfono o enviando el formulario adjunto por correo."}
+    plan_steps:
+      s1: {text: "Revise la dirección impresa en la carta. Si es correcta, confírmela."}
+      s2: {text: "Entre por internet, llame o envíe el formulario adjunto antes del 14 de octubre de 2026."}
+      s3: {text: "Si necesita ayuda, pregunte en una oficina de beneficios. Puede pedir un intérprete gratis."}
+    glossary:
+      "Medicaid": "Cobertura de salud gratis o de bajo costo que da el estado."
+      "renewal packet": "Los formularios que el estado manda cada año para mantener su cobertura."
+      "FAMIS": "El programa de cobertura de salud de Virginia para niños."
+    questions_to_ask:
+      - "¿La dirección que tienen de mí es correcta?"
+      - "¿Qué pasa si mi formulario llega después del 14 de octubre?"
+      - "¿Puedo confirmar mi dirección por teléfono?"
+    translated_pages:
+      - "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: 10 de septiembre de 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del 14 de octubre de 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
+  prs:
+    summary_title: "مدیکید از شما می‌خواهد آدرس خود را تأیید کنید"
+    summary_body: "این نامه از مدیکید ویرجینیا است. از شما می‌خواهد آدرس پستی خود را تا ۱۴ اکتبر ۲۰۲۶ تأیید کنید. اگر این کار را نکنید، ممکن است کاغذهای تجدید خود را از دست بدهید."
+    demands:
+      d1: {text: "آدرس خود را تا ۱۴ اکتبر ۲۰۲۶ تأیید یا نو کنید."}
+      d2: {text: "آدرس خود را از طریق انترنت، تلفون، یا با پست کردن فورم ضمیمه تأیید کنید."}
+    plan_steps:
+      s1: {text: "آدرس چاپ‌شده در نامه را ببینید. اگر درست است، آن را تأیید کنید."}
+      s2: {text: "پیش از ۱۴ اکتبر ۲۰۲۶ آنلاین شوید، زنگ بزنید، یا فورم ضمیمه را پست کنید."}
+      s3: {text: "اگر به کمک نیاز دارید، از یک دفتر امتیازات بپرسید. می‌توانید ترجمان رایگان بخواهید."}
+    glossary:
+      "Medicaid": "پوشش صحی رایگان یا کم‌هزینه از طرف ایالت."
+      "renewal packet": "فورم‌هایی که ایالت هر سال می‌فرستد تا پوشش شما ادامه پیدا کند."
+      "FAMIS": "برنامه پوشش صحی ویرجینیا برای اطفال."
+    questions_to_ask:
+      - "آدرسی که از من دارید درست است؟"
+      - "اگر فورم من بعد از ۱۴ اکتبر برسد چه می‌شود؟"
+      - "می‌توانم آدرسم را از طریق تلفون تأیید کنم؟"
+    translated_pages:
+      - "ریاست خدمات کمک‌های طبی ویرجینیا\nCover Virginia - مدیکید و FAMIS\nتاریخ: ۱۰ سپتمبر ۲۰۲۶\nنمبر دوسیه: ******1234\nمهم: لطفاً آدرس خود را تأیید کنید\nما به آدرس پستی درست شما نیاز داریم تا نامه‌های مربوط به پوشش مدیکید شما را از دست ندهید.\nلطفاً آدرس خود را تا ۱۴ اکتبر ۲۰۲۶ تأیید یا نو کنید.\nمی‌توانید آدرس خود را آنلاین، از طریق تلفون با نمبر روی کارت مدیکید خود، یا با پست کردن فورم ضمیمه تأیید کنید.\nاگر از شما خبری نشود، ممکن است نتوانیم بسته تجدید شما را بفرستیم.\nاین نامه پوشش امروز شما را تغییر نمی‌دهد.\nضمیمه: فورم تأیید آدرس"
+  ar:
+    summary_title: "ميديكيد يطلب منك تأكيد عنوانك"
+    summary_body: "هذه الرسالة من ميديكيد فرجينيا. تطلب منك تأكيد عنوانك البريدي قبل ١٤ أكتوبر ٢٠٢٦. إذا لم تفعل، قد تفوتك أوراق التجديد."
+    demands:
+      d1: {text: "أكّد عنوانك أو حدّثه قبل ١٤ أكتوبر ٢٠٢٦."}
+      d2: {text: "أكّد عنوانك عبر الإنترنت أو الهاتف أو بإرسال النموذج المرفق بالبريد."}
+    plan_steps:
+      s1: {text: "راجع العنوان المطبوع في الرسالة. إذا كان صحيحًا، أكّده."}
+      s2: {text: "ادخل إلى الإنترنت أو اتصل أو أرسل النموذج المرفق قبل ١٤ أكتوبر ٢٠٢٦."}
+      s3: {text: "إذا احتجت مساعدة، اسأل مكتب الإعانات. يمكنك طلب مترجم مجانًا."}
+    glossary:
+      "Medicaid": "تغطية صحية مجانية أو منخفضة التكلفة من الولاية."
+      "renewal packet": "النماذج التي ترسلها الولاية كل سنة لاستمرار تغطيتك."
+      "FAMIS": "برنامج فرجينيا للتغطية الصحية للأطفال."
+    questions_to_ask:
+      - "هل العنوان الذي لديكم صحيح؟"
+      - "ماذا يحدث إذا وصل النموذج بعد ١٤ أكتوبر؟"
+      - "هل يمكنني تأكيد عنواني عبر الهاتف؟"
+    translated_pages:
+      - "إدارة خدمات المساعدة الطبية في فرجينيا\nCover Virginia - ميديكيد و FAMIS\nالتاريخ: ١٠ سبتمبر ٢٠٢٦\nرقم الحالة: ******1234\nمهم: يرجى تأكيد عنوانك\nنحتاج عنوانك البريدي الصحيح حتى لا تفوتك رسائل عن تغطية ميديكيد.\nيرجى تأكيد عنوانك أو تحديثه قبل ١٤ أكتوبر ٢٠٢٦.\nيمكنك تأكيد عنوانك عبر الإنترنت، أو بالهاتف باستخدام الرقم على بطاقة ميديكيد، أو بإرسال النموذج المرفق بالبريد.\nإذا لم نسمع منك، قد لا نستطيع إرسال حزمة التجديد.\nهذه الرسالة لا تغيّر تغطيتك اليوم.\nمرفق: نموذج تأكيد العنوان"

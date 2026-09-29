@@ -1,0 +1,73 @@
+{
+  "asks_for_credentials_or_payment": false,
+  "cautions": [
+    "The Submit Application button sends your whole application. Tap it only when every step is done."
+  ],
+  "confidence": "high",
+  "disclaimer_kind": "general_information",
+  "error_meaning": "The photo you picked is 8.4 MB. This website only takes files up to 5 MB, so it did not upload.",
+  "error_text_quoted": "File exceeds the maximum size of 5 MB",
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "medium",
+    "tier": "pro"
+  },
+  "needs_human_help": false,
+  "red_flags": [],
+  "request_id": "offline-portal_file_too_large-en",
+  "resource_tags": [
+    "benefits_navigation"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "screen_summary": "This is step 3 of 5 on a benefits website. It asks you to upload proof of income. The file you picked was not accepted because it is too big.",
+  "screen_text": [
+    "Sample State Benefits Portal",
+    "Step 3 of 5: Upload your documents",
+    "Document type: Proof of income",
+    "File exceeds the maximum size of 5 MB",
+    "Your file: paystub_photo.jpg (8.4 MB)",
+    "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.",
+    "Choose File",
+    "Upload",
+    "Back",
+    "Submit Application"
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "text": "Make the photo smaller, or take a new photo that is not zoomed in. A PDF scan also works.",
+      "ui_target_as_written": null
+    },
+    {
+      "order": 2,
+      "text": "Tap Choose File and pick the smaller file.",
+      "ui_target_as_written": "Choose File"
+    },
+    {
+      "order": 3,
+      "text": "Tap Upload and wait for the file name to show.",
+      "ui_target_as_written": "Upload"
+    },
+    {
+      "order": 4,
+      "text": "If it still does not work, tap Back and start this step again.",
+      "ui_target_as_written": "Back"
+    }
+  ],
+  "warnings": [
+    "demo_sample"
+  ]
+}

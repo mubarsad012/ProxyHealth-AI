@@ -1,0 +1,73 @@
+{
+  "asks_for_credentials_or_payment": false,
+  "cautions": [
+    "دکمه Submit Application تمام درخواست شما را می‌فرستد. فقط وقتی همه مراحل تمام شد آن را بزنید."
+  ],
+  "confidence": "high",
+  "disclaimer_kind": "general_information",
+  "error_meaning": "عکسی که انتخاب کردید 8.4 MB است. این ویب‌سایت فقط فایل‌های تا 5 MB را قبول می‌کند، برای همین بارگذاری نشد.",
+  "error_text_quoted": "File exceeds the maximum size of 5 MB",
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "medium",
+    "tier": "pro"
+  },
+  "needs_human_help": false,
+  "red_flags": [],
+  "request_id": "offline-portal_file_too_large-prs",
+  "resource_tags": [
+    "benefits_navigation"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "screen_summary": "این مرحله ۳ از ۵ در یک ویب‌سایت امتیازات است. از شما می‌خواهد سند عاید را بارگذاری کنید. فایلی که انتخاب کردید قبول نشد چون خیلی بزرگ است.",
+  "screen_text": [
+    "Sample State Benefits Portal",
+    "Step 3 of 5: Upload your documents",
+    "Document type: Proof of income",
+    "File exceeds the maximum size of 5 MB",
+    "Your file: paystub_photo.jpg (8.4 MB)",
+    "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.",
+    "Choose File",
+    "Upload",
+    "Back",
+    "Submit Application"
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "text": "عکس را کوچک‌تر کنید، یا یک عکس نو بدون زوم بگیرید. اسکن PDF هم کار می‌دهد.",
+      "ui_target_as_written": null
+    },
+    {
+      "order": 2,
+      "text": "روی Choose File بزنید و فایل کوچک‌تر را انتخاب کنید.",
+      "ui_target_as_written": "Choose File"
+    },
+    {
+      "order": 3,
+      "text": "روی Upload بزنید و صبر کنید تا نام فایل نشان داده شود.",
+      "ui_target_as_written": "Upload"
+    },
+    {
+      "order": 4,
+      "text": "اگر باز هم کار نکرد، روی Back بزنید و این مرحله را دوباره شروع کنید.",
+      "ui_target_as_written": "Back"
+    }
+  ],
+  "warnings": [
+    "demo_sample"
+  ]
+}

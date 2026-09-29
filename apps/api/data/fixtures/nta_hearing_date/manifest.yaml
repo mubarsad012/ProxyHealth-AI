@@ -1,0 +1,33 @@
+id: nta_hearing_date
+title_key: fixture.nta_hearing_date
+title_en: Immigration court notice with a hearing date
+document_type: nta
+category: court
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/nta_hearing_date/pages/1
+dhash: 000bc0140d10f8008000e101d004a640a080c000000100910d80280030001004
+page_dhashes:
+- 000bc0140d10f8008000e101d004a640a080c000000100910d80280030001004
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - critical
+  nearest_date_iso: '2026-10-07'
+  date_kinds:
+    d1: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  fixed_keys:
+  - fixed.address_change_multi_agency
+  verify_resource_id: eoir_hotline
+  disclaimer_kind: legal_information_only
+  state: VA

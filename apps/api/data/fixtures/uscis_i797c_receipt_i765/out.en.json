@@ -1,0 +1,364 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "uscis_receipt",
+  "category": "immigration",
+  "document_type_confidence": "high",
+  "sender_as_written": "U.S. Citizenship and Immigration Services",
+  "sender_kind": "federal_agency",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Department of Homeland Security\nU.S. Citizenship and Immigration Services\nI-797C, Notice of Action\nTHIS NOTICE DOES NOT GRANT ANY IMMIGRATION STATUS OR BENEFIT.\nReceipt Number | Case Type\nIOE0912345678 | I765 - Application for Employment Authorization\nReceived Date | Priority Date | Page\n08/17/2026 | 08/17/2026 | 1 of 1\nNotice Date | Applicant\n08/24/2026 | SAMPLE APPLICANT\nNotice Type: Receipt Notice\nWe received your Form I-765, Application for Employment Authorization, and the fee.\nWe will send you a written notice when we make a decision on your case.\nKeep this notice. You will need the receipt number above to check your case status.\nIf you move, update your address with USCIS within 10 days of moving.\nPlease see the additional information on the back. You will be notified separately about any other cases you filed."
+    }
+  ],
+  "summary_title": "USCIS receipt for your work permit application",
+  "summary_body": "This is a receipt from USCIS (the immigration office). It says they received your Form I-765 on 08/17/2026. Nothing is approved or denied yet.",
+  "summary_body_en": "This is a receipt from USCIS (the immigration office). It says they received your Form I-765 on 08/17/2026. Nothing is approved or denied yet.",
+  "summary_span_ids": [
+    "p1b2",
+    "p1b12",
+    "p1b13"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "The notice date printed on this paper is 08/24/2026.",
+      "value_verbatim": "08/24/2026",
+      "source_quote": "08/24/2026 | SAMPLE APPLICANT",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1,
+      "date_text": "08/24/2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "notice_date",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "action",
+      "text": "Keep this notice. You need the receipt number on it to check your case status.",
+      "value_verbatim": "Keep this notice.",
+      "source_quote": "Keep this notice. You will need the receipt number above to check your case status.",
+      "span_ids": [
+        "p1b14"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Keep this notice in a safe place with your other immigration papers.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b14"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s2",
+      "text": "Check your case status with the receipt number on this notice.",
+      "kind": "verify",
+      "resource_tags": [
+        "work_permit"
+      ],
+      "span_ids": [
+        "p1b6"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s3",
+      "text": "Ask a licensed lawyer or a DOJ-accredited representative what this receipt means for your work.",
+      "kind": "professional",
+      "resource_tags": [
+        "immigration_legal_help",
+        "work_permit"
+      ],
+      "span_ids": [
+        "p1b12"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Receipt Number",
+      "explanation": "The code USCIS gives your case. You use it to check your case status."
+    },
+    {
+      "term_as_written": "Priority Date",
+      "explanation": "The date USCIS uses to hold your place in line."
+    },
+    {
+      "term_as_written": "Notice of Action",
+      "explanation": "A letter USCIS sends when something happens in your case."
+    },
+    {
+      "term_as_written": "DOES NOT GRANT ANY IMMIGRATION STATUS OR BENEFIT",
+      "explanation": "The receipt only shows USCIS got your papers. It is not a decision."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "When can I expect a decision on my Form I-765?",
+    "How do I check my case status with this receipt number?"
+  ],
+  "clerk_need_en": "understanding a USCIS receipt notice and checking my case status",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "work_permit",
+    "immigration_legal_help"
+  ],
+  "institutions_as_written": [
+    "U.S. Citizenship and Immigration Services",
+    "Department of Homeland Security"
+  ],
+  "form_numbers": [
+    "I-797C",
+    "I-765"
+  ],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Department of Homeland Security",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.5856,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "U.S. Citizenship and Immigration Services",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.4838,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "I-797C, Notice of Action",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.2769,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "THIS NOTICE DOES NOT GRANT ANY IMMIGRATION STATUS OR BENEFIT.",
+      "bbox": [
+        0.075,
+        0.1357,
+        0.7725,
+        0.1556
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Receipt Number | Case Type",
+      "bbox": [
+        0.075,
+        0.1643,
+        0.925,
+        0.2014
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "IOE0912345678 | I765 - Application for Employment Authorization",
+      "bbox": [
+        0.075,
+        0.2072,
+        0.925,
+        0.2444
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Received Date | Priority Date | Page",
+      "bbox": [
+        0.075,
+        0.2502,
+        0.925,
+        0.2874
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "08/17/2026 | 08/17/2026 | 1 of 1",
+      "bbox": [
+        0.075,
+        0.2932,
+        0.925,
+        0.3304
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Notice Date | Applicant",
+      "bbox": [
+        0.075,
+        0.3362,
+        0.925,
+        0.3734
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "08/24/2026 | SAMPLE APPLICANT",
+      "bbox": [
+        0.075,
+        0.3792,
+        0.925,
+        0.4164
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "Notice Type: Receipt Notice",
+      "bbox": [
+        0.075,
+        0.4338,
+        0.4025,
+        0.4585
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "We received your Form I-765, Application for Employment Authorization, and the fee.",
+      "bbox": [
+        0.075,
+        0.4691,
+        0.86,
+        0.4889
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "We will send you a written notice when we make a decision on your case.",
+      "bbox": [
+        0.075,
+        0.5005,
+        0.745,
+        0.5203
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b14",
+      "page": 1,
+      "text": "Keep this notice. You will need the receipt number above to check your case status.",
+      "bbox": [
+        0.075,
+        0.5319,
+        0.8431,
+        0.5517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b15",
+      "page": 1,
+      "text": "If you move, update your address with USCIS within 10 days of moving.",
+      "bbox": [
+        0.075,
+        0.5633,
+        0.7288,
+        0.5831
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b16",
+      "page": 1,
+      "text": "Please see the additional information on the back. You will be notified separately about any other cases you filed.",
+      "bbox": [
+        0.075,
+        0.5928,
+        0.9031,
+        0.6087
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

@@ -1,29 +1,63 @@
-"""``run_analysis`` (BUILD_PLAN §4.1/§5.0). WP0: one ``AIService.generate`` call and a neutral
-``AnalysisModelOut → AnalysisResult`` mapping (urgency ``info``, ``verified=true`` copied, empty
-``red_flags``, ``disclaimer_kind`` by category). No validators yet — WP2 adds the §11 pipeline.
+"""``run_analysis`` — the document pipeline (BUILD_PLAN §4.1/§5.3 step 6; AI_PROMPTS §9.4, §11).
+
+Order (AI_PROMPTS §11; ARCHITECTURE §2): upload validation → redaction (EXIF, rotation, masks) →
+model reading (``single``, or ``two_call`` on ``SchemaFallbackNeeded`` / ``ANALYSIS_MODE``) →
+transcript assembly + quality (unreadable → stop, one call only) → injection detection and one
+masked re-run → span verification → contact scrubber → deadline rules → emergency lexicon →
+urgency → scam scorer → phrasing lint/rewrite → tags, resources, clerk card, fixed notices →
+disclaimers and warnings → ``AnalysisResult``.
+
+No step trusts a model field it can recompute: facts must quote the transcript (D-09), contacts
+come only from the paper or the resource DB (D-10), dates only from ``deadline_rules`` (D-11),
+urgency only from ``urgency`` (D-12). Nothing here writes to disk or logs content; page bytes,
+transcripts and model prose live only in this request's memory (ARCHITECTURE §7).
+
+This module also holds the helpers ``troubleshoot_pipeline`` and ``chat_pipeline`` share
+(translator, language info, prompt variables, the ``generate`` wrapper, the rewrite callable).
 """
 
-import base64
-import binascii
+from __future__ import annotations
+
+import functools
 import re
 import time
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from pathlib import Path
 
 from pydantic import BaseModel
 
-from proxyhealth_api.ai.failover import AIService, GenerateOutcome
+from proxyhealth_api.ai import prompt_loader as prompt
+from proxyhealth_api.ai.failover import AIService, GenerateOutcome, SchemaFallbackNeeded
 from proxyhealth_api.ai.provider import Part, Task
+from proxyhealth_api.analysis import (
+    clerk,
+    contacts_filter,
+    deadline_rules,
+    disclaimers,
+    emergency,
+    fixed_notices,
+    injection,
+    pdf_pages,
+    phrasing,
+    redaction,
+    scam,
+    tagging,
+    transcript,
+    uploads,
+    urgency,
+    verify,
+)
+from proxyhealth_api.analysis.i18n import Translator, translator_from
 from proxyhealth_api.contracts.analysis import (
-    AmountInfo,
     AnalysisResult,
     AnalyzeRequest,
     ClerkMessage,
-    DateInfo,
     Demand,
     Entities,
+    PageThumbnail,
     PlanStep,
     Quality,
     RedFlag,
@@ -32,23 +66,19 @@ from proxyhealth_api.contracts.analysis import (
     Urgency,
     VerificationSummary,
 )
-from proxyhealth_api.contracts.common import (
-    LANGUAGE_TAG_PATTERN,
-    GeoHints,
-    ModelMeta,
-    PageInput,
-    PageText,
-    TextBlock,
-)
+from proxyhealth_api.contracts.common import LANGUAGE_TAG_PATTERN, GeoHints, ModelMeta, TextBlock
 from proxyhealth_api.contracts.enums import (
     AnalysisMode,
     Confidence,
     DataUseTier,
-    DateKind,
+    DigitSystem,
     DisclaimerKind,
     DocumentCategory,
     ErrorCode,
     Legibility,
+    ModelQuality,
+    PackTier,
+    PlanStepKind,
     Provider,
     ResourceTag,
     ScamRisk,
@@ -59,22 +89,24 @@ from proxyhealth_api.contracts.enums import (
 from proxyhealth_api.contracts.model_out import (
     AnalysisModelOut,
     ChatModelOut,
-    DemandOut,
     ExplainOut,
     LanguagePackModelOut,
     LanguageResolveOut,
-    PlanStepOut,
-    RedFlagOut,
     RewriteOut,
     TaggingModelOut,
     TranscriptOut,
     TroubleshootModelOut,
 )
-from proxyhealth_api.demo.fixtures import FixtureStore
+from proxyhealth_api.contracts.resources import ResourceMatch, ResourceMatchRequest
+from proxyhealth_api.demo.fixtures import Fixture, FixtureStore
 from proxyhealth_api.errors import ApiError
+from proxyhealth_api.logging_ import log_event
+from proxyhealth_api.packs.base import LanguageEntry, LanguageTable
+from proxyhealth_api.packs.cache import PackCache, t_server
+from proxyhealth_api.resources import matcher
 from proxyhealth_api.resources.loader import ResourceRepo
 from proxyhealth_api.resources.rules_repo import RulesRepo
-from proxyhealth_api.settings import Settings
+from proxyhealth_api.settings import DATA_DIR, Settings
 
 
 @dataclass
@@ -87,6 +119,10 @@ class PipelineDeps:
     request_id: str
     data_use_tier: DataUseTier
     clock: Callable[[], datetime]
+    # Optional (defaults keep every BUILD_PLAN §4.1 caller working): the app's pack cache and
+    # language table; ``None`` → a process-wide default reading the same files.
+    packs: PackCache | None = None
+    languages: LanguageTable | None = None
 
 
 # AI_PROMPTS §3 — looked up by the pipeline from the Task, not returned by route().
@@ -102,64 +138,97 @@ TASK_SCHEMA: dict[Task, type[BaseModel]] = {
     Task.resolve_language: LanguageResolveOut,
     Task.phrasing_rewrite: RewriteOut,
 }
-TASK_PROMPT: dict[Task, str] = {
-    Task.analyze_single: "analyze.md",
-    Task.transcribe: "transcribe.md",
-    Task.explain: "explain.md",
-    Task.troubleshoot: "troubleshoot.md",
-    Task.chat: "chat.md",
-    Task.langpack_chunk: "langpack.md",
-    Task.clerk_translate: "langpack.md",
-    Task.tag: "tag.md",
-    Task.resolve_language: "langpack.md",
-    Task.phrasing_rewrite: "phrasing_rewrite.md",
-}
+TASK_PROMPT: dict[Task, str] = dict(prompt.SYSTEM_PROMPT)
 
+MAX_REWRITE_CALLS = 8
+"""Phrasing rewrites per request; beyond this the fixed hedge is used directly (latency cap)."""
+CLERK_CARD_KEY = "clerk.card"
+CLERK_CARD_CONTEXT = (
+    "The English card the reader shows a receptionist; translate for the reader's own eyes; "
+    "keep dates and names as written"
+)
 _LANG_RE = re.compile(LANGUAGE_TAG_PATTERN)
-_VALID_TAGS = {t.value for t in ResourceTag}
-_AMOUNT_RE = re.compile(r"(\d[\d,]*)(?:\.(\d{1,2}))?")
-_DISCLAIMER_BY_CATEGORY: dict[DocumentCategory, DisclaimerKind] = {
-    DocumentCategory.immigration: DisclaimerKind.legal_information_only,
-    DocumentCategory.court: DisclaimerKind.legal_information_only,
-    DocumentCategory.medical: DisclaimerKind.medical_information_only,
-    DocumentCategory.benefits: DisclaimerKind.benefits_information_only,
-    DocumentCategory.housing: DisclaimerKind.housing_information_only,
-}
+_STATE_RE = re.compile(r"^[A-Za-z]{2}$")
+_ZIP3_RE = re.compile(r"^\d{3}")
+_ALNUM_RE = re.compile(r"[^0-9a-z]")
 
 
-def decode_pages(pages: list[PageInput], settings: Settings) -> tuple[list[Part], bool]:
-    """Base64 → bytes with the cheap checks; WP2's ``uploads.py`` adds sniffing and PDF counts."""
-    is_pdf = any(p.mime_type == "application/pdf" for p in pages)
-    if is_pdf and len(pages) > 1:
-        raise ApiError(ErrorCode.too_many_pages, 400, "A PDF must be the only page.")
-    parts: list[Part] = []
-    for index, page in enumerate(pages, 1):
-        try:
-            data = base64.b64decode(page.data_base64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ApiError(
-                ErrorCode.invalid_request, 400, f"pages[{index - 1}].data_base64 is not base64."
-            ) from exc
-        cap = settings.max_pdf_bytes if is_pdf else settings.max_page_bytes
-        if len(data) > cap:
-            raise ApiError(
-                ErrorCode.payload_too_large, 413, f"Page {index} exceeds the size limit.",
-                details={"max_bytes": cap, "page": index},
-            )  # fmt: skip
-        parts.append(Part.of_bytes(data, page.mime_type))
-    return parts, is_pdf
+# ----------------------------------------------------------------------------- shared helpers
+
+
+@functools.cache
+def _default_languages() -> LanguageTable:
+    return LanguageTable.load(DATA_DIR / "languages.yaml", DATA_DIR / "langpacks")
+
+
+@functools.cache
+def _default_packs(var_dir: str) -> PackCache:
+    return PackCache(Path(var_dir))
+
+
+def packs_of(deps: PipelineDeps) -> PackCache:
+    return deps.packs if deps.packs is not None else _default_packs(str(deps.settings.var_dir))
+
+
+def languages_of(deps: PipelineDeps) -> LanguageTable:
+    return deps.languages if deps.languages is not None else _default_languages()
+
+
+def translator(deps: PipelineDeps, tag: str) -> Translator:
+    """``t_server`` bound to ``tag`` (target-language pack, English fallback, never raising)."""
+    packs = packs_of(deps)
+
+    def _t(key: str, /, **vars: str) -> str:
+        return t_server(tag, key, packs, packs.base, **vars)
+
+    return translator_from(_t)
+
+
+def english(deps: PipelineDeps) -> Translator:
+    return translator(deps, "en")
+
+
+def base_strings(deps: PipelineDeps) -> dict[str, str]:
+    return packs_of(deps).base.strings
+
+
+@dataclass(frozen=True)
+class LanguageFacts:
+    """What the prompts and validators need to know about the target language."""
+
+    tag: str
+    name_en: str
+    direction: str
+    script: str | None
+    digit_system: DigitSystem
+    tier: PackTier
+    known: bool
+
+
+def language_facts(deps: PipelineDeps, tag: str) -> LanguageFacts:
+    entry: LanguageEntry | None = languages_of(deps).get(tag)
+    if entry is not None:
+        return LanguageFacts(
+            tag, entry.name_en, entry.direction.value, entry.script, entry.digit_system,
+            entry.tier, True,
+        )  # fmt: skip
+    pack = packs_of(deps).lookup(tag) if _LANG_RE.match(tag) else None
+    if pack is not None:
+        return LanguageFacts(
+            tag, pack.language_name_en, pack.direction.value, pack.script, pack.digit_system,
+            pack.tier, False,
+        )  # fmt: skip
+    slug = tag[2:] if tag.startswith("x-") else tag
+    name = " ".join(slug.replace("-", " ").split()).title() or tag
+    return LanguageFacts(tag, name, "ltr", None, DigitSystem.western, PackTier.tier_3, False)
 
 
 def language_tag(value: str) -> str:
     return value if _LANG_RE.match(value) else "und"
 
 
-def resource_tags(values: list[str]) -> list[ResourceTag]:
-    return [ResourceTag(v) for v in dict.fromkeys(values) if v in _VALID_TAGS]
-
-
-def disclaimer_for(category: DocumentCategory) -> DisclaimerKind:
-    return _DISCLAIMER_BY_CATEGORY.get(category, DisclaimerKind.general_information)
+def base_of(tag: str | None) -> str:
+    return (tag or "").split("-")[0].lower()
 
 
 def hints_for(**values: str | None) -> dict[str, str]:
@@ -175,178 +244,116 @@ def parsed_as[T: BaseModel](outcome: GenerateOutcome, schema: type[T]) -> T:
     return parsed
 
 
+def prompt_base_vars(
+    deps: PipelineDeps, *, target_language: str, today: date, direction: str | None = None
+) -> dict[str, str]:
+    """Placeholders every task shares: the closed lists plus target language and today."""
+    lang = language_facts(deps, target_language)
+    return {
+        **prompt.catalog_vars(),
+        "target_language": target_language,
+        "target_language_name": lang.name_en,
+        "direction": direction or lang.direction,
+        "today": today.isoformat(),
+    }
+
+
+async def generate(
+    deps: PipelineDeps,
+    task: Task,
+    media: Sequence[Part],
+    vars: Mapping[str, str],
+    *,
+    pages: int = 1,
+    is_pdf: bool = False,
+    hints: Mapping[str, str] | None = None,
+    deadline_at: datetime | None = None,
+    lead: Sequence[Part] = (),
+) -> GenerateOutcome:
+    """One provider call through ``AIService``: rendered system prompt + user text before media.
+
+    ``lead`` parts go before the user text (the mock reads the chat ``AnalysisContext`` from the
+    first text part; Gemini never receives them — see ``chat_pipeline``)."""
+    system = prompt.system(task, **vars)
+    user_text = prompt.user(task, **vars)
+    return await deps.ai.generate(
+        task=task, parts=[*lead, Part.of_text(user_text), *media], system=system,
+        schema=TASK_SCHEMA[task], pages=pages, is_pdf=is_pdf, request_id=deps.request_id,
+        hints=hints, deadline_at=deadline_at,
+    )  # fmt: skip
+
+
+@dataclass
+class RewriteBudget:
+    """Shared across one request so a noisy answer cannot fan out into many fast calls."""
+
+    remaining: int = MAX_REWRITE_CALLS
+    calls: int = 0
+
+
+def make_rewriter(
+    deps: PipelineDeps,
+    *,
+    language: str,
+    today: date,
+    budget: RewriteBudget,
+    deadline_at: datetime | None,
+) -> phrasing.Rewriter:
+    """``async rewrite(sentence, professional)`` via task ``phrasing_rewrite`` (fast tier).
+
+    Any failure (quota, upstream, schema) returns ``None`` so the linter uses the fixed hedge —
+    the fast tier being unavailable is never an error (AI_PROMPTS §11.9)."""
+
+    async def rewrite(sentence: str, professional: str) -> str | None:
+        if budget.remaining <= 0:
+            return None
+        budget.remaining -= 1
+        budget.calls += 1
+        vars = {
+            **prompt_base_vars(deps, target_language=language, today=today),
+            "professional": professional,
+            "sentence": prompt.untrusted(sentence, 400),
+        }
+        try:
+            outcome = await generate(
+                deps, Task.phrasing_rewrite, [], vars, deadline_at=deadline_at,
+                hints=hints_for(sentence=sentence, target_language=language),
+            )  # fmt: skip
+        except (ApiError, SchemaFallbackNeeded):
+            return None
+        parsed = outcome.result.parsed
+        return parsed.sentence if isinstance(parsed, RewriteOut) else None
+
+    return rewrite
+
+
 def model_meta(
-    outcome: GenerateOutcome, deps: PipelineDeps, *, demo: bool, latency_ms: int
+    outcome: GenerateOutcome,
+    deps: PipelineDeps,
+    *,
+    demo: bool,
+    latency_ms: int,
+    mode: AnalysisMode = AnalysisMode.single,
 ) -> ModelMeta:
     provider = deps.ai.provider.name
+    mock = provider is Provider.mock
     return ModelMeta(
         provider=provider,
         tier=outcome.route.tier,
         model_id=outcome.result.model_id,
         thinking_level=outcome.route.thinking,
         quality=outcome.quality,
-        analysis_mode=AnalysisMode.mock if provider is Provider.mock else AnalysisMode.single,
-        data_use_tier=deps.data_use_tier,
-        demo=demo,
+        analysis_mode=AnalysisMode.mock if mock else mode,
+        data_use_tier=DataUseTier.demo if mock else deps.data_use_tier,
+        demo=demo or mock,
         latency_ms=latency_ms,
-    )  # fmt: skip
-
-
-def red_flag(rf: RedFlagOut) -> RedFlag:
-    return RedFlag(
-        kind=rf.kind, text=rf.text, source_quote=rf.source_quote, span_ids=list(rf.span_ids),
-        page=rf.page, severity=Severity.medium, fixed_copy_key=None, verified=True,
-    )  # fmt: skip
-
-
-def _amount(text: str | None, currency: str | None) -> AmountInfo | None:
-    m = _AMOUNT_RE.search(text or "")
-    if not m:
-        return None
-    whole = int(m.group(1).replace(",", ""))
-    cents = int((m.group(2) or "0").ljust(2, "0"))
-    return AmountInfo(amount_minor=whole * 100 + cents, currency=(currency or "USD")[:3].upper())
-
-
-def _demand(d: DemandOut) -> Demand:
-    date: DateInfo | None = None
-    if d.date_text or d.relative_rule_text:
-        date = DateInfo(
-            value_iso=None, time_text=d.time_text, kind=DateKind.unresolved, formula=None,
-            anchor_quote=None, anchor_demand_id=None, rule_id=None, rule_source_url=None,
-            rule_verification=None, localized_line=d.date_text or d.relative_rule_text,
-        )  # fmt: skip
-    return Demand(
-        id=d.id, kind=d.kind, text=d.text, value_verbatim=d.value_verbatim,
-        source_quote=d.source_quote, span_ids=list(d.span_ids), page=d.page,
-        confidence=d.confidence, verified=True, verification_note=None, date=date,
-        amount=_amount(d.amount_text, d.currency), documents=list(d.documents), role=d.role,
-        reminder_eligible=False, ambiguity_note=d.ambiguity_note,
-    )  # fmt: skip
-
-
-def _plan_step(p: PlanStepOut) -> PlanStep:
-    return PlanStep(
-        id=p.id, text=p.text, kind=p.kind, resource_tags=resource_tags(p.resource_tags),
-        span_ids=list(p.span_ids), demand_id=p.demand_id,
-    )  # fmt: skip
-
-
-def _page_texts(blocks: list[TextBlock], pages: int) -> list[PageText]:
-    count = max(pages, max((b.page for b in blocks), default=1))
-    return [
-        PageText(page=n, width=None, height=None, blocks=[b for b in blocks if b.page == n])
-        for n in range(1, count + 1)
-    ]
-
-
-def map_analysis(
-    out: AnalysisModelOut, req: AnalyzeRequest, outcome: GenerateOutcome, deps: PipelineDeps,
-    *, pages_received: int, latency_ms: int,
-) -> AnalysisResult:  # fmt: skip
-    demo = bool(req.demo_sample_id) or deps.ai.provider.name is Provider.mock
-    detected = language_tag(out.detected_language)
-    kind = disclaimer_for(out.category)
-    disclaimers = [kind, DisclaimerKind.ai_generated]
-    if detected.split("-")[0] != req.target_language.split("-")[0]:
-        disclaimers.append(DisclaimerKind.machine_translation)
-    if demo:
-        disclaimers.append(DisclaimerKind.demo_sample)
-    warnings: list[WarningCode] = list(outcome.warnings)
-    if demo:
-        warnings.append(WarningCode.demo_sample)
-    readable = out.legibility is not Legibility.poor
-    return AnalysisResult(
-        schema_version=1,
-        request_id=deps.request_id,
-        analysis_id=req.analysis_id or str(uuid.uuid4()),
-        created_at=deps.clock(),
-        quality=Quality(
-            readable=readable, legibility=out.legibility, reason=out.readable_reason,
-            pages_received=pages_received,
-            pages_unreadable=[] if readable else list(range(1, pages_received + 1)),
-        ),  # fmt: skip
-        category=out.category,
-        document_type=out.document_type,
-        document_type_confidence=out.document_type_confidence,
-        sender_as_written=out.sender_as_written,
-        sender_kind=out.sender_kind,
-        detected_language=detected,
-        target_language=req.target_language,
-        translation_confidence=(
-            Confidence.high if detected == req.target_language else Confidence.medium
-        ),
-        is_likely_scam=out.is_likely_scam,
-        scam_risk=ScamRisk.likely if out.is_likely_scam else ScamRisk.none,
-        scam_reasons=list(out.scam_signals),
-        urgency=Urgency(
-            level=UrgencyLevel.info, headline_key="urgency.info.no_date", headline_params={},
-            driving_demand_id=None, nearest_date_iso=None, days_until=None, past_date=False,
-            floor_applied=False, verify_resource_id=None,
-        ),  # fmt: skip
-        summary=SummaryCard(
-            title=out.summary_title, body=out.summary_body, body_en=out.summary_body_en,
-            span_ids=list(out.summary_span_ids),
-        ),  # fmt: skip
-        demands=[_demand(d) for d in out.demands],
-        unverified=[],
-        plan_steps=[_plan_step(p) for p in out.plan_steps],
-        red_flags=[],
-        glossary=list(out.glossary),
-        entities=Entities(
-            institutions_as_written=list(out.institutions_as_written),
-            form_numbers=list(out.form_numbers),
-            geo=GeoHints(
-                state=(out.geo_state or None) and out.geo_state[:2].upper(),
-                county=out.geo_county, city=out.geo_city,
-                zip3=(out.geo_zip or None) and out.geo_zip[:3],
-            ),
-            has_case_number=False,
-            has_receipt_number=False,
-        ),  # fmt: skip
-        clerk_message=ClerkMessage(
-            english=out.clerk_need_en,
-            translated=out.clerk_need_en if detected == req.target_language
-            else f"⟦{req.target_language}⟧ {out.clerk_need_en}",
-            need_line_source="ai",
-            appended_line_keys=[],
-        ),  # fmt: skip
-        resource_tags=resource_tags(out.resource_tags),
-        resource_preview=[],
-        original_text=_page_texts(out.blocks, pages_received),
-        translated_text=list(out.translated_pages),
-        questions_to_ask=list(out.questions_to_ask),
-        verification=VerificationSummary(
-            facts_checked=len(out.demands), facts_rejected=0, contacts_stripped=0,
-            phrasing_rewrites=0, injection_masked=False, verifier_version="0",
-        ),  # fmt: skip
-        safety=Safety(
-            emergency=bool(out.emergency_terms_found), emergency_kinds=[],
-            credential_or_payment_request=False,
-        ),  # fmt: skip
-        disclaimer_kind=kind,
-        disclaimers=disclaimers,
-        warnings=warnings,
-        model_meta=model_meta(outcome, deps, demo=demo, latency_ms=latency_ms),
-        page_thumbnails=None,
     )
 
 
-async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResult:
-    media, is_pdf = decode_pages(req.pages, deps.settings)
-    pages_received = len(req.pages)
-    if not pages_received and req.demo_sample_id:
-        fixture = deps.fixtures.get(req.demo_sample_id)
-        pages_received = fixture.manifest.pages if fixture else 1
-    parts = [Part.of_text(f"target_language={req.target_language}"), *media]
-    started = time.perf_counter()
-    outcome = await deps.ai.generate(
-        task=Task.analyze_single, parts=parts, system="", schema=AnalysisModelOut,
-        pages=max(pages_received, 1), is_pdf=is_pdf, request_id=deps.request_id,
-        hints=hints_for(demo_sample_id=req.demo_sample_id, target_language=req.target_language),
-    )  # fmt: skip
-    latency_ms = int((time.perf_counter() - started) * 1000)
-    out = parsed_as(outcome, AnalysisModelOut)
-    return map_analysis(
-        out, req, outcome, deps, pages_received=pages_received, latency_ms=latency_ms
-    )
+def pack_machine_translated(deps: PipelineDeps, tag: str) -> bool:
+    flag = packs_of(deps).machine_translated(tag)
+    return flag if flag is not None else base_of(tag) != "en"
+
+
+def elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)

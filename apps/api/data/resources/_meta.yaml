@@ -1,0 +1,177 @@
+resource_db_version: "2026-09-27"
+fallback_only_tags: [traffic_court, prescription_help]
+language_families: [[zh, zh-Hans, zh-Hant, yue], [pt, pt-BR], [prs, fa]]
+state_names: {AL: Alabama, AK: Alaska, AZ: Arizona, AR: Arkansas, CA: California, CO: Colorado, CT: Connecticut, DE: Delaware, DC: District of Columbia, FL: Florida, GA: Georgia, HI: Hawaii, ID: Idaho, IL: Illinois, IN: Indiana, IA: Iowa, KS: Kansas, KY: Kentucky, LA: Louisiana, ME: Maine, MD: Maryland, MA: Massachusetts, MI: Michigan, MN: Minnesota, MS: Mississippi, MO: Missouri, MT: Montana, NE: Nebraska, NV: Nevada, NH: New Hampshire, NJ: New Jersey, NM: New Mexico, NY: New York, NC: North Carolina, ND: North Dakota, OH: Ohio, OK: Oklahoma, OR: Oregon, PA: Pennsylvania, RI: Rhode Island, SC: South Carolina, SD: South Dakota, TN: Tennessee, TX: Texas, UT: Utah, VT: Vermont, VA: Virginia, WA: Washington, WV: West Virginia, WI: Wisconsin, WY: Wyoming, PR: Puerto Rico, GU: Guam, VI: U.S. Virgin Islands, AS: American Samoa, MP: Northern Mariana Islands}
+checklist:
+  bring_notice: "This letter or notice"
+  bring_case_number: "Your case number (printed on the letter)"
+  bring_receipt_number: "Your receipt number (3 letters, then 10 digits)"
+  bring_a_number: "Your A-number (Alien Registration Number, 8 or 9 digits)"
+  bring_hearing_notice: "Your hearing notice"
+  bring_subject_id: "The Subject ID and place of birth printed on your ICE paperwork"
+  bring_photo_id: "A photo ID (passport, driver's license, or Green Card)"
+  bring_household_ids: "ID for everyone in your household"
+  bring_proof_income: "Proof of income (pay stubs or last tax return)"
+  bring_pay_stubs: "Your pay stubs"
+  bring_tax_return: "Your last tax return, if you have one"
+  bring_proof_address: "Proof of where you live (a bill or lease with your name)"
+  bring_proof_va_address: "Proof of your Virginia address"
+  bring_proof_rent_utilities: "Your rent and utility bills"
+  bring_the_bill: "The bill or account number"
+  bring_itemized_bill_request: "Ask for an itemized bill"
+  bring_insurance_card: "Your insurance card, if you have one"
+  bring_denial_letter: "The denial letter"
+  bring_the_summons: "The summons or court paper"
+  bring_lease: "Your lease"
+  bring_shutoff_notice: "The shutoff notice"
+  bring_hours_log: "A list of the days and hours you worked"
+  bring_employer_info: "Your employer's name, address, and phone"
+  bring_school_records: "Your child's school papers (report cards, evaluations)"
+  bring_vaccine_record: "Your child's vaccine record, if you have it"
+  bring_passport_or_two_ids: "Your passport, or two other ID documents"
+  bring_name_of_helper: "The full name of the person or office you want to check"
+  bring_proof_income_or_benefit_card: "Proof of income, or your Medicaid, SNAP or TANF card"
+  bring_the_child: "Bring the child"
+  bring_medication_list: "All your medicine bottles or a list of them"
+why:
+  why.for_immigration_legal_help: "For immigration legal help"
+  why.for_removal_proceedings: "For immigration court cases"
+  why.for_asylum: "For asylum cases"
+  why.for_daca_tps: "For DACA and TPS"
+  why.for_work_permit: "For work permits"
+  why.for_green_card: "For Green Card questions"
+  why.for_naturalization: "For citizenship applications"
+  why.for_change_of_address: "For reporting a move"
+  why.for_fee_waiver: "For fee questions"
+  why.for_afghan_specific: "For Afghan newcomers"
+  why.for_refugee_services: "For refugee services"
+  why.for_court_notice: "For court dates and notices"
+  why.for_jury_summons: "For jury summons questions"
+  why.for_traffic_court: "For court notices"
+  why.for_medical_bill: "For hospital and doctor bills"
+  why.for_charity_care: "For free or reduced-cost hospital care"
+  why.for_insurance_denial: "For insurance denials and appeals"
+  why.for_medicare_appeal: "For Medicare appeals"
+  why.for_medicaid_renewal: "For Medicaid letters"
+  why.for_prescription_help: "For prescriptions"
+  why.for_primary_care_uninsured: "For low-cost clinics"
+  why.for_lab_results: "For understanding lab results"
+  why.for_vaccine_records: "For vaccine records"
+  why.for_language_access: "For interpreter rights"
+  why.for_food: "For food help"
+  why.for_wic: "For WIC"
+  why.for_school_meals: "For school meals"
+  why.for_snap: "For SNAP (food stamps)"
+  why.for_ssa_benefits: "For Social Security letters"
+  why.for_benefits_navigation: "For help finding benefits"
+  why.for_housing_counseling: "For housing counseling"
+  why.for_eviction: "For eviction notices"
+  why.for_rent_assistance: "For rent help"
+  why.for_utility_shutoff: "For utility shutoff notices"
+  why.for_section8: "For Section 8 and housing vouchers"
+  why.for_school_enrollment: "For school enrollment"
+  why.for_special_education: "For IEP and 504 plans"
+  why.for_homeless_students: "For students without stable housing"
+  why.for_workers_rights: "For workplace problems"
+  why.for_wage_theft: "For unpaid wages"
+  why.for_discrimination: "For discrimination at work"
+  why.for_workplace_safety: "For unsafe work conditions"
+  why.for_tax_notice: "For IRS letters"
+  why.for_itin: "For ITIN questions"
+  why.for_scam_report: "To report a scam"
+  why.for_crisis: "Help right now"
+  why.for_domestic_violence: "For domestic violence"
+  why.for_trafficking: "For human trafficking"
+  why.for_poison: "For poison emergencies"
+  why.institution_match: "Named on your paper ({institution})"
+  why.serves_your_county: "Serves {county}"
+  why.serves_your_area: "Serves your area"
+  why.serves_your_state: "Serves {state}"
+  why.check_service_area: "Check that they serve your area"
+  why.anywhere_in_us: "Anywhere in the U.S."
+  why.speaks_your_language: "Help in your language"
+  why.for_this_paper: "Made for this kind of paper"
+  why.report_scam: "To report a scam"
+  why.crisis_line: "Help right now"
+notes:
+  notes.set_region_for_local_help: "Set your state in Settings to see help near you."
+  notes.county_unknown: "Add the first 3 digits of your ZIP code in Settings to see more local help."
+  notes.no_local_results: "We do not have local listings for your area yet. These national services help anyone."
+  notes.lsc_restricted_explained: "Some legal aid offices can only help people with certain immigration papers."
+  notes.resource_text_english_only: "Some listing details are in English."
+  notes.verify_before_going: "Hours and phone numbers change. Call before you go."
+warning_keys: [jury_never_check_citizen, jury_never_register_to_vote, ask_for_plain_language_summary, address_change_multi_agency, usps_does_not_forward_uscis, ead_receipt_not_work_authorization, tps_dates_from_federal_register, forms_are_free, asylum_rules_aug_2026, no_fee_waiver_hr1, verify_local_office_open, hr1_coverage_changes, staff_reference, schools_may_not_ask_status, eeoc_deadline_180_300, osha_retaliation_30d, court_date_is_the_deadline, not_a_court_order, law_changes_2027, lsc_eviction_db_2021, medicare_windows_changed]
+doc_type_pins:            # §4.5 verbatim
+  uscis_receipt: [uscis_i797_types, uscis_contact]
+  uscis_rfe: [uscis_i797_types, uscis_contact, immlawhelp]
+  uscis_noid: [immlawhelp, eoir_roster]
+  uscis_biometrics: [uscis_biometrics_page, uscis_contact]
+  uscis_interview: [uscis_contact]
+  uscis_approval: [uscis_i797_types]
+  uscis_denial: [immlawhelp, eoir_probono]
+  nta: [eoir_hotline, eoir_acis, eoir_probono, eoir_icor]
+  hearing_notice: [eoir_hotline, eoir_acis, eoir_court_finder]
+  ij_decision: [eoir_probono, eoir_forms, eoir_hotline]
+  bia_notice: [eoir_hotline, eoir_probono]
+  ice_checkin: [ice_checkin]
+  ead_related: [uscis_i765, uscis_contact]
+  green_card_related: [uscis_replace_green_card, uscis_contact]
+  tps_related: [uscis_tps]
+  asylum_fee_notice: [asap, uscis_hr1_fees]
+  parole_related: [uscis_contact, uscis_afghan]
+  medical_bill: [cms_medical_bill_rights, dollarfor]
+  eob: [healthcare_appeals]
+  insurance_denial: [healthcare_appeals]
+  prior_auth: [healthcare_appeals]
+  lab_result: [medlineplus_labs]
+  prescription_label: [hhs_ocr_lep, hrsa_fqhc]
+  discharge_instructions: [hhs_ocr_lep]
+  vaccine_record: [cdc_iis]
+  appointment_reminder: []
+  medicaid_renewal: [medicaid_state]
+  snap_notice: [snap_state]
+  wic_notice: [signupwic]
+  ssa_letter: [ssa_appeals, ssa_scams]
+  pay_or_quit: [hud_counselor, va_code_pay_or_quit, va_courts_landlord_tenant]
+  eviction_summons: [va_courts_landlord_tenant, va_eviction_helpline, lawhelp, hud_counselor]
+  lease: [hud_counselor]
+  rent_increase: [hud_counselor]
+  section8_recert: [hud_pha]
+  utility_shutoff: [liheap, "211"]
+  school_enrollment: [plyler_explainer, nche_mckinney_vento]
+  immunization_notice: [school_vaccine_requirements, cdc_iis]
+  iep_504_notice: [pti_centers]
+  school_meals: [school_meals]
+  report_card: []
+  w2_1099: []
+  i9: [uscis_i765]
+  offer_letter: [ftc_job_scams]
+  pay_stub: [dol_whd]
+  irs_notice: [irs_notice_lookup, irs_scams]
+  itin: [irs_itin]
+  jury_summons: [uscourts_jury]
+  traffic_court: [immlawhelp, lawhelp]
+  other_notice: []
+  unknown: []
+urgent_doc_boost:         # §4.6 verbatim
+  nta: [court_notice, removal_proceedings]
+  hearing_notice: [court_notice, removal_proceedings]
+  uscis_noid: [immigration_legal_help]
+  eviction_summons: [eviction]
+  pay_or_quit: [eviction, rent_assistance]
+  utility_shutoff: [utility_shutoff]
+  asylum_fee_notice: [asylum]
+  ice_checkin: [removal_proceedings]
+well_known_ids:           # §4.7 verbatim
+  fallback_always: ["211"]
+  fallback_immigration: [immlawhelp]
+  fallback_health: [hrsa_fqhc]
+  fallback_scam: [ftc_reportfraud, dhs_oig]
+  fallback_emergency: ["988", dv_hotline, poison]
+  lsc_alternative: [immlawhelp, eoir_probono]
+  verify_court_date: eoir_hotline
+  verify_uscis_date: uscis_contact
+  scam_card_phone: dhs_oig
+  scam_card_url: ftc_reportfraud
+  emergency_card: ["988", poison, dv_hotline]
+  offline_subset: ["211", "988", dv_hotline, poison, trafficking, immlawhelp, eoir_probono, hrsa_fqhc, dhs_oig, ftc_reportfraud, eoir_hotline, uscis_contact, lawhelp, feeding_america, liheap, hud_counselor]

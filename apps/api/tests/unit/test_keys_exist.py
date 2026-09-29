@@ -27,7 +27,8 @@ DATA_DIR = API_ROOT / "data"
 
 SERVER_KEY_RE = re.compile(
     r"^(status_note|why|notes|warn|prepare|fixed|err|urgency|scam|chat\.refusal|chat\.refer|clerk|fixture)"
-    r"\.[a-z0-9_.]+$"
+    # a.b.c — but not filename-like literals such as prepare.yaml or deadlines.json
+    r"\.(?!(?:[a-z0-9_.]*\.)?(?:ya?ml|json|py|md|txt)$)[a-z0-9_.]+$"
 )
 # Python string literals ('…' or "…") that might hold a pack key; short, single-line, no escapes.
 PY_LITERAL_RE = re.compile(r"""(?<![\w.])(?:"([^"\\\n]{3,120})"|'([^'\\\n]{3,120})')""")

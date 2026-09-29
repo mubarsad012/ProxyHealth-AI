@@ -1,0 +1,163 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# The court address is fictional; the demo verifies the date through the resource DB, not the paper.
+id: nta_hearing_date
+kind: document
+title_en: "Immigration court notice with a hearing date"
+document_type: nta
+category: court
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [60, 60, 60], logo: none, watermark_angle: 18}
+pages:
+  - - {text: "U.S. Department of Justice", style: letterhead, ref: doj}
+    - {text: "Executive Office for Immigration Review - Immigration Court", style: letterhead_sub, ref: sender}
+    - {text: "Form I-862", style: right, ref: form}
+    - {text: "NOTICE TO APPEAR", style: title, ref: heading}
+    - {text: "In removal proceedings under section 240 of the Immigration and Nationality Act", style: center, ref: proceedings}
+    - {text: "Respondent: SAMPLE RESPONDENT", style: field, ref: respondent}
+    - {text: "The Department of Homeland Security alleges that:", style: subheading, ref: alleges}
+    - {text: "1. You are not a citizen or national of the United States.", style: bullet, ref: alleg1}
+    - {text: "2. You entered the United States at an unknown place on an unknown date.", style: bullet, ref: alleg2}
+    - {text: "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.", style: bold, ref: ordered}
+    - {text: "You may be represented in this proceeding, at no expense to the Government, by an attorney or other person authorized to practice.", style: body, ref: counsel}
+    - {text: "Failure to appear: If you fail to attend the hearing at the time and place designated, an order of removal may be entered in your absence.", style: body, ref: fta}
+    - {text: "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33.", style: body, ref: address}
+expected:
+  urgency_level: [critical]
+  nearest_date_iso: "2026-10-07"
+  date_kinds: {d1: stated}
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  fixed_keys: [fixed.address_change_multi_agency]
+  verify_resource_id: eoir_hotline
+  disclaimer_kind: legal_information_only
+  state: VA
+out:
+  base:
+    sender_as_written: "Executive Office for Immigration Review - Immigration Court"
+    sender_kind: court
+    summary_title: "Notice to Appear in immigration court on October 7, 2026"
+    summary_body: "This paper starts a case in immigration court. It lists what the government says about you and tells you to appear before a judge on October 7, 2026 at 8:30 AM. Nothing is decided yet."
+    summary_span_ids: ["@heading", "@alleges", "@ordered"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "Go to the immigration court on October 7, 2026 at 8:30 AM."
+        value_verbatim: "October 7, 2026"
+        source_quote: "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM."
+        span_ids: ["@ordered"]
+        date_text: "October 7, 2026"
+        time_text: "8:30 AM"
+        role: hearing_date
+        confidence: high
+      - id: d2
+        kind: contact
+        text: "The court address is printed on your paper."
+        value_verbatim: "100 Sample Plaza, Suite 200, Fairfax, VA 22030"
+        source_quote: "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM."
+        span_ids: ["@ordered"]
+        role: other
+        confidence: high
+      - id: d3
+        kind: action
+        text: "The paper says to tell the court about any new address within five working days, with Form EOIR-33."
+        value_verbatim: "within five working days, using Form EOIR-33"
+        source_quote: "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33."
+        span_ids: ["@address"]
+        relative_rule_text: "within five working days"
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Check the hearing date with the court's case line. Dates on this paper can change.", kind: verify, resource_tags: [court_notice], span_ids: ["@ordered"], demand_id: d1}
+      - {id: s2, text: "Talk to a licensed lawyer or a DOJ-accredited representative before the hearing. The court keeps a list of free legal help.", kind: professional, resource_tags: [removal_proceedings, immigration_legal_help], span_ids: ["@counsel"], demand_id: d1}
+      - {id: s3, text: "Keep this paper with your other immigration papers.", kind: gather, resource_tags: [], span_ids: ["@heading"], demand_id: null}
+      - {id: s4, text: "Go to every hearing, even if you do not have a lawyer yet.", kind: visit, resource_tags: [], span_ids: ["@fta"], demand_id: d1}
+    glossary:
+      - {term_as_written: "Respondent", explanation: "The person the court case is about."}
+      - {term_as_written: "removal proceedings", explanation: "A case in immigration court about whether a person can stay in the U.S."}
+      - {term_as_written: "alleges", explanation: "Says something is true. The judge has not decided it."}
+      - {term_as_written: "EOIR-33", explanation: "The court's form for telling it your new address."}
+    red_flags: []
+    questions_to_ask:
+      - "Is my hearing still on October 7, 2026 at 8:30 AM?"
+      - "Where can I find free legal help before the hearing?"
+      - "How do I send Form EOIR-33 if I move?"
+    clerk_need_en: "a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer"
+    resource_tags: [removal_proceedings, court_notice, change_of_address]
+    institutions_as_written: ["U.S. Department of Justice", "Executive Office for Immigration Review", "Department of Homeland Security"]
+    form_numbers: ["I-862", "EOIR-33"]
+    geo_state: VA
+    geo_city: Fairfax
+    geo_zip: "22030"
+    legibility: good
+  es:
+    summary_title: "Aviso de Comparecencia ante la corte de inmigración el 7 de octubre de 2026"
+    summary_body: "Este papel inicia un caso en la corte de inmigración. Dice lo que el gobierno afirma sobre usted y le ordena presentarse ante un juez el 7 de octubre de 2026 a las 8:30 AM. Todavía no hay nada decidido."
+    demands:
+      d1: {text: "Vaya a la corte de inmigración el 7 de octubre de 2026 a las 8:30 AM."}
+      d2: {text: "La dirección de la corte está impresa en su papel."}
+      d3: {text: "El papel dice que avise a la corte de cualquier dirección nueva dentro de cinco días hábiles, con el Formulario EOIR-33."}
+    plan_steps:
+      s1: {text: "Confirme la fecha de la audiencia con la línea de casos de la corte. Las fechas de este papel pueden cambiar."}
+      s2: {text: "Hable con un abogado con licencia o un representante acreditado por el DOJ antes de la audiencia. La corte tiene una lista de ayuda legal gratis."}
+      s3: {text: "Guarde este papel con sus otros papeles de inmigración."}
+      s4: {text: "Vaya a cada audiencia, aunque todavía no tenga abogado."}
+    glossary:
+      "Respondent": "La persona de quien trata el caso en la corte."
+      "removal proceedings": "Un caso en la corte de inmigración sobre si una persona puede quedarse en EE. UU."
+      "alleges": "Dice que algo es verdad. El juez todavía no lo ha decidido."
+      "EOIR-33": "El formulario de la corte para avisar su nueva dirección."
+    questions_to_ask:
+      - "¿Mi audiencia sigue siendo el 7 de octubre de 2026 a las 8:30 AM?"
+      - "¿Dónde encuentro ayuda legal gratis antes de la audiencia?"
+      - "¿Cómo envío el Formulario EOIR-33 si me mudo?"
+    translated_pages:
+      - "Departamento de Justicia de los Estados Unidos\nOficina Ejecutiva de Revisión de Casos de Inmigración - Corte de Inmigración\nFormulario I-862\nAVISO DE COMPARECENCIA\nEn un proceso de expulsión según la sección 240 de la Ley de Inmigración y Nacionalidad\nDemandado: SAMPLE RESPONDENT\nEl Departamento de Seguridad Nacional afirma que:\n1. Usted no es ciudadano ni nacional de los Estados Unidos.\n2. Usted entró a los Estados Unidos por un lugar desconocido en una fecha desconocida.\nSE LE ORDENA presentarse ante un juez de inmigración en 100 Sample Plaza, Suite 200, Fairfax, VA 22030 el 7 de octubre de 2026 a las 8:30 AM.\nUsted puede tener representación en este proceso, sin costo para el Gobierno, por un abogado u otra persona autorizada.\nFalta de comparecencia: Si no asiste a la audiencia en la hora y el lugar indicados, se puede dictar una orden de expulsión en su ausencia.\nDebe avisar a la Corte de Inmigración de cualquier cambio de dirección dentro de cinco días hábiles, usando el Formulario EOIR-33."
+  prs:
+    summary_title: "اطلاعیه حضور در محکمه مهاجرت در ۷ اکتبر ۲۰۲۶"
+    summary_body: "این کاغذ یک قضیه را در محکمه مهاجرت آغاز می‌کند. آنچه دولت درباره شما می‌گوید را فهرست می‌کند و می‌گوید در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح نزد قاضی حاضر شوید. هنوز چیزی تصمیم نشده است."
+    demands:
+      d1: {text: "در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح به محکمه مهاجرت بروید."}
+      d2: {text: "آدرس محکمه روی کاغذ شما چاپ شده است."}
+      d3: {text: "کاغذ می‌گوید هر آدرس نو را در ظرف پنج روز کاری با فورم EOIR-33 به محکمه خبر دهید."}
+    plan_steps:
+      s1: {text: "تاریخ جلسه را با خط معلومات قضایای محکمه بررسی کنید. تاریخ‌های این کاغذ ممکن است تغییر کند."}
+      s2: {text: "پیش از جلسه با یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه صحبت کنید. محکمه فهرستی از کمک حقوقی رایگان دارد."}
+      s3: {text: "این کاغذ را با دیگر اسناد مهاجرتی خود نگه دارید."}
+      s4: {text: "به هر جلسه بروید، حتی اگر هنوز وکیل ندارید."}
+    glossary:
+      "Respondent": "شخصی که قضیه محکمه درباره او است."
+      "removal proceedings": "قضیه‌ای در محکمه مهاجرت درباره اینکه آیا شخص می‌تواند در امریکا بماند."
+      "alleges": "می‌گوید چیزی درست است. قاضی هنوز درباره آن تصمیم نگرفته است."
+      "EOIR-33": "فورم محکمه برای خبر دادن آدرس نو شما."
+    questions_to_ask:
+      - "آیا جلسه من هنوز در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح است؟"
+      - "پیش از جلسه کمک حقوقی رایگان را از کجا پیدا کنم؟"
+      - "اگر خانه‌ام را عوض کنم فورم EOIR-33 را چطور بفرستم؟"
+    translated_pages:
+      - "وزارت عدلیه ایالات متحده\nاداره اجرایی بررسی مهاجرت - محکمه مهاجرت\nفورم I-862\nاطلاعیه حضور\nدر جریان اخراج طبق بخش ۲۴۰ قانون مهاجرت و تابعیت\nخوانده: SAMPLE RESPONDENT\nوزارت امنیت داخلی ادعا می‌کند که:\n۱. شما شهروند یا تبعه ایالات متحده نیستید.\n۲. شما از جای نامعلوم در تاریخ نامعلوم وارد ایالات متحده شدید.\nبه شما امر می‌شود که در 100 Sample Plaza, Suite 200, Fairfax, VA 22030 در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح نزد قاضی مهاجرت حاضر شوید.\nشما می‌توانید در این جریان، بدون هزینه برای دولت، توسط یک وکیل یا شخص مجاز دیگر نمایندگی شوید.\nعدم حضور: اگر در زمان و جای تعیین‌شده در جلسه حاضر نشوید، ممکن است در غیاب شما حکم اخراج صادر شود.\nشما باید هر تغییر آدرس را در ظرف پنج روز کاری با استفاده از فورم EOIR-33 به محکمه مهاجرت خبر دهید."
+  ar:
+    summary_title: "إشعار بالحضور أمام محكمة الهجرة في ٧ أكتوبر ٢٠٢٦"
+    summary_body: "هذه الورقة تبدأ قضية في محكمة الهجرة. تذكر ما تقوله الحكومة عنك وتطلب منك الحضور أمام قاضٍ في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا. لم يُحسم شيء بعد."
+    demands:
+      d1: {text: "اذهب إلى محكمة الهجرة في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا."}
+      d2: {text: "عنوان المحكمة مطبوع على ورقتك."}
+      d3: {text: "تقول الورقة أن تُبلغ المحكمة بأي عنوان جديد خلال خمسة أيام عمل، باستخدام النموذج EOIR-33."}
+    plan_steps:
+      s1: {text: "تحقق من موعد الجلسة عبر خط معلومات القضايا في المحكمة. قد تتغير التواريخ على هذه الورقة."}
+      s2: {text: "تحدث مع محامٍ مرخّص أو ممثل معتمد من وزارة العدل قبل الجلسة. لدى المحكمة قائمة بالمساعدة القانونية المجانية."}
+      s3: {text: "احتفظ بهذه الورقة مع أوراق الهجرة الأخرى."}
+      s4: {text: "اذهب إلى كل جلسة، حتى لو لم يكن لديك محامٍ بعد."}
+    glossary:
+      "Respondent": "الشخص الذي تدور عنه القضية في المحكمة."
+      "removal proceedings": "قضية في محكمة الهجرة حول ما إذا كان الشخص يستطيع البقاء في أمريكا."
+      "alleges": "يقول إن شيئًا ما صحيح. لم يقرر القاضي ذلك بعد."
+      "EOIR-33": "نموذج المحكمة لإبلاغها بعنوانك الجديد."
+    questions_to_ask:
+      - "هل ما زالت جلستي في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا؟"
+      - "أين أجد مساعدة قانونية مجانية قبل الجلسة؟"
+      - "كيف أرسل النموذج EOIR-33 إذا انتقلت؟"
+    translated_pages:
+      - "وزارة العدل الأمريكية\nالمكتب التنفيذي لمراجعة قضايا الهجرة - محكمة الهجرة\nالنموذج I-862\nإشعار بالحضور\nفي إجراءات الترحيل بموجب المادة ٢٤٠ من قانون الهجرة والجنسية\nالمدعى عليه: SAMPLE RESPONDENT\nتدّعي وزارة الأمن الداخلي أن:\n١. أنت لست مواطنًا أو من رعايا الولايات المتحدة.\n٢. دخلت الولايات المتحدة من مكان غير معروف في تاريخ غير معروف.\nيُطلب منك الحضور أمام قاضي هجرة في 100 Sample Plaza, Suite 200, Fairfax, VA 22030 في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا.\nيمكن أن يمثلك في هذه الإجراءات، دون تكلفة على الحكومة، محامٍ أو شخص آخر مخوّل.\nعدم الحضور: إذا لم تحضر الجلسة في الوقت والمكان المحددين، قد يصدر أمر ترحيل في غيابك.\nيجب أن تُبلغ محكمة الهجرة بأي تغيير في العنوان خلال خمسة أيام عمل، باستخدام النموذج EOIR-33."

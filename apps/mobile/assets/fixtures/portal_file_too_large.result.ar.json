@@ -1,0 +1,73 @@
+{
+  "asks_for_credentials_or_payment": false,
+  "cautions": [
+    "زر Submit Application يرسل طلبك كله. اضغط عليه فقط عندما تنتهي كل الخطوات."
+  ],
+  "confidence": "high",
+  "disclaimer_kind": "general_information",
+  "error_meaning": "الصورة التي اخترتها حجمها 8.4 MB. هذا الموقع يقبل الملفات حتى 5 MB فقط، لذلك لم تُرفع.",
+  "error_text_quoted": "File exceeds the maximum size of 5 MB",
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "medium",
+    "tier": "pro"
+  },
+  "needs_human_help": false,
+  "red_flags": [],
+  "request_id": "offline-portal_file_too_large-ar",
+  "resource_tags": [
+    "benefits_navigation"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "screen_summary": "هذه الخطوة ٣ من ٥ في موقع للإعانات. يطلب منك رفع إثبات الدخل. الملف الذي اخترته لم يُقبل لأنه كبير جدًا.",
+  "screen_text": [
+    "Sample State Benefits Portal",
+    "Step 3 of 5: Upload your documents",
+    "Document type: Proof of income",
+    "File exceeds the maximum size of 5 MB",
+    "Your file: paystub_photo.jpg (8.4 MB)",
+    "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.",
+    "Choose File",
+    "Upload",
+    "Back",
+    "Submit Application"
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "text": "صغّر الصورة، أو التقط صورة جديدة دون تكبير. المسح الضوئي بصيغة PDF يصلح أيضًا.",
+      "ui_target_as_written": null
+    },
+    {
+      "order": 2,
+      "text": "اضغط على Choose File واختر الملف الأصغر.",
+      "ui_target_as_written": "Choose File"
+    },
+    {
+      "order": 3,
+      "text": "اضغط على Upload وانتظر حتى يظهر اسم الملف.",
+      "ui_target_as_written": "Upload"
+    },
+    {
+      "order": 4,
+      "text": "إذا لم ينجح ذلك، اضغط على Back وابدأ هذه الخطوة من جديد.",
+      "ui_target_as_written": "Back"
+    }
+  ],
+  "warnings": [
+    "demo_sample"
+  ]
+}

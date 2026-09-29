@@ -1,0 +1,451 @@
+{
+  "analysis_id": "sample-nta_hearing_date-prs",
+  "category": "court",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer",
+    "need_line_source": "ai",
+    "translated": "⟦prs⟧ a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 7, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": "8:30 AM",
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d1",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "hearing_date",
+      "source_quote": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح به محکمه مهاجرت بروید.",
+      "value_verbatim": "October 7, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d2",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "آدرس محکمه روی کاغذ شما چاپ شده است.",
+      "value_verbatim": "100 Sample Plaza, Suite 200, Fairfax, VA 22030",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "within five working days",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d3",
+      "kind": "action",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33.",
+      "span_ids": [
+        "p1b13"
+      ],
+      "text": "کاغذ می‌گوید هر آدرس نو را در ظرف پنج روز کاری با فورم EOIR-33 به محکمه خبر دهید.",
+      "value_verbatim": "within five working days, using Form EOIR-33",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "legal_information_only",
+  "disclaimers": [
+    "legal_information_only",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "nta",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [
+      "I-862",
+      "EOIR-33"
+    ],
+    "geo": {
+      "city": "Fairfax",
+      "county": null,
+      "state": "VA",
+      "zip3": "220"
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "U.S. Department of Justice",
+      "Executive Office for Immigration Review",
+      "Department of Homeland Security"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "شخصی که قضیه محکمه درباره او است.",
+      "term_as_written": "Respondent"
+    },
+    {
+      "explanation": "قضیه‌ای در محکمه مهاجرت درباره اینکه آیا شخص می‌تواند در امریکا بماند.",
+      "term_as_written": "removal proceedings"
+    },
+    {
+      "explanation": "می‌گوید چیزی درست است. قاضی هنوز درباره آن تصمیم نگرفته است.",
+      "term_as_written": "alleges"
+    },
+    {
+      "explanation": "فورم محکمه برای خبر دادن آدرس نو شما.",
+      "term_as_written": "EOIR-33"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.075,
+            0.058,
+            0.4031,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "U.S. Department of Justice"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.086,
+            0.5606,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Executive Office for Immigration Review - Immigration Court"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.1681,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Form I-862"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1493,
+            0.3731,
+            0.1816
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "NOTICE TO APPEAR"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1981,
+            0.8256,
+            0.2179
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "In removal proceedings under section 240 of the Immigration and Nationality Act"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2256,
+            0.925,
+            0.2633
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Respondent: SAMPLE RESPONDENT"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2768,
+            0.61,
+            0.2981
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "The Department of Homeland Security alleges that:"
+        },
+        {
+          "bbox": [
+            0.1125,
+            0.3048,
+            0.6206,
+            0.3246
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "1. You are not a citizen or national of the United States."
+        },
+        {
+          "bbox": [
+            0.1125,
+            0.3304,
+            0.81,
+            0.3502
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "2. You entered the United States at an unknown place on an unknown date."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3589,
+            0.8812,
+            0.3986
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4101,
+            0.8581,
+            0.4498
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You may be represented in this proceeding, at no expense to the Government, by an attorney or other person authorized to practice."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4614,
+            0.8725,
+            0.501
+          ],
+          "id": "p1b12",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Failure to appear: If you fail to attend the hearing at the time and place designated, an order of removal may be entered in your absence."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.5126,
+            0.9044,
+            0.5522
+          ],
+          "id": "p1b13",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33."
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d1",
+      "id": "s1",
+      "kind": "verify",
+      "resource_tags": [
+        "court_notice"
+      ],
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "تاریخ جلسه را با خط معلومات قضایای محکمه بررسی کنید. تاریخ‌های این کاغذ ممکن است تغییر کند."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s2",
+      "kind": "professional",
+      "resource_tags": [
+        "removal_proceedings",
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b11"
+      ],
+      "text": "پیش از جلسه با یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه صحبت کنید. محکمه فهرستی از کمک حقوقی رایگان دارد."
+    },
+    {
+      "demand_id": null,
+      "id": "s3",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b4"
+      ],
+      "text": "این کاغذ را با دیگر اسناد مهاجرتی خود نگه دارید."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s4",
+      "kind": "visit",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12"
+      ],
+      "text": "به هر جلسه بروید، حتی اگر هنوز وکیل ندارید."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "آیا جلسه من هنوز در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح است؟",
+    "پیش از جلسه کمک حقوقی رایگان را از کجا پیدا کنم؟",
+    "اگر خانه‌ام را عوض کنم فورم EOIR-33 را چطور بفرستم؟"
+  ],
+  "red_flags": [],
+  "request_id": "offline-nta_hearing_date-prs",
+  "resource_preview": [],
+  "resource_tags": [
+    "removal_proceedings",
+    "court_notice",
+    "change_of_address"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Executive Office for Immigration Review - Immigration Court",
+  "sender_kind": "court",
+  "summary": {
+    "body": "این کاغذ یک قضیه را در محکمه مهاجرت آغاز می‌کند. آنچه دولت درباره شما می‌گوید را فهرست می‌کند و می‌گوید در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح نزد قاضی حاضر شوید. هنوز چیزی تصمیم نشده است.",
+    "body_en": "This paper starts a case in immigration court. It lists what the government says about you and tells you to appear before a judge on October 7, 2026 at 8:30 AM. Nothing is decided yet.",
+    "span_ids": [
+      "p1b4",
+      "p1b7",
+      "p1b10"
+    ],
+    "title": "اطلاعیه حضور در محکمه مهاجرت در ۷ اکتبر ۲۰۲۶"
+  },
+  "target_language": "prs",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "وزارت عدلیه ایالات متحده\nاداره اجرایی بررسی مهاجرت - محکمه مهاجرت\nفورم I-862\nاطلاعیه حضور\nدر جریان اخراج طبق بخش ۲۴۰ قانون مهاجرت و تابعیت\nخوانده: SAMPLE RESPONDENT\nوزارت امنیت داخلی ادعا می‌کند که:\n۱. شما شهروند یا تبعه ایالات متحده نیستید.\n۲. شما از جای نامعلوم در تاریخ نامعلوم وارد ایالات متحده شدید.\nبه شما امر می‌شود که در 100 Sample Plaza, Suite 200, Fairfax, VA 22030 در ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ صبح نزد قاضی مهاجرت حاضر شوید.\nشما می‌توانید در این جریان، بدون هزینه برای دولت، توسط یک وکیل یا شخص مجاز دیگر نمایندگی شوید.\nعدم حضور: اگر در زمان و جای تعیین‌شده در جلسه حاضر نشوید، ممکن است در غیاب شما حکم اخراج صادر شود.\nشما باید هر تغییر آدرس را در ظرف پنج روز کاری با استفاده از فورم EOIR-33 به محکمه مهاجرت خبر دهید."
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 3,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

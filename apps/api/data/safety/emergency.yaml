@@ -1,0 +1,415 @@
+# data/safety/emergency.yaml — WP2 (D-14; COMPLIANCE_PRIVACY §7; AI_PROMPTS §11.7).
+#
+# Emergency lexicon run in code over transcripts, chat questions/messages and troubleshoot
+# screen_text + user_goal. ANY hit → safety.emergency = true and the fixed emergency card first.
+# Bias: over-trigger. A false positive costs one dismiss; a false negative may cost a life.
+#
+# Schema: {version, kinds, languages: {<tag>: {reviewed_by, reviewed_on, match, terms: {<kind>:
+# [phrases]}, exclude: [phrases]}}}. Matching is case-insensitive after NFKC, quote/dash
+# unification and removal of zero-width joiners. `match`:
+#   word      — whole-word (Latin scripts); a term ending in `*` also matches longer words
+#   prefix    — the term must start a word but may continue (inflecting non-Latin scripts)
+#   substring — anywhere (scripts written without spaces between words: zh-Hans, zh-Hant, my,
+#               and Korean, whose particles attach to the word)
+# `exclude` phrases (resource names printed on ordinary papers, e.g. "Poison Control", and label
+# boilerplate such as "If swallowed") are removed from *printed* text (transcripts, screen_text)
+# before matching so a medicine label's help line is not an emergency. They are never removed
+# from what the user typed (chat question, troubleshoot user_goal): "My son swallowed something,
+# should I call poison control?" is an emergency.
+# Every list is a machine-assisted draft: `reviewed_by: null` until a native speaker signs off
+# (launch gate, DECISIONS Q6). A language without a list falls back to en + es and adds
+# warnings: [emergency_lexicon_unavailable].
+version: "2026-09-27"
+kinds: [chest_pain, breathing, overdose, poison, self_harm, stroke, bleeding, allergic, violence]
+fallback_languages: [en, es]
+languages:
+  en:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: ["poison control", "poison help", "poison center", "poison control center", "if swallowed", "if accidentally swallowed"]
+    terms:
+      chest_pain: ["chest pain", "chest pains", "pain in my chest", "pain in the chest", "chest tightness", "tightness in my chest", "pressure in my chest", "heart attack", "chest hurt*", "chest is hurt*", "chest is tight", "chest feels tight"]
+      breathing: ["can't breathe", "cannot breathe", "can not breathe", "trouble breathing", "difficulty breathing", "hard to breathe", "short of breath", "shortness of breath", "not breathing", "stopped breathing", "choking", "gasping for air"]
+      overdose: ["overdose", "overdosed", "overdosing", "took too many pills", "too much medicine", "fentanyl", "naloxone", "narcan"]
+      poison: ["poisoned", "poisoning", "swallowed poison", "drank poison", "swallowed bleach", "drank bleach", "swallowed a battery", "carbon monoxide", "poison", "swallowed"]
+      self_harm: ["suicide", "suicidal", "kill myself", "killing myself", "end my life", "want to die", "hurt myself", "hurting myself", "self-harm", "self harm", "cut myself", "no reason to live"]
+      stroke: ["stroke", "face drooping", "face is drooping", "slurred speech", "arm weakness", "sudden numbness", "numb on one side", "sudden confusion"]
+      bleeding: ["heavy bleeding", "bleeding heavily", "severe bleeding", "won't stop bleeding", "bleeding won't stop", "bleeding will not stop", "lots of blood", "losing blood", "hemorrhage", "coughing up blood", "vomiting blood", "bleeding a lot", "bleeding badly", "bleeding so much", "can't stop bleeding", "cannot stop bleeding", "can't stop the bleeding"]
+      allergic: ["anaphylaxis", "anaphylactic", "severe allergic reaction", "allergic reaction", "throat swelling", "throat is closing", "swollen tongue", "epipen"]
+      violence: ["domestic violence", "he hits me", "she hits me", "hit me", "beats me", "beat me", "abusing me", "being abused", "domestic abuse", "threatened to kill", "going to kill me", "rape", "raped", "sexual assault", "assaulted me", "human trafficking", "afraid for my life", "hits me", "hitting me", "beating me", "kicks me", "chokes me", "choked me", "strangled me"]
+  es:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: ["control de envenenamiento", "centro de toxicología", "centro de control de envenenamientos"]
+    terms:
+      chest_pain: ["dolor de pecho", "dolor en el pecho", "presión en el pecho", "ataque al corazón", "infarto", "me duele el pecho"]
+      breathing: ["no puedo respirar", "no puede respirar", "dificultad para respirar", "falta de aire", "le falta el aire", "se está ahogando", "no respira"]
+      overdose: ["sobredosis", "tomó demasiadas pastillas", "demasiada medicina", "fentanilo", "naloxona"]
+      poison: ["envenenado", "envenenada", "envenenamiento", "intoxicación", "tragó veneno", "tragó cloro", "veneno", "se tragó"]
+      self_harm: ["suicidio", "suicidarme", "matarme", "quitarme la vida", "quiero morir", "hacerme daño", "lastimarme", "autolesión", "me quiero matar", "quiero matarme", "me voy a matar", "me quiero morir", "quiero morirme"]
+      stroke: ["derrame cerebral", "accidente cerebrovascular", "embolia", "cara caída", "habla arrastrada", "no puede hablar"]
+      bleeding: ["sangrado abundante", "sangrando mucho", "hemorragia", "no para de sangrar", "mucha sangre", "no deja de sangrar", "sangra mucho"]
+      allergic: ["reacción alérgica grave", "reacción alérgica", "anafilaxia", "se le cierra la garganta", "garganta hinchada", "lengua hinchada"]
+      violence: ["violencia doméstica", "me pega", "me golpea", "me golpeó", "me amenazó con matarme", "violación", "me violó", "abuso sexual", "trata de personas", "me pegó", "me está pegando", "me golpean"]
+  zh-Hans:
+    reviewed_by: null
+    reviewed_on: null
+    match: substring
+    exclude: []
+    terms:
+      chest_pain: ["胸痛", "胸口痛", "胸闷", "心脏病发作"]
+      breathing: ["呼吸困难", "不能呼吸", "喘不过气", "无法呼吸", "窒息"]
+      overdose: ["服药过量", "用药过量", "过量服用", "吃了太多药"]
+      poison: ["中毒", "误服", "喝了漂白剂"]
+      self_harm: ["自杀", "想死", "自残", "伤害自己", "结束生命"]
+      stroke: ["中风", "脑卒中", "口齿不清", "脸部下垂", "半身麻木"]
+      bleeding: ["大出血", "流血不止", "出血不止", "大量出血"]
+      allergic: ["严重过敏", "过敏反应", "过敏性休克", "喉咙肿"]
+      violence: ["家暴", "家庭暴力", "他打我", "她打我", "要杀我", "强奸", "性侵", "人口贩卖"]
+  zh-Hant:
+    reviewed_by: null
+    reviewed_on: null
+    match: substring
+    exclude: []
+    terms:
+      chest_pain: ["胸痛", "胸口痛", "胸悶", "心臟病發作"]
+      breathing: ["呼吸困難", "不能呼吸", "喘不過氣", "無法呼吸", "窒息"]
+      overdose: ["服藥過量", "用藥過量", "過量服用", "吃了太多藥"]
+      poison: ["中毒", "誤服", "喝了漂白水"]
+      self_harm: ["自殺", "想死", "自殘", "傷害自己", "結束生命"]
+      stroke: ["中風", "腦中風", "口齒不清", "臉部下垂", "半身麻木"]
+      bleeding: ["大出血", "流血不止", "出血不止", "大量出血"]
+      allergic: ["嚴重過敏", "過敏反應", "過敏性休克", "喉嚨腫"]
+      violence: ["家暴", "家庭暴力", "他打我", "她打我", "要殺我", "強姦", "性侵", "人口販賣"]
+  vi:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: []
+    terms:
+      chest_pain: ["đau ngực", "tức ngực", "đau tim", "nhồi máu cơ tim"]
+      breathing: ["khó thở", "không thở được", "ngạt thở", "không thể thở"]
+      overdose: ["quá liều", "uống quá nhiều thuốc"]
+      poison: ["ngộ độc", "trúng độc", "uống thuốc độc"]
+      self_harm: ["tự tử", "tự sát", "muốn chết", "tự làm hại", "làm hại bản thân"]
+      stroke: ["đột quỵ", "tai biến", "méo miệng", "nói ngọng", "yếu nửa người"]
+      bleeding: ["chảy máu nhiều", "chảy máu không ngừng", "xuất huyết", "băng huyết"]
+      allergic: ["sốc phản vệ", "dị ứng nặng", "sưng họng", "sưng lưỡi"]
+      violence: ["bạo lực gia đình", "đánh tôi", "đe dọa giết", "hiếp dâm", "cưỡng hiếp", "buôn người"]
+  tl:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: []
+    terms:
+      chest_pain: ["pananakit ng dibdib", "masakit ang dibdib", "sakit sa dibdib", "atake sa puso"]
+      breathing: ["hindi makahinga", "hirap huminga", "nahihirapang huminga", "kinakapos ng hininga"]
+      overdose: ["sobrang dosis", "labis na gamot", "overdose"]
+      poison: ["nalason", "pagkalason", "lason"]
+      self_harm: ["magpakamatay", "pagpapakamatay", "gusto kong mamatay", "saktan ang sarili"]
+      stroke: ["istrok", "stroke", "baluktot ang mukha", "hindi makapagsalita", "pamamanhid"]
+      bleeding: ["matinding pagdurugo", "dumudugo nang husto", "hindi tumitigil ang pagdurugo"]
+      allergic: ["matinding allergy", "anaphylaxis", "namamaga ang lalamunan", "namamagang dila"]
+      violence: ["karahasan sa tahanan", "sinasaktan ako", "binubugbog ako", "papatayin ako", "ginahasa", "panggagahasa", "human trafficking"]
+  ar:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: ["مركز السموم", "مركز مكافحة السموم"]
+    terms:
+      chest_pain: ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر", "نوبة قلبية", "أزمة قلبية"]
+      breathing: ["لا أستطيع التنفس", "لا يستطيع التنفس", "صعوبة في التنفس", "ضيق التنفس", "ضيق في التنفس", "اختناق"]
+      overdose: ["جرعة زائدة", "جرعة مفرطة", "تناول الكثير من الحبوب"]
+      poison: ["تسمم", "مسموم", "مادة سامة", "شرب مبيض"]
+      self_harm: ["انتحار", "الانتحار", "أريد أن أموت", "أقتل نفسي", "إيذاء النفس", "أؤذي نفسي"]
+      stroke: ["سكتة دماغية", "جلطة دماغية", "تدلي الوجه", "صعوبة في الكلام", "تنميل في جانب واحد"]
+      bleeding: ["نزيف حاد", "نزيف شديد", "نزيف لا يتوقف", "ينزف بشدة"]
+      allergic: ["حساسية شديدة", "صدمة تأقية", "تورم الحلق", "تورم اللسان"]
+      violence: ["عنف أسري", "عنف منزلي", "يضربني", "هددني بالقتل", "اغتصاب", "اعتداء جنسي", "اتجار بالبشر"]
+  ht:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: ["sant pwazon", "kontwòl pwazon"]
+    terms:
+      chest_pain: ["doulè nan pwatrin", "doulè pwatrin", "kriz kadyak", "kriz kè"]
+      breathing: ["mwen pa ka respire", "pa ka respire", "difikilte pou respire", "souf kout", "li toufe"]
+      overdose: ["surdoz", "twòp medikaman", "twòp grenn"]
+      poison: ["anpwazonnen", "pwazonnen", "pwazon"]
+      self_harm: ["swisid", "touye tèt mwen", "mwen vle mouri", "fè tèt mwen mal"]
+      stroke: ["estwòk", "konjesyon serebral", "figi l tonbe", "pa ka pale"]
+      bleeding: ["senyen anpil", "san pa sispann koule", "emoraji"]
+      allergic: ["reyaksyon alèjik grav", "gòj anfle", "lang anfle"]
+      violence: ["vyolans nan kay", "li bat mwen", "menase touye mwen", "kadejak", "vyòl", "trafik moun"]
+  pt-BR:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: ["centro de intoxicações", "centro de informação toxicológica", "disque-intoxicação"]
+    terms:
+      chest_pain: ["dor no peito", "dor torácica", "ataque cardíaco", "infarto"]
+      breathing: ["não consigo respirar", "não consegue respirar", "falta de ar", "dificuldade para respirar", "sufocando"]
+      overdose: ["overdose", "superdosagem", "remédio demais"]
+      poison: ["envenenado", "envenenada", "envenenamento", "intoxicação", "veneno"]
+      self_harm: ["suicídio", "me matar", "quero morrer", "me machucar", "automutilação"]
+      stroke: ["derrame", "avc", "acidente vascular cerebral", "rosto caído", "fala enrolada"]
+      bleeding: ["sangramento intenso", "sangrando muito", "hemorragia", "não para de sangrar"]
+      allergic: ["reação alérgica grave", "anafilaxia", "garganta inchada", "língua inchada"]
+      violence: ["violência doméstica", "me bate", "ameaçou me matar", "estupro", "abuso sexual", "tráfico de pessoas"]
+  ru:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["боль в груди", "боли в груди", "сердечный приступ", "инфаркт"]
+      breathing: ["не могу дышать", "не может дышать", "трудно дышать", "задыхаюсь", "одышка"]
+      overdose: ["передозировк", "слишком много таблеток"]
+      poison: ["отравлен", "отравил", "выпил яд", "выпила яд"]
+      self_harm: ["самоубийств", "суицид", "покончить с собой", "хочу умереть", "причинить себе вред"]
+      stroke: ["инсульт", "перекосило лицо", "невнятная речь", "онемение"]
+      bleeding: ["сильное кровотечение", "кровотечение не останавливается", "много крови"]
+      allergic: ["анафилак", "сильная аллергическая реакция", "отек горла", "отёк горла", "отек языка", "отёк языка"]
+      violence: ["домашнее насилие", "бьет меня", "бьёт меня", "угрожал убить", "изнасилова", "торговля людьми"]
+  uk:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["біль у грудях", "серцевий напад", "інфаркт"]
+      breathing: ["не можу дихати", "не може дихати", "важко дихати", "задишка", "задихаюся"]
+      overdose: ["передозуванн", "забагато таблеток"]
+      poison: ["отруєнн", "отруїв", "отруїла", "отрута"]
+      self_harm: ["самогубств", "суїцид", "хочу померти", "накласти на себе руки", "завдати собі шкоди"]
+      stroke: ["інсульт", "перекошене обличчя", "невиразне мовлення", "оніміння"]
+      bleeding: ["сильна кровотеча", "кровотеча не зупиняється", "багато крові"]
+      allergic: ["анафілак", "сильна алергічна реакція", "набряк горла", "набряк язика"]
+      violence: ["домашнє насильство", "б'є мене", "погрожував убити", "зґвалтуванн", "торгівля людьми"]
+  ko:
+    reviewed_by: null
+    reviewed_on: null
+    match: substring
+    exclude: []
+    terms:
+      chest_pain: ["가슴 통증", "가슴이 아파", "흉통", "심장마비"]
+      breathing: ["숨을 쉴 수 없", "숨쉬기 힘들", "호흡곤란", "숨이 막"]
+      overdose: ["과다복용", "약을 너무 많이"]
+      poison: ["중독", "독극물", "독을 먹"]
+      self_harm: ["자살", "죽고 싶", "자해"]
+      stroke: ["뇌졸중", "중풍", "얼굴이 처지", "말이 어눌"]
+      bleeding: ["심한 출혈", "피가 멈추지 않", "과다출혈"]
+      allergic: ["아나필락시스", "심한 알레르기", "목이 붓", "혀가 붓"]
+      violence: ["가정폭력", "나를 때려", "죽이겠다고 협박", "성폭행", "강간", "인신매매"]
+  fr:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: ["centre antipoison", "centre anti-poison"]
+    terms:
+      chest_pain: ["douleur thoracique", "douleur à la poitrine", "mal à la poitrine", "crise cardiaque", "infarctus"]
+      breathing: ["je ne peux pas respirer", "ne peut pas respirer", "difficulté à respirer", "essouffl*", "étouff*"]
+      overdose: ["overdose", "surdose", "trop de médicaments"]
+      poison: ["empoisonn*", "intoxication", "poison"]
+      self_harm: ["suicide", "me tuer", "envie de mourir", "me faire du mal", "automutilation"]
+      stroke: ["avc", "accident vasculaire cérébral", "visage affaissé", "trouble de la parole"]
+      bleeding: ["saignement abondant", "hémorragie", "saigne beaucoup", "ne s'arrête pas de saigner"]
+      allergic: ["réaction allergique grave", "anaphylaxie", "gorge gonflée", "langue gonflée"]
+      violence: ["violence conjugale", "violence domestique", "il me frappe", "elle me frappe", "menacé de me tuer", "viol", "agression sexuelle", "traite des êtres humains"]
+  prs:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["درد قفسه سینه", "درد سینه", "حمله قلبی"]
+      breathing: ["نفس کشیده نمی‌توانم", "نمی‌توانم نفس بکشم", "تنگی نفس", "مشکل تنفس", "نفسم بند"]
+      overdose: ["اوردوز", "مصرف بیش از حد دوا", "دوای زیاد خورده"]
+      poison: ["مسمومیت", "مسموم", "زهر خورده"]
+      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خود را بکشم", "به خود آسیب"]
+      stroke: ["سکته مغزی", "سکته", "کجی روی", "گپ زده نمی‌تواند"]
+      bleeding: ["خونریزی شدید", "خون زیاد", "خونریزی بند نمی‌شود"]
+      allergic: ["حساسیت شدید", "آلرژی شدید", "پندیدن گلو", "ورم زبان"]
+      violence: ["خشونت خانگی", "مرا لت می‌کند", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان"]
+  ps:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["د سینې درد", "په سینه کې درد", "زړه حمله"]
+      breathing: ["ساه نشم اخیستلی", "د تنفس ستونزه", "ساه لنډی"]
+      overdose: ["اوورډوز", "له حده زیات دوا", "ډېر دوا"]
+      poison: ["مسمومیت", "زهر", "زهرجن"]
+      self_harm: ["ځان وژنه", "ځانوژنه", "غواړم مړ شم", "ځان ته زیان"]
+      stroke: ["د مغزو سکته", "سکته", "مخ کوږ شوی"]
+      bleeding: ["سخت وینه بهیدل", "وینه نه بندیږي", "ډېره وینه"]
+      allergic: ["سخته حساسیت", "الرژي", "ستونی پړسیدلی"]
+      violence: ["کورنی تاوتریخوالی", "ما وهي", "د وژلو ګواښ", "جنسي تیری", "انسان قاچاق"]
+  fa:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["درد قفسه سینه", "درد سینه", "حمله قلبی"]
+      breathing: ["نمی‌توانم نفس بکشم", "تنگی نفس", "مشکل تنفسی", "خفگی"]
+      overdose: ["مصرف بیش از حد", "اوردوز", "قرص زیادی خورده"]
+      poison: ["مسمومیت", "مسموم شده", "سم خورده"]
+      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خودم را بکشم", "آسیب به خود"]
+      stroke: ["سکته مغزی", "افتادگی صورت", "اختلال در گفتار", "بی‌حسی یک طرف"]
+      bleeding: ["خونریزی شدید", "خونریزی بند نمی‌آید", "خون زیادی"]
+      allergic: ["واکنش آلرژیک شدید", "شوک آنافیلاکسی", "تورم گلو", "تورم زبان"]
+      violence: ["خشونت خانگی", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان"]
+  ur:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["سینے میں درد", "سینے کا درد", "دل کا دورہ"]
+      breathing: ["سانس نہیں لے سک", "سانس لینے میں دشواری", "سانس پھول", "دم گھٹ"]
+      overdose: ["اوور ڈوز", "زیادہ مقدار میں دوا", "بہت زیادہ گولیاں"]
+      poison: ["زہر", "زہریلا"]
+      self_harm: ["خودکشی", "مرنا چاہتا", "مرنا چاہتی", "خود کو نقصان"]
+      stroke: ["فالج", "چہرہ لٹک", "بولنے میں دشواری"]
+      bleeding: ["شدید خون بہ", "خون نہیں رک", "بہت زیادہ خون"]
+      allergic: ["شدید الرجی", "حلق میں سوجن", "زبان میں سوجن"]
+      violence: ["گھریلو تشدد", "مجھے مارتا", "قتل کی دھمکی", "جنسی زیادتی", "ریپ", "انسانی اسمگلنگ"]
+  hi:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["सीने में दर्द", "छाती में दर्द", "दिल का दौरा"]
+      breathing: ["सांस नहीं ले पा", "सांस लेने में तकलीफ", "सांस फूल", "दम घुट"]
+      overdose: ["ओवरडोज़", "ओवरडोज", "दवा की अधिक मात्रा", "बहुत सारी गोलियां"]
+      poison: ["ज़हर", "जहर", "विषाक्त"]
+      self_harm: ["आत्महत्या", "मरना चाहता", "मरना चाहती", "खुद को नुकसान"]
+      stroke: ["स्ट्रोक", "लकवा", "चेहरा लटक", "बोलने में दिक्कत"]
+      bleeding: ["बहुत खून बह", "खून नहीं रुक", "भारी रक्तस्राव"]
+      allergic: ["गंभीर एलर्जी", "एनाफिलेक्सिस", "गले में सूजन", "जीभ में सूजन"]
+      violence: ["घरेलू हिंसा", "मुझे मारता", "जान से मारने की धमकी", "बलात्कार", "यौन उत्पीड़न", "मानव तस्करी"]
+  pa:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["ਛਾਤੀ ਵਿੱਚ ਦਰਦ", "ਛਾਤੀ ਦਾ ਦਰਦ", "ਦਿਲ ਦਾ ਦੌਰਾ"]
+      breathing: ["ਸਾਹ ਨਹੀਂ ਲੈ ਸਕ", "ਸਾਹ ਲੈਣ ਵਿੱਚ ਤਕਲੀਫ਼", "ਸਾਹ ਚੜ੍ਹ"]
+      overdose: ["ਓਵਰਡੋਜ਼", "ਬਹੁਤ ਜ਼ਿਆਦਾ ਦਵਾਈ"]
+      poison: ["ਜ਼ਹਿਰ", "ਜ਼ਹਿਰੀਲਾ"]
+      self_harm: ["ਖੁਦਕੁਸ਼ੀ", "ਆਤਮ ਹੱਤਿਆ", "ਮਰਨਾ ਚਾਹੁੰਦਾ", "ਆਪਣੇ ਆਪ ਨੂੰ ਨੁਕਸਾਨ"]
+      stroke: ["ਸਟ੍ਰੋਕ", "ਅਧਰੰਗ", "ਚਿਹਰਾ ਲਟਕ", "ਬੋਲਣ ਵਿੱਚ ਮੁਸ਼ਕਲ"]
+      bleeding: ["ਬਹੁਤ ਖੂਨ ਵਗ", "ਖੂਨ ਨਹੀਂ ਰੁਕ"]
+      allergic: ["ਗੰਭੀਰ ਐਲਰਜੀ", "ਗਲੇ ਵਿੱਚ ਸੋਜ", "ਜੀਭ ਵਿੱਚ ਸੋਜ"]
+      violence: ["ਘਰੇਲੂ ਹਿੰਸਾ", "ਮੈਨੂੰ ਕੁੱਟਦਾ", "ਮਾਰਨ ਦੀ ਧਮਕੀ", "ਬਲਾਤਕਾਰ", "ਮਨੁੱਖੀ ਤਸਕਰੀ"]
+  bn:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["বুকে ব্যথা", "বুক ব্যথা", "হার্ট অ্যাটাক"]
+      breathing: ["শ্বাস নিতে পারছি না", "শ্বাসকষ্ট", "দম বন্ধ"]
+      overdose: ["ওভারডোজ", "অতিরিক্ত ওষুধ"]
+      poison: ["বিষ খে", "বিষক্রিয়া", "বিষাক্ত"]
+      self_harm: ["আত্মহত্যা", "মরে যেতে চাই", "নিজের ক্ষতি"]
+      stroke: ["স্ট্রোক", "মুখ বেঁকে", "কথা জড়িয়ে"]
+      bleeding: ["প্রচুর রক্তপাত", "রক্ত বন্ধ হচ্ছে না", "রক্তক্ষরণ"]
+      allergic: ["মারাত্মক অ্যালার্জি", "গলা ফুলে", "জিভ ফুলে"]
+      violence: ["পারিবারিক সহিংসতা", "আমাকে মারে", "মেরে ফেলার হুমকি", "ধর্ষণ", "মানব পাচার"]
+  so:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: []
+    terms:
+      chest_pain: ["xanuun laabta", "xabad xanuun", "wadne qabad"]
+      breathing: ["ma neefsan karo", "neefsasho adag", "neef qabad"]
+      overdose: ["qaadasho xad dhaaf ah", "daawo badan"]
+      poison: ["sun cabbay", "sumoobay", "sunta"]
+      self_harm: ["is dil", "isdilid", "waxaan rabaa inaan dhinto", "is dhaawac"]
+      stroke: ["istaroog", "faalig", "wajiga oo dhacay"]
+      bleeding: ["dhiig bax badan", "dhiig joogsan waayay"]
+      allergic: ["xasaasiyad daran", "cunaha oo bararay", "carrab bararay"]
+      violence: ["rabshad qoys", "wuu i garaacaa", "igu hanjabay inuu i dilo", "kufsi", "ka ganacsiga dadka"]
+  sw:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: []
+    terms:
+      chest_pain: ["maumivu ya kifua", "mshtuko wa moyo"]
+      breathing: ["siwezi kupumua", "shida ya kupumua", "kukosa pumzi"]
+      overdose: ["kuzidisha dozi", "dawa nyingi kupita kiasi"]
+      poison: ["amewekewa sumu", "kunywa sumu", "sumu"]
+      self_harm: ["kujiua", "nataka kufa", "kujidhuru"]
+      stroke: ["kiharusi", "uso umelegea", "kushindwa kuongea"]
+      bleeding: ["kutokwa na damu nyingi", "damu haikomi"]
+      allergic: ["mzio mkali", "koo kuvimba", "ulimi kuvimba"]
+      violence: ["ukatili wa nyumbani", "ananipiga", "alitishia kuniua", "ubakaji", "amenibaka", "biashara ya binadamu"]
+  am:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["የደረት ሕመም", "የደረት ህመም", "ደረቴን ያመኛል", "የልብ ድካም"]
+      breathing: ["መተንፈስ አልችልም", "የመተንፈስ ችግር", "ትንፋሽ ማጠር"]
+      overdose: ["ከመጠን በላይ መድሃኒት", "ከልክ በላይ መድኃኒት"]
+      poison: ["መርዝ", "ተመርዟል", "መመረዝ"]
+      self_harm: ["ራስን ማጥፋት", "መሞት እፈልጋለሁ", "ራሴን መጉዳት"]
+      stroke: ["ስትሮክ", "የአንጎል ደም መፍሰስ", "ፊት መጣመም"]
+      bleeding: ["ከፍተኛ ደም መፍሰስ", "ደም አይቆምም"]
+      allergic: ["ከባድ አለርጂ", "ጉሮሮ ማበጥ", "ምላስ ማበጥ"]
+      violence: ["የቤት ውስጥ ጥቃት", "ይደበድበኛል", "ሊገድለኝ ዛተ", "አስገድዶ መድፈር", "ሰዎችን መነገድ"]
+  my:
+    reviewed_by: null
+    reviewed_on: null
+    match: substring
+    exclude: []
+    terms:
+      chest_pain: ["ရင်ဘတ်အောင့်", "ရင်ဘတ်နာ", "နှလုံးရောဂါဖောက်"]
+      breathing: ["အသက်ရှူမရ", "အသက်ရှူကျပ်"]
+      overdose: ["ဆေးအလွန်အကျွံ", "ဆေးများလွန်း"]
+      poison: ["အဆိပ်သင့်", "အဆိပ်"]
+      self_harm: ["သေကြောင်းကြံ", "မိမိကိုယ်ကို သတ်", "သေချင်"]
+      stroke: ["လေဖြတ်", "မျက်နှာရွဲ့", "စကားမပီ"]
+      bleeding: ["သွေးအများကြီးထွက်", "သွေးမတိတ်"]
+      allergic: ["ပြင်းထန်သော ဓာတ်မတည့်", "လည်ချောင်းရောင်"]
+      violence: ["အိမ်တွင်းအကြမ်းဖက်", "ကျွန်ုပ်ကို ရိုက်", "မုဒိမ်း", "လူကုန်ကူး"]
+  ne:
+    reviewed_by: null
+    reviewed_on: null
+    match: prefix
+    exclude: []
+    terms:
+      chest_pain: ["छातीमा दुखाइ", "छाती दुख्", "मुटुको दौरा"]
+      breathing: ["सास फेर्न सकिन", "सास फेर्न गाह्रो", "सास फुल्"]
+      overdose: ["ओभरडोज", "धेरै औषधि खा"]
+      poison: ["विष खा", "विषाक्त"]
+      self_harm: ["आत्महत्या", "मर्न चाहन्छु", "आफैलाई हानि"]
+      stroke: ["स्ट्रोक", "पक्षाघात", "अनुहार ढल्क", "बोल्न गाह्रो"]
+      bleeding: ["धेरै रगत बग", "रगत रोकिँदैन", "भारी रक्तस्राव"]
+      allergic: ["गम्भीर एलर्जी", "घाँटी सुन्नि", "जिब्रो सुन्नि"]
+      violence: ["घरेलु हिंसा", "मलाई कुट्छ", "मार्ने धम्की", "बलात्कार", "मानव बेचबिखन"]
+  rw:
+    reviewed_by: null
+    reviewed_on: null
+    match: word
+    exclude: []
+    terms:
+      chest_pain: ["kubabara mu gatuza", "ububabare bwo mu gituza", "indwara y'umutima itunguranye"]
+      breathing: ["sinshobora guhumeka", "guhumeka nabi", "kubura umwuka"]
+      overdose: ["kunywa imiti myinshi", "imiti irenze urugero"]
+      poison: ["uburozi", "yarozwe", "kunywa uburozi"]
+      self_harm: ["kwiyahura", "ndashaka gupfa", "kwikomeretsa"]
+      stroke: ["guturika k'udutsi two mu bwonko", "isura yagoramye", "stroke"]
+      bleeding: ["kuva amaraso menshi", "amaraso ntahagarara"]
+      allergic: ["allergie ikabije", "umuhogo wabyimbye", "ururimi rwabyimbye"]
+      violence: ["ihohoterwa mu rugo", "arankubita", "yantera ubwoba ko azanyica", "gufata ku ngufu", "icuruzwa ry'abantu"]

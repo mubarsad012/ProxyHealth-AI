@@ -1,0 +1,151 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional court. The citizenship question is printed so the fixed notice (D-20) has context.
+id: jury_summons
+kind: document
+title_en: "Jury summons from a court"
+document_type: jury_summons
+category: civic
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [70, 50, 20], logo: seal, watermark_angle: 38}
+pages:
+  - - {text: "Circuit Court of Sample County, Virginia", style: letterhead, ref: sender}
+    - {text: "Office of the Jury Administrator", style: letterhead_sub, ref: office}
+    - {text: "Date: September 25, 2026", style: right, ref: notice_date}
+    - {text: "SUMMONS FOR JURY SERVICE", style: title, ref: heading}
+    - {text: "You are hereby summoned to appear for jury service.", style: body, ref: summoned}
+    - {text: "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026.", style: bold, ref: return_by}
+    - {text: "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse.", style: bold, ref: report}
+    - {text: "Question 4. Are you a citizen of the United States?  [ ] Yes  [ ] No", style: field, ref: q4}
+    - {text: "Answer every question truthfully. Failure to return the questionnaire may result in a fine.", style: body, ref: fine}
+    - {text: "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181.", style: body, ref: phone}
+expected:
+  urgency_level: [medium]
+  nearest_date_iso: "2026-10-23"
+  date_kinds: {d1: stated, d2: stated}
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  fixed_keys: [fixed.jury_summons]
+  fixed_severity: high
+  disclaimer_kind: legal_information_only
+  state: VA
+out:
+  base:
+    sender_as_written: "Circuit Court of Sample County, Virginia"
+    sender_kind: court
+    summary_title: "Jury summons from the Circuit Court of Sample County"
+    summary_body: "This is a jury summons from the Circuit Court of Sample County. It asks you to answer a form by October 23, 2026 and to report on November 16, 2026 at 8:00 AM."
+    summary_span_ids: ["@sender", "@return_by", "@report"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "Answer the questionnaire and send it back by October 23, 2026."
+        value_verbatim: "October 23, 2026"
+        source_quote: "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026."
+        span_ids: ["@return_by"]
+        date_text: "October 23, 2026"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d2
+        kind: appointment
+        text: "The summons gives a report date of November 16, 2026 at 8:00 AM."
+        value_verbatim: "November 16, 2026"
+        source_quote: "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse."
+        span_ids: ["@report"]
+        date_text: "November 16, 2026"
+        time_text: "8:00 AM"
+        role: appointment
+        confidence: high
+      - id: d3
+        kind: contact
+        text: "Jury Office phone, from your paper: (703) 555-0181."
+        value_verbatim: "(703) 555-0181"
+        source_quote: "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Answer every question on the questionnaire and mail it back before October 23, 2026.", kind: mail, resource_tags: [jury_summons], span_ids: ["@return_by", "@fine"], demand_id: d1}
+      - {id: s2, text: "Call the Jury Office with questions about the dates.", kind: call, resource_tags: [], span_ids: ["@phone"], demand_id: d3}
+      - {id: s3, text: "If you are unsure about the citizenship question, ask a licensed lawyer or a DOJ-accredited representative.", kind: professional, resource_tags: [jury_summons, immigration_legal_help], span_ids: ["@q4"], demand_id: null}
+    glossary:
+      - {term_as_written: "jury service", explanation: "Helping a court decide a case as a member of a jury."}
+      - {term_as_written: "Juror Qualification Questionnaire", explanation: "A form with questions the court uses to see who can serve."}
+      - {term_as_written: "excuse", explanation: "Permission from the court not to serve."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I move my report date?"
+      - "How do I return the questionnaire?"
+      - "Is an interpreter available at the courthouse?"
+    clerk_need_en: "a jury summons - answering the form before its due date"
+    resource_tags: [jury_summons]
+    institutions_as_written: ["Circuit Court of Sample County"]
+    form_numbers: []
+    geo_state: VA
+    legibility: good
+  es:
+    summary_title: "Citación para jurado de la Corte de Circuito del Condado de Sample"
+    summary_body: "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del 23 de octubre de 2026 y presentarse el 16 de noviembre de 2026 a las 8:00 AM."
+    demands:
+      d1: {text: "Conteste el cuestionario y envíelo antes del 23 de octubre de 2026."}
+      d2: {text: "La citación da como fecha para presentarse el 16 de noviembre de 2026 a las 8:00 AM."}
+      d3: {text: "Teléfono de la Oficina del Jurado, de su papel: (703) 555-0181."}
+    plan_steps:
+      s1: {text: "Conteste cada pregunta del cuestionario y envíelo por correo antes del 23 de octubre de 2026."}
+      s2: {text: "Llame a la Oficina del Jurado si tiene preguntas sobre las fechas."}
+      s3: {text: "Si tiene dudas sobre la pregunta de ciudadanía, pregunte a un abogado con licencia o a un representante acreditado por el DOJ."}
+    glossary:
+      "jury service": "Ayudar a una corte a decidir un caso como parte de un jurado."
+      "Juror Qualification Questionnaire": "Un formulario con preguntas que la corte usa para ver quién puede servir."
+      "excuse": "Permiso de la corte para no servir."
+    questions_to_ask:
+      - "¿Puedo cambiar mi fecha para presentarme?"
+      - "¿Cómo devuelvo el cuestionario?"
+      - "¿Hay intérprete en la corte?"
+    translated_pages:
+      - "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: 25 de septiembre de 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del 23 de octubre de 2026.\nFecha para presentarse: 16 de noviembre de 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
+  prs:
+    summary_title: "احضاریه هیئت منصفه از محکمه ناحیه Sample"
+    summary_body: "این احضاریه هیئت منصفه از محکمه ناحیه Sample است. از شما می‌خواهد تا ۲۳ اکتبر ۲۰۲۶ یک فورم را جواب دهید و در ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح حاضر شوید."
+    demands:
+      d1: {text: "پرسشنامه را جواب دهید و تا ۲۳ اکتبر ۲۰۲۶ پس بفرستید."}
+      d2: {text: "احضاریه تاریخ حضور را ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح می‌گوید."}
+      d3: {text: "تلفون دفتر هیئت منصفه، از کاغذ شما: (703) 555-0181."}
+    plan_steps:
+      s1: {text: "به هر سوال پرسشنامه جواب دهید و پیش از ۲۳ اکتبر ۲۰۲۶ آن را پست کنید."}
+      s2: {text: "برای سوال درباره تاریخ‌ها با دفتر هیئت منصفه زنگ بزنید."}
+      s3: {text: "اگر درباره سوال تابعیت مطمئن نیستید، از یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه بپرسید."}
+    glossary:
+      "jury service": "کمک به محکمه برای تصمیم در یک قضیه به حیث عضو هیئت منصفه."
+      "Juror Qualification Questionnaire": "فورمی با سوال‌هایی که محکمه برای دانستن اینکه چه کسی می‌تواند خدمت کند استفاده می‌کند."
+      "excuse": "اجازه محکمه برای خدمت نکردن."
+    questions_to_ask:
+      - "آیا می‌توانم تاریخ حضور خود را تغییر دهم؟"
+      - "پرسشنامه را چطور پس بفرستم؟"
+      - "آیا در محکمه ترجمان موجود است؟"
+    translated_pages:
+      - "محکمه ناحیه Sample، ویرجینیا\nدفتر مدیر هیئت منصفه\nتاریخ: ۲۵ سپتمبر ۲۰۲۶\nاحضاریه برای خدمت در هیئت منصفه\nبدین وسیله شما برای خدمت در هیئت منصفه احضار می‌شوید.\nلطفاً پرسشنامه صلاحیت عضو هیئت منصفه را پر کنید و تا ۲۳ اکتبر ۲۰۲۶ پس بفرستید.\nتاریخ حضور: ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح، اتاق تجمع هیئت منصفه، محکمه ناحیه Sample.\nسوال ۴. آیا شما شهروند ایالات متحده هستید؟ [ ] بلی [ ] نخیر\nبه هر سوال راست جواب دهید. پس نفرستادن پرسشنامه ممکن است باعث جریمه شود.\nبرای خواستن تاریخ نو یا معافیت، با دفتر هیئت منصفه به نمبر (703) 555-0181 زنگ بزنید."
+  ar:
+    summary_title: "استدعاء لهيئة المحلفين من محكمة مقاطعة Sample"
+    summary_body: "هذا استدعاء لهيئة المحلفين من محكمة مقاطعة Sample. يطلب منك الإجابة على نموذج قبل ٢٣ أكتوبر ٢٠٢٦ والحضور في ١٦ نوفمبر ٢٠٢٦ الساعة ٨:٠٠ صباحًا."
+    demands:
+      d1: {text: "أجب على الاستبيان وأرسله قبل ٢٣ أكتوبر ٢٠٢٦."}
+      d2: {text: "يذكر الاستدعاء موعد الحضور في ١٦ نوفمبر ٢٠٢٦ الساعة ٨:٠٠ صباحًا."}
+      d3: {text: "هاتف مكتب المحلفين، من ورقتك: (703) 555-0181."}
+    plan_steps:
+      s1: {text: "أجب على كل سؤال في الاستبيان وأرسله بالبريد قبل ٢٣ أكتوبر ٢٠٢٦."}
+      s2: {text: "اتصل بمكتب المحلفين إذا كانت لديك أسئلة عن المواعيد."}
+      s3: {text: "إذا لم تكن متأكدًا من سؤال الجنسية، اسأل محاميًا مرخّصًا أو ممثلًا معتمدًا من وزارة العدل."}
+    glossary:
+      "jury service": "مساعدة المحكمة في الحكم في قضية كعضو في هيئة المحلفين."
+      "Juror Qualification Questionnaire": "نموذج فيه أسئلة تستخدمه المحكمة لمعرفة من يمكنه الخدمة."
+      "excuse": "إذن من المحكمة بعدم الخدمة."
+    questions_to_ask:
+      - "هل يمكنني تغيير موعد الحضور؟"
+      - "كيف أعيد الاستبيان؟"
+      - "هل يوجد مترجم في المحكمة؟"
+    translated_pages:
+      - "محكمة الدائرة في مقاطعة Sample، فرجينيا\nمكتب مسؤول هيئة المحلفين\nالتاريخ: ٢٥ سبتمبر ٢٠٢٦\nاستدعاء للخدمة في هيئة المحلفين\nيتم استدعاؤك بموجب هذا للحضور للخدمة في هيئة المحلفين.\nيرجى تعبئة استبيان أهلية المحلفين وإعادته قبل ٢٣ أكتوبر ٢٠٢٦.\nموعد الحضور: ١٦ نوفمبر ٢٠٢٦ الساعة ٨:٠٠ صباحًا، قاعة تجمع المحلفين، محكمة مقاطعة Sample.\nالسؤال ٤. هل أنت مواطن في الولايات المتحدة؟ [ ] نعم [ ] لا\nأجب على كل سؤال بصدق. عدم إعادة الاستبيان قد يؤدي إلى غرامة.\nلطلب موعد جديد أو إعفاء، اتصل بمكتب المحلفين على (703) 555-0181."

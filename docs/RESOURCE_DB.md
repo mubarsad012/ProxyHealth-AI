@@ -886,7 +886,7 @@ notes:
   notes.set_region_for_local_help: "Set your state in Settings to see help near you."
   notes.county_unknown: "Add the first 3 digits of your ZIP code in Settings to see more local help."
   notes.no_local_results: "We do not have local listings for your area yet. These national services help anyone."
-  notes.lsc_restricted_explained: "This organization usually cannot help people without immigration papers, except survivors of violence or trafficking. If that is not you, try these instead."
+  notes.lsc_restricted_explained: "Some legal aid offices can only help people with certain immigration papers."
   notes.resource_text_english_only: "Some listing details are in English."
   notes.verify_before_going: "Hours and phone numbers change. Call before you go."
 warning_keys: [jury_never_check_citizen, jury_never_register_to_vote, ask_for_plain_language_summary, address_change_multi_agency, usps_does_not_forward_uscis, ead_receipt_not_work_authorization, tps_dates_from_federal_register, forms_are_free, asylum_rules_aug_2026, no_fee_waiver_hr1, verify_local_office_open, hr1_coverage_changes, staff_reference, schools_may_not_ask_status, eeoc_deadline_180_300, osha_retaliation_30d, court_date_is_the_deadline, not_a_court_order, law_changes_2027, lsc_eviction_db_2021, medicare_windows_changed]

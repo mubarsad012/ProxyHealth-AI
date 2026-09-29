@@ -1,0 +1,392 @@
+{
+  "analysis_id": "sample-jury_summons-es",
+  "category": "civic",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a jury summons - answering the form before its due date",
+    "need_line_source": "ai",
+    "translated": "⟦es⟧ a jury summons - answering the form before its due date"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 23, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d1",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "response_due",
+      "source_quote": "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "Conteste el cuestionario y envíelo antes del 23 de octubre de 2026.",
+      "value_verbatim": "October 23, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "November 16, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": "8:00 AM",
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d2",
+      "kind": "appointment",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "appointment",
+      "source_quote": "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse.",
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "La citación da como fecha para presentarse el 16 de noviembre de 2026 a las 8:00 AM.",
+      "value_verbatim": "November 16, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d3",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "Teléfono de la Oficina del Jurado, de su papel: (703) 555-0181.",
+      "value_verbatim": "(703) 555-0181",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "general_information",
+  "disclaimers": [
+    "general_information",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "jury_summons",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": "VA",
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "Circuit Court of Sample County"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "Ayudar a una corte a decidir un caso como parte de un jurado.",
+      "term_as_written": "jury service"
+    },
+    {
+      "explanation": "Un formulario con preguntas que la corte usa para ver quién puede servir.",
+      "term_as_written": "Juror Qualification Questionnaire"
+    },
+    {
+      "explanation": "Permiso de la corte para no servir.",
+      "term_as_written": "excuse"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.1562,
+            0.058,
+            0.6506,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Circuit Court of Sample County, Virginia"
+        },
+        {
+          "bbox": [
+            0.1562,
+            0.086,
+            0.4088,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Office of the Jury Administrator"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.2956,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date: September 25, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1493,
+            0.53,
+            0.1816
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "SUMMONS FOR JURY SERVICE"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.199,
+            0.5669,
+            0.2188
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You are hereby summoned to appear for jury service."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2304,
+            0.9169,
+            0.2502
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2618,
+            0.8462,
+            0.3014
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3101,
+            0.925,
+            0.3478
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Question 4. Are you a citizen of the United States? [ ] Yes [ ] No"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3565,
+            0.8944,
+            0.3763
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Answer every question truthfully. Failure to return the questionnaire may result in a fine."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3879,
+            0.7394,
+            0.4077
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181."
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d1",
+      "id": "s1",
+      "kind": "mail",
+      "resource_tags": [
+        "jury_summons"
+      ],
+      "span_ids": [
+        "p1b6",
+        "p1b9"
+      ],
+      "text": "Conteste cada pregunta del cuestionario y envíelo por correo antes del 23 de octubre de 2026."
+    },
+    {
+      "demand_id": "d3",
+      "id": "s2",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "Llame a la Oficina del Jurado si tiene preguntas sobre las fechas."
+    },
+    {
+      "demand_id": null,
+      "id": "s3",
+      "kind": "professional",
+      "resource_tags": [
+        "jury_summons",
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "Si tiene dudas sobre la pregunta de ciudadanía, pregunte a un abogado con licencia o a un representante acreditado por el DOJ."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "¿Puedo cambiar mi fecha para presentarme?",
+    "¿Cómo devuelvo el cuestionario?",
+    "¿Hay intérprete en la corte?"
+  ],
+  "red_flags": [],
+  "request_id": "offline-jury_summons-es",
+  "resource_preview": [],
+  "resource_tags": [
+    "jury_summons"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Circuit Court of Sample County, Virginia",
+  "sender_kind": "court",
+  "summary": {
+    "body": "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del 23 de octubre de 2026 y presentarse el 16 de noviembre de 2026 a las 8:00 AM.",
+    "body_en": "This is a jury summons from the Circuit Court of Sample County. It asks you to answer a form by October 23, 2026 and to report on November 16, 2026 at 8:00 AM.",
+    "span_ids": [
+      "p1b1",
+      "p1b6",
+      "p1b7"
+    ],
+    "title": "Citación para jurado de la Corte de Circuito del Condado de Sample"
+  },
+  "target_language": "es",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: 25 de septiembre de 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del 23 de octubre de 2026.\nFecha para presentarse: 16 de noviembre de 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 3,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

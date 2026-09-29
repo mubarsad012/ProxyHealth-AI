@@ -1,0 +1,28 @@
+id: w2_form
+title_key: fixture.w2_form
+title_en: W-2 wage and tax form from an employer
+document_type: w2_1099
+category: employment
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/w2_form/pages/1
+dhash: 0006e014d918d0888180c184c186d344a080c100c18380910d90280020001004
+page_dhashes:
+- 0006e014d918d0888180c184c186d344a080c100c18380910d90280020001004
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - info
+  demands_count: 0
+  scam_risk: none
+  readable: true
+  disclaimer_kind: legal_information_only
+  glossary_terms:
+  - Employer identification number (EIN)
+  - Federal income tax withheld
+  resource_tags_include:
+  - itin

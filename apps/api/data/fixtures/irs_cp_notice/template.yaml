@@ -1,0 +1,88 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Amounts and the phone number are fictional (555-01xx); irs.gov/payments is the genuine IRS page.
+id: irs_cp_notice
+kind: document
+title_en: "IRS letter about your taxes"
+document_type: irs_notice
+category: tax
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [30, 30, 30], logo: seal, watermark_angle: 34}
+pages:
+  - - {text: "Department of the Treasury", style: letterhead, ref: treasury}
+    - {text: "Internal Revenue Service", style: letterhead_sub, ref: sender}
+    - {text: "Notice CP14", style: right, ref: notice_no}
+    - {text: "Tax year 2025", style: right, ref: tax_year}
+    - {text: "Notice date: September 21, 2026", style: right, ref: notice_date}
+    - {text: "Balance due on your 2025 tax return", style: title, ref: heading}
+    - {text: "Our records show you have unpaid taxes for the tax year 2025.", style: body, ref: unpaid}
+    - {text: "Amount due: $312.45", style: heading, ref: amount}
+    - {text: "Pay by: October 26, 2026", style: bold, ref: pay_by}
+    - {text: "If you pay after this date, interest and penalties may increase the amount you owe.", style: body, ref: interest}
+    - {text: "Pay online at irs.gov/payments or mail a check with the payment stub below.", style: body, ref: how}
+    - {text: "If you already paid or you disagree, call us at (800) 555-0110.", style: body, ref: phone}
+    - {text: "Keep this notice for your records.", style: small, ref: keep}
+expected:
+  urgency_level: [medium]
+  nearest_date_iso: "2026-10-26"
+  date_kinds: {d2: stated}
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: general_information
+  resource_tags_include: [tax_notice]
+out:
+  base:
+    sender_as_written: "Internal Revenue Service"
+    sender_kind: federal_agency
+    summary_title: "IRS notice CP14 about your 2025 taxes"
+    summary_body: "This is IRS notice CP14 about your 2025 taxes. It says the amount due is $312.45 by October 26, 2026. It lists ways to pay or to call with questions."
+    summary_span_ids: ["@notice_no", "@amount", "@pay_by"]
+    demands:
+      - id: d1
+        kind: amount
+        text: "The notice says the amount due is $312.45."
+        value_verbatim: "$312.45"
+        source_quote: "Amount due: $312.45"
+        span_ids: ["@amount"]
+        amount_text: "$312.45"
+        currency: USD
+        role: payment_due
+        confidence: high
+      - id: d2
+        kind: deadline
+        text: "The notice gives October 26, 2026 as the date to pay."
+        value_verbatim: "October 26, 2026"
+        source_quote: "Pay by: October 26, 2026"
+        span_ids: ["@pay_by"]
+        date_text: "October 26, 2026"
+        anchor_span_id: "@notice_date"
+        role: payment_due
+        confidence: high
+      - id: d3
+        kind: contact
+        text: "IRS phone for questions, from your paper: (800) 555-0110."
+        value_verbatim: "(800) 555-0110"
+        source_quote: "If you already paid or you disagree, call us at (800) 555-0110."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Look up notice CP14 on the IRS notice page to read what it means.", kind: verify, resource_tags: [tax_notice], span_ids: ["@notice_no"], demand_id: null}
+      - {id: s2, text: "If you have questions or already paid, call the number on the notice before October 26, 2026.", kind: call, resource_tags: [], span_ids: ["@phone", "@pay_by"], demand_id: d2}
+      - {id: s3, text: "A free tax clinic or a tax professional can go over this notice with you.", kind: professional, resource_tags: [tax_notice], span_ids: ["@unpaid"], demand_id: null}
+    glossary:
+      - {term_as_written: "Notice CP14", explanation: "The name of this IRS letter. It is about a balance due."}
+      - {term_as_written: "Tax year", explanation: "The year the taxes are for."}
+      - {term_as_written: "penalties", explanation: "Extra charges added when a payment is late."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I set up a payment plan?"
+      - "How can I see how you got this amount?"
+      - "I already paid. How do I show you?"
+    clerk_need_en: "an IRS letter - what it says and the date to respond by"
+    resource_tags: [tax_notice]
+    institutions_as_written: ["Department of the Treasury", "Internal Revenue Service"]
+    form_numbers: ["CP14"]
+    legibility: good

@@ -1,0 +1,284 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "other_notice",
+  "category": "immigration",
+  "document_type_confidence": "medium",
+  "sender_as_written": "U.S. Immigration Services Department",
+  "sender_kind": "federal_agency",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "U.S. Immigration Services Department\nOffice of Immigration Fees and Penalties\nDate: September 29, 2026\nFINAL WARNING - IMMIGRATION FEE PAST DUE\nDear Applicant,\nOur records show you owe an unpaid immigration processing fee of $950.\nYou must pay today with Google Play gift cards or you will be deported unless payment is received within 48 hours.\nCall Officer Daniel Sample at (202) 555-0147 and read the gift card numbers over the phone.\nUSCIS payment portal: www.uscis-fee-payment.example.com\nDo not tell anyone about this letter. Keep this matter confidential."
+    }
+  ],
+  "summary_title": "Letter that asks for gift cards and says it is from immigration",
+  "summary_body": "This letter says it is from the \"U.S. Immigration Services Department\". It asks for $950 in Google Play gift cards and threatens deportation. I could not match this to a known kind of paper.",
+  "summary_body_en": "This letter says it is from the \"U.S. Immigration Services Department\". It asks for $950 in Google Play gift cards and threatens deportation. I could not match this to a known kind of paper.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b6",
+    "p1b7"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "amount",
+      "text": "The letter asks for $950.",
+      "value_verbatim": "$950",
+      "source_quote": "Our records show you owe an unpaid immigration processing fee of $950.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": "$950",
+      "currency": "USD",
+      "documents": [],
+      "role": "payment_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Do not pay and do not call the number on this letter. Check with the real agency through Get help.",
+      "kind": "verify",
+      "resource_tags": [
+        "scam_report"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s2",
+      "text": "A licensed lawyer or a DOJ-accredited representative can tell you what the real agency needs.",
+      "kind": "professional",
+      "resource_tags": [
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b1"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s3",
+      "text": "Keep the letter and the envelope. They can help when you report it.",
+      "kind": "gather",
+      "resource_tags": [
+        "scam_report"
+      ],
+      "span_ids": [
+        "p1b4"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "gift cards",
+      "explanation": "Store cards with money on them. Real agencies do not take them as payment."
+    },
+    {
+      "term_as_written": "confidential",
+      "explanation": "Kept secret."
+    }
+  ],
+  "red_flags": [
+    {
+      "kind": "scam_payment_method",
+      "text": "The letter asks for payment with gift cards.",
+      "source_quote": "You must pay today with Google Play gift cards",
+      "span_ids": [
+        "p1b7"
+      ],
+      "page": 1
+    },
+    {
+      "kind": "impersonation",
+      "text": "The letter uses an agency name that does not match the real immigration office, and its website does not end in .gov.",
+      "source_quote": "USCIS payment portal: www.uscis-fee-payment.example.com",
+      "span_ids": [
+        "p1b9"
+      ],
+      "page": 1
+    },
+    {
+      "kind": "urgency_pressure",
+      "text": "The letter tells you to keep it secret and pay fast.",
+      "source_quote": "Do not tell anyone about this letter.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1
+    }
+  ],
+  "questions_to_ask": [],
+  "clerk_need_en": "understanding a paper I received",
+  "emergency_terms_found": [],
+  "is_likely_scam": true,
+  "scam_signals": [
+    "gift_card",
+    "deportation_threat",
+    "non_gov_domain",
+    "urgency_pressure"
+  ],
+  "resource_tags": [
+    "scam_report",
+    "immigration_legal_help"
+  ],
+  "institutions_as_written": [
+    "U.S. Immigration Services Department"
+  ],
+  "form_numbers": [],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "U.S. Immigration Services Department",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.6375,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Office of Immigration Fees and Penalties",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.4831,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Date: September 29, 2026",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.2956,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "FINAL WARNING - IMMIGRATION FEE PAST DUE",
+      "bbox": [
+        0.075,
+        0.1493,
+        0.8081,
+        0.1816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Dear Applicant,",
+      "bbox": [
+        0.075,
+        0.199,
+        0.2169,
+        0.2188
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Our records show you owe an unpaid immigration processing fee of $950.",
+      "bbox": [
+        0.075,
+        0.2304,
+        0.7575,
+        0.2502
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "You must pay today with Google Play gift cards or you will be deported unless payment is received within 48 hours.",
+      "bbox": [
+        0.075,
+        0.2618,
+        0.9056,
+        0.3014
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Call Officer Daniel Sample at (202) 555-0147 and read the gift card numbers over the phone.",
+      "bbox": [
+        0.075,
+        0.313,
+        0.9237,
+        0.3329
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "USCIS payment portal: www.uscis-fee-payment.example.com",
+      "bbox": [
+        0.075,
+        0.3444,
+        0.6356,
+        0.3643
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "Do not tell anyone about this letter. Keep this matter confidential.",
+      "bbox": [
+        0.075,
+        0.3758,
+        0.6844,
+        0.3957
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

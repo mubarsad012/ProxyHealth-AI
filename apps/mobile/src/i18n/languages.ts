@@ -60,7 +60,7 @@ export const LANGUAGES: Record<string, LanguageInfo> = {
     "tier": 1,
     "tts_tag": "es-US",
     "tts_fallback_tag": "es-MX",
-    "bundled": false,
+    "bundled": true,
     "machine_translated": true
   },
   "zh-Hans": {
@@ -130,7 +130,7 @@ export const LANGUAGES: Record<string, LanguageInfo> = {
     "tier": 1,
     "tts_tag": "ar-SA",
     "tts_fallback_tag": "ar-EG",
-    "bundled": false,
+    "bundled": true,
     "machine_translated": true
   },
   "ht": {
@@ -228,7 +228,7 @@ export const LANGUAGES: Record<string, LanguageInfo> = {
     "tier": 2,
     "tts_tag": "fa-AF",
     "tts_fallback_tag": "fa-IR",
-    "bundled": false,
+    "bundled": true,
     "machine_translated": true
   },
   "ps": {
@@ -242,7 +242,7 @@ export const LANGUAGES: Record<string, LanguageInfo> = {
     "tier": 2,
     "tts_tag": null,
     "tts_fallback_tag": "fa-AF",
-    "bundled": false,
+    "bundled": true,
     "machine_translated": true
   },
   "fa": {

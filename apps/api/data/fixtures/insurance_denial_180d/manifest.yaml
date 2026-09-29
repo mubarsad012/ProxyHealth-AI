@@ -1,0 +1,29 @@
+id: insurance_denial_180d
+title_key: fixture.insurance_denial_180d
+title_en: Insurance denial letter with 180 days to appeal
+document_type: insurance_denial
+category: medical
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/insurance_denial_180d/pages/1
+dhash: 80e0c0cc2910b503e02880088080c7001c0138004008206001c0068004004406
+page_dhashes:
+- 80e0c0cc2910b503e02880088080c7001c0138004008206001c0068004004406
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - medium
+  nearest_date_iso: '2026-10-17'
+  date_kinds:
+    d1: stated
+    d2: estimated
+  rule_ids:
+    d2: aca_internal_appeal_180d
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  disclaimer_kind: medical_information_only

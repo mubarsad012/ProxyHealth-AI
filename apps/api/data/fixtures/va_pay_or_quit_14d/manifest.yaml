@@ -1,0 +1,35 @@
+id: va_pay_or_quit_14d
+title_key: fixture.va_pay_or_quit_14d
+title_en: Virginia 14-day pay-or-quit notice from a landlord
+document_type: pay_or_quit
+category: housing
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/va_pay_or_quit_14d/pages/1
+dhash: 002ee0383640f000c000000ee08406402880a001400100d00320140010001006
+page_dhashes:
+- 002ee0383640f000c000000ee08406402880a001400100d00320140010001006
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - high
+  nearest_date_iso: '2026-10-08'
+  date_kinds:
+    d2: stated
+    d3: unresolved
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  fixed_keys:
+  - fixed.pay_or_quit
+  disclaimer_kind: housing_information_only
+  resource_tags_include:
+  - eviction
+  state: VA

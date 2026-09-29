@@ -1,0 +1,310 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "w2_1099",
+  "category": "employment",
+  "document_type_confidence": "high",
+  "sender_as_written": "Sample Hardware Store LLC",
+  "sender_kind": "employer",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Form W-2 Wage and Tax Statement 2025\nCopy B - To Be Filed With Employee's FEDERAL Tax Return\na Employee's social security number | XXX-XX-4321\nb Employer identification number (EIN) | 12-3456789\nc Employer's name | Sample Hardware Store LLC, Manassas, VA\ne Employee's name | SAMPLE WORKER\n1 Wages, tips, other compensation | 28,450.00\n2 Federal income tax withheld | 1,912.00\n3 Social security wages | 28,450.00\n4 Social security tax withheld | 1,763.90\n5 Medicare wages and tips | 28,450.00\n6 Medicare tax withheld | 412.53\n15 State | VA\n16 State wages, tips, etc. | 28,450.00\n17 State income tax | 1,020.00\nDepartment of the Treasury - Internal Revenue Service"
+    }
+  ],
+  "summary_title": "W-2 tax form from Sample Hardware Store LLC for 2025",
+  "summary_body": "This is your W-2 from Sample Hardware Store LLC for 2025. It shows what you were paid and what tax was taken out. It is a form you keep for filing taxes.",
+  "summary_body_en": "This is your W-2 from Sample Hardware Store LLC for 2025. It shows what you were paid and what tax was taken out. It is a form you keep for filing taxes.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b5",
+    "p1b7"
+  ],
+  "demands": [],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Keep this form with your tax papers. You use it when you file taxes.",
+      "kind": "gather",
+      "resource_tags": [
+        "tax_notice"
+      ],
+      "span_ids": [
+        "p1b2"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s2",
+      "text": "A free tax-help site or a tax professional can explain the boxes with you.",
+      "kind": "professional",
+      "resource_tags": [
+        "tax_notice",
+        "itin"
+      ],
+      "span_ids": [
+        "p1b1"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Employer identification number (EIN)",
+      "explanation": "The number the IRS uses for your employer."
+    },
+    {
+      "term_as_written": "Federal income tax withheld",
+      "explanation": "Tax your employer took out of your pay and sent to the IRS."
+    },
+    {
+      "term_as_written": "Wages, tips, other compensation",
+      "explanation": "The money you were paid for work in the year."
+    },
+    {
+      "term_as_written": "Medicare tax withheld",
+      "explanation": "Tax taken out of your pay for Medicare."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "Is the name on this form spelled right?",
+    "Can you send me a corrected form if a box is wrong?"
+  ],
+  "clerk_need_en": "a tax form from my employer (W-2 or 1099) - what the boxes mean",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "tax_notice",
+    "itin"
+  ],
+  "institutions_as_written": [
+    "Sample Hardware Store LLC",
+    "Internal Revenue Service"
+  ],
+  "form_numbers": [
+    "W-2"
+  ],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": "Manassas",
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Form W-2 Wage and Tax Statement 2025",
+      "bbox": [
+        0.075,
+        0.0725,
+        0.5569,
+        0.0971
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Copy B - To Be Filed With Employee's FEDERAL Tax Return",
+      "bbox": [
+        0.075,
+        0.1058,
+        0.4981,
+        0.1217
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "a Employee's social security number | XXX-XX-4321",
+      "bbox": [
+        0.075,
+        0.1285,
+        0.925,
+        0.1657
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "b Employer identification number (EIN) | 12-3456789",
+      "bbox": [
+        0.075,
+        0.1715,
+        0.925,
+        0.2087
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "c Employer's name | Sample Hardware Store LLC, Manassas, VA",
+      "bbox": [
+        0.075,
+        0.2145,
+        0.925,
+        0.2517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "e Employee's name | SAMPLE WORKER",
+      "bbox": [
+        0.075,
+        0.2575,
+        0.925,
+        0.2947
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "1 Wages, tips, other compensation | 28,450.00",
+      "bbox": [
+        0.075,
+        0.3005,
+        0.925,
+        0.3377
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "2 Federal income tax withheld | 1,912.00",
+      "bbox": [
+        0.075,
+        0.3435,
+        0.925,
+        0.3807
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "3 Social security wages | 28,450.00",
+      "bbox": [
+        0.075,
+        0.3865,
+        0.925,
+        0.4237
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "4 Social security tax withheld | 1,763.90",
+      "bbox": [
+        0.075,
+        0.4295,
+        0.925,
+        0.4667
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "5 Medicare wages and tips | 28,450.00",
+      "bbox": [
+        0.075,
+        0.4725,
+        0.925,
+        0.5097
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "6 Medicare tax withheld | 412.53",
+      "bbox": [
+        0.075,
+        0.5155,
+        0.925,
+        0.5527
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "15 State | VA",
+      "bbox": [
+        0.075,
+        0.5585,
+        0.925,
+        0.5957
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b14",
+      "page": 1,
+      "text": "16 State wages, tips, etc. | 28,450.00",
+      "bbox": [
+        0.075,
+        0.6014,
+        0.925,
+        0.6386
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b15",
+      "page": 1,
+      "text": "17 State income tax | 1,020.00",
+      "bbox": [
+        0.075,
+        0.6444,
+        0.925,
+        0.6816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b16",
+      "page": 1,
+      "text": "Department of the Treasury - Internal Revenue Service",
+      "bbox": [
+        0.075,
+        0.6884,
+        0.4756,
+        0.7043
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional court, case number and phone (555-01xx).
+id: traffic_court_notice
+kind: document
+title_en: "Traffic court notice with a court date"
+document_type: traffic_court
+category: court
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [40, 70, 40], logo: seal, watermark_angle: 46}
+pages:
+  - - {text: "General District Court of Sample County", style: letterhead, ref: sender}
+    - {text: "Traffic Division - Sample County, Virginia", style: letterhead_sub, ref: division}
+    - {text: "Date: September 25, 2026", style: right, ref: notice_date}
+    - {text: "Case No.: GT26-000123-00", style: right, ref: case}
+    - {text: "NOTICE OF COURT DATE", style: title, ref: heading}
+    - {text: "Defendant: SAMPLE DRIVER", style: body, ref: defendant}
+    - {text: "Offense: Speeding 15 mph over the posted limit", style: body, ref: offense}
+    - {text: "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B.", style: bold, ref: court_date}
+    - {text: "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court.", style: body, ref: prepay}
+    - {text: "Failure to appear may result in suspension of your driver's license.", style: body, ref: fta}
+    - {text: "Clerk's Office: (703) 555-0137", style: body, ref: phone}
+expected:
+  urgency_level: [high, critical]
+  nearest_date_iso: "2026-10-09"
+  date_kinds: {d1: stated, d3: stated}
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  fixed_keys: [fixed.traffic_court_immigration]
+  disclaimer_kind: legal_information_only
+  state: VA
+out:
+  base:
+    sender_as_written: "General District Court of Sample County"
+    sender_kind: court
+    summary_title: "Traffic court date on October 13, 2026"
+    summary_body: "This is a court paper about a traffic matter. It gives a court date of October 13, 2026 at 9:00 AM. It also says you may prepay $156.00 by October 9, 2026 instead."
+    summary_span_ids: ["@heading", "@court_date", "@prepay"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "The court date is October 13, 2026 at 9:00 AM, in Courtroom 2B."
+        value_verbatim: "October 13, 2026"
+        source_quote: "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B."
+        span_ids: ["@court_date"]
+        date_text: "October 13, 2026"
+        time_text: "9:00 AM"
+        role: hearing_date
+        confidence: high
+      - id: d2
+        kind: amount
+        text: "The paper says you may prepay $156.00."
+        value_verbatim: "$156.00"
+        source_quote: "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court."
+        span_ids: ["@prepay"]
+        amount_text: "$156.00"
+        currency: USD
+        role: payment_due
+        confidence: high
+      - id: d3
+        kind: deadline
+        text: "The paper gives October 9, 2026 as the last day to prepay."
+        value_verbatim: "October 9, 2026"
+        source_quote: "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court."
+        span_ids: ["@prepay"]
+        date_text: "October 9, 2026"
+        role: payment_due
+        confidence: high
+      - id: d4
+        kind: contact
+        text: "Clerk's Office phone, from your paper: (703) 555-0137."
+        value_verbatim: "(703) 555-0137"
+        source_quote: "Clerk's Office: (703) 555-0137"
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Call the Clerk's Office to check the court date.", kind: verify, resource_tags: [traffic_court], span_ids: ["@phone", "@court_date"], demand_id: d1}
+      - {id: s2, text: "If you are not a U.S. citizen, talk to an immigration lawyer before you pay or go to court.", kind: professional, resource_tags: [immigration_legal_help], span_ids: ["@prepay"], demand_id: d2}
+      - {id: s3, text: "Bring this paper and a photo ID if you go to court.", kind: bring, resource_tags: [], span_ids: ["@court_date"], demand_id: d1}
+    glossary:
+      - {term_as_written: "prepay", explanation: "Pay the fine before the court date instead of going to court."}
+      - {term_as_written: "Failure to appear", explanation: "Not going to court on the date."}
+      - {term_as_written: "Defendant", explanation: "The person the case is about."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I move my court date?"
+      - "Is an interpreter available in Courtroom 2B?"
+      - "How can I prepay the $156.00?"
+    clerk_need_en: "a traffic or court notice - the court date or payment date on it"
+    resource_tags: [traffic_court, immigration_legal_help]
+    institutions_as_written: ["General District Court of Sample County"]
+    form_numbers: []
+    geo_state: VA
+    legibility: good

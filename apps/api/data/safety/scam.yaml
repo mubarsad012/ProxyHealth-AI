@@ -1,0 +1,299 @@
+# data/safety/scam.yaml — WP2 (D-13; DOCUMENT_TAXONOMY §6). Schema: §6.6.
+#
+# Regexes are case-insensitive over NFKC-normalized, whitespace-collapsed block text (same
+# normalizer as `analysis/verify.py`), in English and Spanish; other languages inherit both.
+# `reason_key` must exist in `data/langpacks/en.json` (null = scores but shows no chip).
+# Guards: `{sender_kind: [...], document_type: [...], negative_regex: "...", weight: N,
+# unless_any_of: [signal ids]}` — the first matching guard's weight replaces the signal weight
+# (0 = the signal never counts on its own; `unless_any_of` keeps the full weight when one of the
+# listed signals also fires).
+version: "2026-09-27"
+thresholds: {possible: 2, likely: 4}
+gov_tlds: [".gov", ".mil"]
+agency_names:
+  - "USCIS"
+  - "U.S. Citizenship"
+  - "US Citizenship"
+  - "ICE"
+  - "DHS"
+  - "Homeland Security"
+  - "Social Security"
+  - "SSA"
+  - "IRS"
+  - "Internal Revenue"
+  - "Medicare"
+  - "Medicaid"
+  - "EOIR"
+  - "Immigration Court"
+  - "Department of State"
+  - "Department of Justice"
+  - "Department of Labor"
+agency_document_types:
+  - uscis_receipt
+  - uscis_rfe
+  - uscis_noid
+  - uscis_biometrics
+  - uscis_interview
+  - uscis_approval
+  - uscis_denial
+  - ead_related
+  - green_card_related
+  - tps_related
+  - asylum_fee_notice
+  - parole_related
+  - ice_checkin
+  - irs_notice
+  - itin
+  - ssa_letter
+agency_sender_kinds: [federal_agency, state_agency, local_agency, court, unknown]
+private_sender_kinds: [landlord, hospital_or_clinic, utility, pharmacy, school, employer]
+payment_signals: [gift_card, wire_transfer, payment_app, crypto]
+threat_signals: [arrest_threat, deportation_threat, impersonation, non_gov_domain]
+fee_signals: [expedite_fee, fee_for_free_form, upfront_fee]
+request_signals: [id_or_payment_data_request, gift_card, wire_transfer, payment_app, crypto, upfront_fee]
+likely_rules: [payment_and_agency_sender, payment_and_threat, nongov_and_request, guaranteed_and_fee]
+signals:
+  - id: gift_card
+    reason_key: scam.gift_card
+    red_flag_kind: scam_payment_method
+    weight: 3
+    patterns:
+      en:
+        - "\\bgift ?cards?\\b"
+        - "\\b(itunes|google play|steam|target|walmart|amazon|ebay) (gift )?cards?\\b"
+        - "\\bprepaid (debit )?cards?\\b"
+        - "\\b(green ?dot|moneypak|vanilla) "
+      es:
+        - "\\btarjetas? de regalo\\b"
+        - "\\btarjetas? prepaga(da)?s?\\b"
+    guards: []
+
+  - id: wire_transfer
+    reason_key: scam.wire_transfer
+    red_flag_kind: scam_payment_method
+    weight: 3
+    patterns:
+      en:
+        - "\\bwestern union\\b"
+        - "\\bmoneygram\\b"
+        - "\\bwire (transfer|the money|the funds|payment)\\b"
+        - "\\bbank wire\\b"
+      es:
+        - "\\bgiro (bancario|de dinero)\\b"
+        - "\\btransferencia (bancaria )?(inmediata|urgente)\\b"
+    guards:
+      - sender_kind: [hospital_or_clinic, utility, insurer]
+        negative_regex: "wire transfers? (are )?accepted|accepted forms? of payment"
+        weight: 1
+
+  - id: payment_app
+    reason_key: scam.payment_app
+    red_flag_kind: scam_payment_method
+    weight: 2
+    patterns:
+      en:
+        - "\\bzelle\\b"
+        - "\\bvenmo\\b"
+        - "\\bcash ?app\\b"
+        - "\\bpaypal\\b"
+        - "\\bapple pay\\b"
+        - "\\bgoogle pay\\b"
+      es:
+        - "\\bzelle\\b"
+        - "\\bvenmo\\b"
+        - "\\bpaypal\\b"
+    guards:
+      - sender_kind: [landlord, hospital_or_clinic, utility, pharmacy, school, employer]
+        requires_sender_name: true
+        weight: 1
+
+  - id: crypto
+    reason_key: scam.crypto
+    red_flag_kind: scam_payment_method
+    weight: 3
+    patterns:
+      en:
+        - "\\b(bitcoin|btc|crypto(currency)?|ethereum|usdt|tether)\\b"
+        - "\\bcrypto ?atm\\b"
+        - "\\bwallet address\\b"
+      es:
+        - "\\b(bitcoin|criptomonedas?|cripto)\\b"
+        - "\\bcajero (de )?cripto\\b"
+    guards: []
+
+  - id: arrest_threat
+    reason_key: scam.arrest_threat
+    red_flag_kind: urgency_pressure
+    weight: 2
+    patterns:
+      en:
+        - "\\b(warrant|arrest(ed)?|police|sheriff|jail|law enforcement).{0,80}(today|immediately|within \\d+ (hours|minutes)|unless you|if you (do not|don't|fail))"
+      es:
+        - "\\b(orden de arresto|arrest(o|ado)|polic[ií]a|c[aá]rcel).{0,80}(hoy|inmediatamente|dentro de \\d+ horas|a menos que|si (no|usted no))"
+    guards:
+      - sender_kind: [court]
+        weight: 0
+        unless_any_of: [gift_card, wire_transfer, payment_app, crypto]
+      - document_type: [traffic_court, nta, hearing_notice, ij_decision, eviction_summons]
+        weight: 0
+        unless_any_of: [gift_card, wire_transfer, payment_app, crypto]
+
+  - id: deportation_threat
+    reason_key: scam.deportation_threat
+    red_flag_kind: urgency_pressure
+    weight: 2
+    patterns:
+      en:
+        - "\\b(deport(ed|ation)|removed from the (country|united states)|immigration (hold|arrest)).{0,80}\\b(pay|payment|paid|unless|fee|immediately)\\b"
+        - "\\b(pay|payment|fee).{0,80}\\b(avoid|prevent|stop) (your )?(deportation|removal|arrest)\\b"
+        - "\\b(pay|payment|fee)\\b.{0,80}\\bor\\b.{0,40}\\b(deport(ed|ation)?|removed from the (country|united states))\\b"
+      es:
+        - "\\b(deport(ado|aci[oó]n)|expulsi[oó]n).{0,80}\\b(pag(ue|ar|o)|a menos que|tarifa|cuota|inmediatamente)\\b"
+        - "\\b(pag(ue|ar|o)|tarifa|cuota)\\b.{0,80}\\bo\\b.{0,40}\\b(deportad[oa]s?|deportaci[oó]n|expulsad[oa]s?)\\b"
+    guards:
+      - document_type: [nta, hearing_notice, ij_decision, bia_notice]
+        weight: 0
+
+  - id: guaranteed
+    reason_key: scam.guaranteed
+    red_flag_kind: guaranteed_result
+    weight: 2
+    patterns:
+      en:
+        - "\\bguarantee(d|s)?\\b.{0,40}\\b(approval|visa|green card|result|win|citizenship|work permit)\\b"
+        - "\\b100 ?% (approval|success|guaranteed)\\b"
+        - "\\byou (have )?(won|been selected)\\b.{0,60}\\b(visa|lottery|green card)\\b"
+      es:
+        - "\\bgarantiza(do|mos)?\\b.{0,40}\\b(aprobaci[oó]n|visa|residencia|resultado|ciudadan[ií]a)\\b"
+        - "\\b100 ?% (de )?(aprobaci[oó]n|[eé]xito|garantizado)\\b"
+    guards: []
+
+  - id: notario
+    reason_key: scam.notario
+    red_flag_kind: notario
+    weight: 2
+    patterns:
+      en:
+        - "\\bnotarios?( p[úu]blicos?)?\\b"
+        - "\\bnotary\\b.{0,40}\\b(immigration|legal advice|represent)"
+        - "\\bimmigration consultant\\b"
+      es:
+        - "\\bnotarios?( p[úu]blicos?)?\\b.{0,60}\\b(inmigraci[oó]n|migratori[oa]|papeles|residencia|visa)\\b"
+        - "\\bconsultor(a)? de inmigraci[oó]n\\b"
+    guards:
+      - document_type: [lease, offer_letter, i9, w2_1099, pay_stub]
+        negative_regex: "notary public"
+        weight: 0
+
+  - id: non_gov_domain
+    reason_key: scam.non_gov_domain
+    red_flag_kind: impersonation
+    weight: 3
+    patterns: {en: [], es: []}   # computed: agency name within 120 chars of a non-.gov domain
+    guards:
+      - sender_kind: [hospital_or_clinic, insurer, utility, landlord, pharmacy, school, employer]
+        weight: 0
+
+  - id: expedite_fee
+    reason_key: scam.expedite_fee
+    red_flag_kind: fee_for_free_form
+    weight: 2
+    patterns:
+      en:
+        - "\\b(expedite|speed up|faster|jump the line|priority handling|special connection)\\b.{0,60}\\b(fee|\\$|pay|payment)"
+      es:
+        - "\\b(acelerar|m[aá]s r[aá]pido|agilizar|conexi[oó]n especial)\\b.{0,60}\\b(tarifa|cuota|\\$|pag(o|ar|ue))"
+    guards:
+      - negative_regex: "premium processing|form i-?907"
+        weight: 0
+
+  - id: fee_for_free_form
+    reason_key: scam.fee_for_free_form
+    red_flag_kind: fee_for_free_form
+    weight: 2
+    patterns:
+      en:
+        - "\\b(download|access|obtain|get) (the|a|your) forms?\\b.{0,40}(\\$|\\bfee\\b|\\bpay)"
+        - "\\bform (fee|charge) payable to (?!u\\.?s\\.? department|uscis|department of homeland security)"
+      es:
+        - "\\b(descargar|obtener|acceder a) (el|la|su|un) formulario\\b.{0,40}(\\$|tarifa|cuota|pag(o|ar|ue))"
+    guards: []
+
+  - id: upfront_fee
+    reason_key: scam.upfront_fee
+    red_flag_kind: fee_for_free_form
+    weight: 2
+    patterns:
+      en:
+        - "\\b(pay|payment|deposit|fee)\\b.{0,30}\\b(up ?front|in advance|before (we|they|i) (start|begin|file)|to (start|begin|open) your (case|file|application))\\b"
+        - "\\b(processing|registration|release|activation) fee\\b.{0,40}\\b(before|first|now)\\b"
+      es:
+        - "\\b(pag(o|ar|ue)|dep[oó]sito|cuota)\\b.{0,30}\\b(por adelantado|de antemano|antes de (empezar|comenzar|iniciar))\\b"
+    guards:
+      - negative_regex: "filing fee|biometric(s)? (services )?fee|payable to (the )?u\\.?s\\.? department|payable to uscis"
+        weight: 0
+
+  - id: urgency_pressure
+    reason_key: scam.urgency_pressure
+    red_flag_kind: urgency_pressure
+    weight: 1
+    weight_with_secrecy: 2
+    patterns:
+      en:
+        - "\\b(act|respond|pay|call) (now|immediately|today|within (\\d+|one|two|24|48|72) (hours?|minutes?))\\b"
+        - "\\blast chance\\b"
+        - "\\bfinal (warning|notice) before (arrest|legal action|deportation|suspension of your (ssn|social security number))"
+      es:
+        - "\\b(act[uú]e|responda|pague|llame) (ahora|inmediatamente|dentro de (24|48|72) horas)\\b"
+        - "\\b[uú]ltima oportunidad\\b"
+    secrecy_patterns:
+      en:
+        - "\\bdo not (tell|discuss|hang up)\\b"
+        - "\\bkeep this (confidential|secret|private)\\b"
+      es:
+        - "\\bno (le )?(diga|cuente|comente) (a )?nadie\\b"
+        - "\\bmant[eé]ngalo (confidencial|en secreto)\\b"
+    guards: []
+
+  - id: impersonation
+    reason_key: scam.impersonation
+    red_flag_kind: impersonation
+    weight: 2
+    patterns:
+      en:
+        - "\\bu\\.s\\.c\\.i\\.s\\b"
+        - "\\bdepartment of immigration\\b"
+        - "\\bus immigration services\\b"
+        - "\\bfederal immigration agency\\b"
+        - "\\bdeportation department\\b"
+        - "\\bsocial security bureau\\b"
+        - "\\bbadge (number|id)\\b.{0,40}\\b(pay|fee)\\b"
+        - "\\bofficer\\b.{0,30}\\bwill (arrest|come to your home)\\b"
+      es:
+        - "\\bdepartamento de inmigraci[oó]n\\b"
+        - "\\boficina federal de inmigraci[oó]n\\b"
+        - "\\bdepartamento de deportaci[oó]n\\b"
+        - "\\bn[uú]mero de placa\\b.{0,40}\\b(pag(o|ar|ue)|tarifa)\\b"
+    guards: []
+
+  - id: id_or_payment_data_request
+    reason_key: scam.asks_for_id_numbers
+    red_flag_kind: unusual_contact
+    weight: 1
+    weight_with_threat: 2
+    patterns:
+      en:
+        - "\\b(send|text|reply with|confirm|provide|email) (us )?(your|the) (ssn|social security( number)?|a-?number|alien (registration )?number|bank (account|details)|card number|pin|password|one-time code)\\b"
+      es:
+        - "\\b(env[ií]e|mande|responda con|confirme|proporcione) (su|el) (n[uú]mero de seguro social|ssn|n[uú]mero a|n[uú]mero de extranjero|cuenta bancaria|n[uú]mero de tarjeta|pin|contrase[nñ]a)\\b"
+    guards:
+      - document_type: [i9, w2_1099, itin, school_enrollment, school_meals, snap_notice, medicaid_renewal, wic_notice, section8_recert]
+        weight: 0
+
+  - id: no_sender
+    reason_key: null
+    red_flag_kind: unusual_contact
+    weight: 1
+    patterns: {en: [], es: []}   # computed: sender_as_written is null and money or data is demanded
+    guards: []
+reviewed_by: {en: null, es: null}

@@ -1,0 +1,300 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "jury_summons",
+  "category": "civic",
+  "document_type_confidence": "high",
+  "sender_as_written": "Circuit Court of Sample County, Virginia",
+  "sender_kind": "court",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "محکمه ناحیه Sample، ویرجینیا\nدفتر مدیر هیئت منصفه\nتاریخ: ۲۵ سپتمبر ۲۰۲۶\nاحضاریه برای خدمت در هیئت منصفه\nبدین وسیله شما برای خدمت در هیئت منصفه احضار می‌شوید.\nلطفاً پرسشنامه صلاحیت عضو هیئت منصفه را پر کنید و تا ۲۳ اکتبر ۲۰۲۶ پس بفرستید.\nتاریخ حضور: ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح، اتاق تجمع هیئت منصفه، محکمه ناحیه Sample.\nسوال ۴. آیا شما شهروند ایالات متحده هستید؟ [ ] بلی [ ] نخیر\nبه هر سوال راست جواب دهید. پس نفرستادن پرسشنامه ممکن است باعث جریمه شود.\nبرای خواستن تاریخ نو یا معافیت، با دفتر هیئت منصفه به نمبر (703) 555-0181 زنگ بزنید."
+    }
+  ],
+  "summary_title": "احضاریه هیئت منصفه از محکمه ناحیه Sample",
+  "summary_body": "این احضاریه هیئت منصفه از محکمه ناحیه Sample است. از شما می‌خواهد تا ۲۳ اکتبر ۲۰۲۶ یک فورم را جواب دهید و در ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح حاضر شوید.",
+  "summary_body_en": "This is a jury summons from the Circuit Court of Sample County. It asks you to answer a form by October 23, 2026 and to report on November 16, 2026 at 8:00 AM.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b6",
+    "p1b7"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "پرسشنامه را جواب دهید و تا ۲۳ اکتبر ۲۰۲۶ پس بفرستید.",
+      "value_verbatim": "October 23, 2026",
+      "source_quote": "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "page": 1,
+      "date_text": "October 23, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b3",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "appointment",
+      "text": "احضاریه تاریخ حضور را ۱۶ نوامبر ۲۰۲۶ ساعت ۸:۰۰ صبح می‌گوید.",
+      "value_verbatim": "November 16, 2026",
+      "source_quote": "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse.",
+      "span_ids": [
+        "p1b7"
+      ],
+      "page": 1,
+      "date_text": "November 16, 2026",
+      "time_text": "8:00 AM",
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "appointment",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "contact",
+      "text": "تلفون دفتر هیئت منصفه، از کاغذ شما: (703) 555-0181.",
+      "value_verbatim": "(703) 555-0181",
+      "source_quote": "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "به هر سوال پرسشنامه جواب دهید و پیش از ۲۳ اکتبر ۲۰۲۶ آن را پست کنید.",
+      "kind": "mail",
+      "resource_tags": [
+        "jury_summons"
+      ],
+      "span_ids": [
+        "p1b6",
+        "p1b9"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s2",
+      "text": "برای سوال درباره تاریخ‌ها با دفتر هیئت منصفه زنگ بزنید.",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b10"
+      ],
+      "demand_id": "d3"
+    },
+    {
+      "id": "s3",
+      "text": "اگر درباره سوال تابعیت مطمئن نیستید، از یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه بپرسید.",
+      "kind": "professional",
+      "resource_tags": [
+        "jury_summons",
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b8"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "jury service",
+      "explanation": "کمک به محکمه برای تصمیم در یک قضیه به حیث عضو هیئت منصفه."
+    },
+    {
+      "term_as_written": "Juror Qualification Questionnaire",
+      "explanation": "فورمی با سوال‌هایی که محکمه برای دانستن اینکه چه کسی می‌تواند خدمت کند استفاده می‌کند."
+    },
+    {
+      "term_as_written": "excuse",
+      "explanation": "اجازه محکمه برای خدمت نکردن."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "آیا می‌توانم تاریخ حضور خود را تغییر دهم؟",
+    "پرسشنامه را چطور پس بفرستم؟",
+    "آیا در محکمه ترجمان موجود است؟"
+  ],
+  "clerk_need_en": "a jury summons - answering the form before its due date",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "jury_summons"
+  ],
+  "institutions_as_written": [
+    "Circuit Court of Sample County"
+  ],
+  "form_numbers": [],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Circuit Court of Sample County, Virginia",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.6506,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Office of the Jury Administrator",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.4088,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Date: September 25, 2026",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.2956,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "SUMMONS FOR JURY SERVICE",
+      "bbox": [
+        0.075,
+        0.1493,
+        0.53,
+        0.1816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "You are hereby summoned to appear for jury service.",
+      "bbox": [
+        0.075,
+        0.199,
+        0.5669,
+        0.2188
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026.",
+      "bbox": [
+        0.075,
+        0.2304,
+        0.9169,
+        0.2502
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse.",
+      "bbox": [
+        0.075,
+        0.2618,
+        0.8462,
+        0.3014
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Question 4. Are you a citizen of the United States? [ ] Yes [ ] No",
+      "bbox": [
+        0.075,
+        0.3101,
+        0.925,
+        0.3478
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Answer every question truthfully. Failure to return the questionnaire may result in a fine.",
+      "bbox": [
+        0.075,
+        0.3565,
+        0.8944,
+        0.3763
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181.",
+      "bbox": [
+        0.075,
+        0.3879,
+        0.7394,
+        0.4077
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional school and school division.
+id: school_immunization_notice
+kind: document
+title_en: "School notice about your child's vaccines"
+document_type: immunization_notice
+category: school
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [160, 90, 0], logo: left, watermark_angle: 30}
+pages:
+  - - {text: "Maple Grove Elementary School", style: letterhead, ref: sender}
+    - {text: "Sample County Public Schools, Virginia - Office of the School Nurse", style: letterhead_sub, ref: division}
+    - {text: "Date: September 25, 2026", style: right, ref: notice_date}
+    - {text: "Immunization Compliance Notice", style: title, ref: heading}
+    - {text: "Dear Parent or Guardian of: SAMPLE STUDENT, Grade 3", style: body, ref: dear}
+    - {text: "Our records show your child is missing the following vaccines:", style: body, ref: missing}
+    - {text: "- Tdap (tetanus, diphtheria, pertussis) booster", style: bullet, ref: v1}
+    - {text: "- MMR (measles, mumps, rubella) dose 2", style: bullet, ref: v2}
+    - {text: "Please give the school a record of these vaccines by October 23, 2026.", style: bold, ref: due}
+    - {text: "If we do not receive the record by that date, your child may be excluded from school until the record is received.", style: body, ref: exclusion}
+    - {text: "Vaccine records can often be found at your child's doctor's office or the state health department.", style: body, ref: where}
+    - {text: "Questions? Call the school nurse at (703) 555-0118.", style: body, ref: phone}
+expected:
+  urgency_level: [medium]
+  nearest_date_iso: "2026-10-23"
+  date_kinds: {d1: stated}
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: general_information
+  resource_tags_include: [vaccine_records]
+  state: VA
+out:
+  base:
+    sender_as_written: "Maple Grove Elementary School"
+    sender_kind: school
+    summary_title: "School asks for your child's vaccine record"
+    summary_body: "This notice is from Maple Grove Elementary School. The school says your child needs 2 vaccines on file by October 23, 2026. Nothing has changed at school yet."
+    summary_span_ids: ["@sender", "@missing", "@due"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "Give the school a record of the vaccines by October 23, 2026."
+        value_verbatim: "October 23, 2026"
+        source_quote: "Please give the school a record of these vaccines by October 23, 2026."
+        span_ids: ["@due"]
+        date_text: "October 23, 2026"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d2
+        kind: document_requested
+        text: "The school lists 2 vaccines: a Tdap booster and MMR dose 2."
+        value_verbatim: "Tdap (tetanus, diphtheria, pertussis) booster"
+        source_quote: "- Tdap (tetanus, diphtheria, pertussis) booster"
+        span_ids: ["@v1", "@v2"]
+        documents: ["Tdap (tetanus, diphtheria, pertussis) booster", "MMR (measles, mumps, rubella) dose 2"]
+        role: response_due
+        confidence: high
+      - id: d3
+        kind: contact
+        text: "School nurse phone, from your paper: (703) 555-0118."
+        value_verbatim: "(703) 555-0118"
+        source_quote: "Questions? Call the school nurse at (703) 555-0118."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Look for your child's vaccine record at home or ask your child's doctor for a copy.", kind: gather, resource_tags: [vaccine_records], span_ids: ["@where"], demand_id: d2}
+      - {id: s2, text: "If a vaccine on the list is missing, call a clinic or the health department to ask about it.", kind: call, resource_tags: [vaccine_records], span_ids: ["@v1", "@v2"], demand_id: d2}
+      - {id: s3, text: "Bring the record to the school before October 23, 2026.", kind: bring, resource_tags: [school_enrollment], span_ids: ["@due"], demand_id: d1}
+    glossary:
+      - {term_as_written: "Immunization", explanation: "Another word for vaccine or shot."}
+      - {term_as_written: "booster", explanation: "An extra dose of a vaccine given later."}
+      - {term_as_written: "excluded", explanation: "Not allowed to come to school for a time."}
+      - {term_as_written: "Tdap", explanation: "A vaccine for tetanus, diphtheria and whooping cough."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I bring the record in person or send a photo?"
+      - "Which clinic can give the missing vaccines?"
+      - "What happens if the appointment is after October 23?"
+    clerk_need_en: "a school vaccine notice - which vaccines it lists and the date"
+    resource_tags: [vaccine_records, school_enrollment]
+    institutions_as_written: ["Maple Grove Elementary School", "Sample County Public Schools"]
+    form_numbers: []
+    geo_state: VA
+    legibility: good

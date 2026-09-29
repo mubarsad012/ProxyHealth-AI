@@ -1,4 +1,4 @@
-"""``GET /v1/rules`` (API_CONTRACT §3.10). WP0 stub over the empty ``RulesRepo``."""
+"""``GET /v1/rules`` (API_CONTRACT §3.10): the deadline rules table from ``RulesRepo`` (WP3)."""
 
 from typing import Annotated
 

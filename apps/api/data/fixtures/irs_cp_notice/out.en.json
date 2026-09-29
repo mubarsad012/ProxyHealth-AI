@@ -1,0 +1,341 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "irs_notice",
+  "category": "tax",
+  "document_type_confidence": "high",
+  "sender_as_written": "Internal Revenue Service",
+  "sender_kind": "federal_agency",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Department of the Treasury\nInternal Revenue Service\nNotice CP14\nTax year 2025\nNotice date: September 21, 2026\nBalance due on your 2025 tax return\nOur records show you have unpaid taxes for the tax year 2025.\nAmount due: $312.45\nPay by: October 26, 2026\nIf you pay after this date, interest and penalties may increase the amount you owe.\nPay online at irs.gov/payments or mail a check with the payment stub below.\nIf you already paid or you disagree, call us at (800) 555-0110.\nKeep this notice for your records."
+    }
+  ],
+  "summary_title": "IRS notice CP14 about your 2025 taxes",
+  "summary_body": "This is IRS notice CP14 about your 2025 taxes. It says the amount due is $312.45 by October 26, 2026. It lists ways to pay or to call with questions.",
+  "summary_body_en": "This is IRS notice CP14 about your 2025 taxes. It says the amount due is $312.45 by October 26, 2026. It lists ways to pay or to call with questions.",
+  "summary_span_ids": [
+    "p1b3",
+    "p1b8",
+    "p1b9"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "amount",
+      "text": "The notice says the amount due is $312.45.",
+      "value_verbatim": "$312.45",
+      "source_quote": "Amount due: $312.45",
+      "span_ids": [
+        "p1b8"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": "$312.45",
+      "currency": "USD",
+      "documents": [],
+      "role": "payment_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "deadline",
+      "text": "The notice gives October 26, 2026 as the date to pay.",
+      "value_verbatim": "October 26, 2026",
+      "source_quote": "Pay by: October 26, 2026",
+      "span_ids": [
+        "p1b9"
+      ],
+      "page": 1,
+      "date_text": "October 26, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b5",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "payment_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "contact",
+      "text": "IRS phone for questions, from your paper: (800) 555-0110.",
+      "value_verbatim": "(800) 555-0110",
+      "source_quote": "If you already paid or you disagree, call us at (800) 555-0110.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Look up notice CP14 on the IRS notice page to read what it means.",
+      "kind": "verify",
+      "resource_tags": [
+        "tax_notice"
+      ],
+      "span_ids": [
+        "p1b3"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s2",
+      "text": "If you have questions or already paid, call the number on the notice before October 26, 2026.",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12",
+        "p1b9"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s3",
+      "text": "A free tax clinic or a tax professional can go over this notice with you.",
+      "kind": "professional",
+      "resource_tags": [
+        "tax_notice"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Notice CP14",
+      "explanation": "The name of this IRS letter. It is about a balance due."
+    },
+    {
+      "term_as_written": "Tax year",
+      "explanation": "The year the taxes are for."
+    },
+    {
+      "term_as_written": "penalties",
+      "explanation": "Extra charges added when a payment is late."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "Can I set up a payment plan?",
+    "How can I see how you got this amount?",
+    "I already paid. How do I show you?"
+  ],
+  "clerk_need_en": "an IRS letter - what it says and the date to respond by",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "tax_notice"
+  ],
+  "institutions_as_written": [
+    "Department of the Treasury",
+    "Internal Revenue Service"
+  ],
+  "form_numbers": [
+    "CP14"
+  ],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Department of the Treasury",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.5075,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Internal Revenue Service",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.3531,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Notice CP14",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.1787,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Tax year 2025",
+      "bbox": [
+        0.075,
+        0.1329,
+        0.195,
+        0.1517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Notice date: September 21, 2026",
+      "bbox": [
+        0.075,
+        0.1575,
+        0.3538,
+        0.1763
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Balance due on your 2025 tax return",
+      "bbox": [
+        0.075,
+        0.1986,
+        0.64,
+        0.2309
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Our records show you have unpaid taxes for the tax year 2025.",
+      "bbox": [
+        0.075,
+        0.2483,
+        0.6519,
+        0.2681
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Amount due: $312.45",
+      "bbox": [
+        0.075,
+        0.2884,
+        0.3256,
+        0.313
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Pay by: October 26, 2026",
+      "bbox": [
+        0.075,
+        0.3237,
+        0.3081,
+        0.3435
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "If you pay after this date, interest and penalties may increase the amount you owe.",
+      "bbox": [
+        0.075,
+        0.3551,
+        0.8406,
+        0.3749
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "Pay online at irs.gov/payments or mail a check with the payment stub below.",
+      "bbox": [
+        0.075,
+        0.3865,
+        0.7825,
+        0.4063
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "If you already paid or you disagree, call us at (800) 555-0110.",
+      "bbox": [
+        0.075,
+        0.4179,
+        0.6275,
+        0.4377
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "Keep this notice for your records.",
+      "bbox": [
+        0.075,
+        0.4473,
+        0.3181,
+        0.4633
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

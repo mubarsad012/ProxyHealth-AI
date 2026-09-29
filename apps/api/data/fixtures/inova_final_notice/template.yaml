@@ -1,0 +1,183 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# The Inova name appears because the demo shows the institution bonus (Inova financial assistance
+# first when state=VA); every amount, number and phone on this page is fictional (555-01xx).
+id: inova_final_notice
+kind: document
+title_en: "Hospital bill marked final notice"
+document_type: medical_bill
+category: medical
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [0, 94, 120], band_height: 150, watermark_angle: 28}
+pages:
+  - - {text: "Inova Health System", style: band, ref: sender}
+    - {text: "Patient Financial Services - Fairfax, VA", style: band, ref: office}
+    - {text: "Statement date: September 20, 2026", style: right, ref: statement_date}
+    - {text: "Account number: ******5678", style: right, ref: account}
+    - {text: "FINAL NOTICE", style: stamp, ref: final}
+    - {text: "Patient: SAMPLE PATIENT", style: body, ref: patient}
+    - {text: "Date of service: July 2, 2026 - Emergency department visit", style: body, ref: service}
+    - {text: "Amount due: $1,240.00", style: heading, ref: amount}
+    - {text: "Please pay by October 28, 2026.", style: bold, ref: pay_by}
+    - {text: "This is your final notice. Please pay the amount due to avoid being sent to a collection agency.", style: body, ref: final_text}
+    - {text: "Financial assistance is available. Ask us about our financial assistance policy before you pay.", style: note, ref: fap}
+    - {text: "Questions about this bill? Call Patient Accounts at (703) 555-0142.", style: body, ref: phone}
+    - {text: "ATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.", style: small, ref: tagline_es}
+    - {text: "ملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا.", style: small, ref: tagline_ar}
+expected:
+  urgency_level: [medium]
+  nearest_date_iso: "2026-10-28"
+  date_kinds: {d2: stated}
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  red_flag_kinds: [urgency_pressure]
+  clerk_appended_keys: [clerk.interpreter_hhs]
+  disclaimer_kind: medical_information_only
+  first_resource_id: inova_fa
+  state: VA
+out:
+  base:
+    sender_as_written: "Inova Health System"
+    sender_kind: hospital_or_clinic
+    summary_title: "Hospital bill from Inova marked final notice"
+    summary_body: "This is a bill from Inova Health System for an emergency visit on July 2, 2026. It says the amount due is $1,240.00 by October 28, 2026. It also says financial assistance is available."
+    summary_span_ids: ["@sender", "@service", "@amount", "@pay_by"]
+    demands:
+      - id: d1
+        kind: amount
+        text: "The bill says the amount due is $1,240.00."
+        value_verbatim: "$1,240.00"
+        source_quote: "Amount due: $1,240.00"
+        span_ids: ["@amount"]
+        amount_text: "$1,240.00"
+        currency: USD
+        role: payment_due
+        confidence: high
+      - id: d2
+        kind: deadline
+        text: "The bill asks for payment by October 28, 2026."
+        value_verbatim: "October 28, 2026"
+        source_quote: "Please pay by October 28, 2026."
+        span_ids: ["@pay_by"]
+        date_text: "October 28, 2026"
+        anchor_span_id: "@statement_date"
+        role: payment_due
+        confidence: high
+      - id: d3
+        kind: action
+        text: "The bill says financial assistance is available. You can ask about it before you pay."
+        value_verbatim: "Financial assistance is available."
+        source_quote: "Financial assistance is available. Ask us about our financial assistance policy before you pay."
+        span_ids: ["@fap"]
+        role: other
+        confidence: high
+      - id: d4
+        kind: contact
+        text: "Phone for questions about this bill, from your paper: (703) 555-0142."
+        value_verbatim: "(703) 555-0142"
+        source_quote: "Questions about this bill? Call Patient Accounts at (703) 555-0142."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Ask the hospital for an itemized bill that lists each charge.", kind: ask, resource_tags: [medical_bill], span_ids: ["@amount"], demand_id: d1}
+      - {id: s2, text: "Ask about financial assistance before you pay. Hospitals with a policy let people apply.", kind: ask, resource_tags: [charity_care], span_ids: ["@fap"], demand_id: d3}
+      - {id: s3, text: "Call the number on the bill with your questions before October 28, 2026.", kind: call, resource_tags: [], span_ids: ["@phone", "@pay_by"], demand_id: d2}
+      - {id: s4, text: "A hospital financial counselor can go over the bill with you.", kind: professional, resource_tags: [charity_care, medical_bill], span_ids: ["@final_text"], demand_id: null}
+    glossary:
+      - {term_as_written: "Statement", explanation: "A paper that lists what you owe on an account."}
+      - {term_as_written: "Financial assistance", explanation: "Help from the hospital that can lower or cover a bill for people who apply."}
+      - {term_as_written: "collection agency", explanation: "A company that tries to collect unpaid bills."}
+    red_flags:
+      - kind: urgency_pressure
+        text: "The bill is marked FINAL NOTICE. This puts pressure on you, but it is not a court paper."
+        source_quote: "FINAL NOTICE"
+        span_ids: ["@final"]
+    questions_to_ask:
+      - "Can I get an itemized bill?"
+      - "How do I apply for financial assistance?"
+      - "Did my insurance pay part of this bill?"
+    clerk_need_en: "a hospital bill - the amount, what it is for, and help paying it"
+    resource_tags: [medical_bill, charity_care]
+    institutions_as_written: ["Inova Health System"]
+    form_numbers: []
+    geo_state: VA
+    geo_city: Fairfax
+    legibility: good
+  es:
+    summary_title: "Factura del hospital Inova marcada como aviso final"
+    summary_body: "Esta es una factura de Inova Health System por una visita de emergencia el 2 de julio de 2026. Dice que el monto a pagar es $1,240.00 antes del 28 de octubre de 2026. También dice que hay ayuda financiera."
+    demands:
+      d1: {text: "La factura dice que el monto a pagar es $1,240.00."}
+      d2: {text: "La factura pide el pago antes del 28 de octubre de 2026."}
+      d3: {text: "La factura dice que hay ayuda financiera. Puede preguntar por ella antes de pagar."}
+      d4: {text: "Teléfono para preguntas sobre esta factura, de su papel: (703) 555-0142."}
+    plan_steps:
+      s1: {text: "Pida al hospital una factura detallada con cada cargo."}
+      s2: {text: "Pregunte por la ayuda financiera antes de pagar. Los hospitales con un programa dejan que la gente la solicite."}
+      s3: {text: "Llame al número de la factura con sus preguntas antes del 28 de octubre de 2026."}
+      s4: {text: "Un consejero financiero del hospital puede revisar la factura con usted."}
+    glossary:
+      "Statement": "Un papel que muestra lo que usted debe en una cuenta."
+      "Financial assistance": "Ayuda del hospital que puede bajar o cubrir una factura para quienes la solicitan."
+      "collection agency": "Una compañía que trata de cobrar facturas no pagadas."
+    red_flags:
+      - "La factura dice AVISO FINAL. Esto le presiona, pero no es un papel de la corte."
+    questions_to_ask:
+      - "¿Me pueden dar una factura detallada?"
+      - "¿Cómo solicito la ayuda financiera?"
+      - "¿Mi seguro pagó parte de esta factura?"
+    translated_pages:
+      - "Inova Health System\nServicios Financieros para Pacientes - Fairfax, VA\nFecha del estado de cuenta: 20 de septiembre de 2026\nNúmero de cuenta: ******5678\nAVISO FINAL\nPaciente: SAMPLE PATIENT\nFecha del servicio: 2 de julio de 2026 - Visita al departamento de emergencias\nMonto a pagar: $1,240.00\nPague antes del 28 de octubre de 2026.\nEste es su aviso final. Pague el monto para evitar que su cuenta se envíe a una agencia de cobranza.\nHay ayuda financiera disponible. Pregúntenos por nuestra política de ayuda financiera antes de pagar.\n¿Preguntas sobre esta factura? Llame a Cuentas de Pacientes al (703) 555-0142.\nATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.\nAviso: Si habla árabe, tiene servicios gratuitos de ayuda con el idioma."
+  prs:
+    summary_title: "بل شفاخانه Inova با نشان اطلاعیه نهایی"
+    summary_body: "این یک بل از Inova Health System برای مراجعه عاجل در ۲ جولای ۲۰۲۶ است. می‌گوید مبلغ قابل پرداخت $1,240.00 تا ۲۸ اکتبر ۲۰۲۶ است. همچنین می‌گوید کمک مالی موجود است."
+    demands:
+      d1: {text: "بل می‌گوید مبلغ قابل پرداخت $1,240.00 است."}
+      d2: {text: "بل پرداخت را تا ۲۸ اکتبر ۲۰۲۶ می‌خواهد."}
+      d3: {text: "بل می‌گوید کمک مالی موجود است. پیش از پرداخت می‌توانید درباره آن بپرسید."}
+      d4: {text: "تلفون برای سوال درباره این بل، از کاغذ شما: (703) 555-0142."}
+    plan_steps:
+      s1: {text: "از شفاخانه یک بل مفصل بخواهید که هر هزینه را نشان دهد."}
+      s2: {text: "پیش از پرداخت درباره کمک مالی بپرسید. شفاخانه‌هایی که پالیسی دارند اجازه درخواست می‌دهند."}
+      s3: {text: "پیش از ۲۸ اکتبر ۲۰۲۶ با نمبر روی بل زنگ بزنید و سوال‌های خود را بپرسید."}
+      s4: {text: "یک مشاور مالی شفاخانه می‌تواند بل را با شما مرور کند."}
+    glossary:
+      "Statement": "کاغذی که نشان می‌دهد در یک حساب چقدر بدهکار هستید."
+      "Financial assistance": "کمک شفاخانه که می‌تواند بل را برای کسانی که درخواست می‌کنند کم یا پوشش کند."
+      "collection agency": "شرکتی که کوشش می‌کند بل‌های پرداخت‌نشده را جمع کند."
+    red_flags:
+      - "روی بل نوشته شده اطلاعیه نهایی. این بر شما فشار می‌آورد، اما کاغذ محکمه نیست."
+    questions_to_ask:
+      - "آیا می‌توانم یک بل مفصل بگیرم؟"
+      - "چطور برای کمک مالی درخواست کنم؟"
+      - "آیا بیمه من بخشی از این بل را پرداخت کرده است؟"
+    translated_pages:
+      - "Inova Health System\nخدمات مالی مریضان - Fairfax, VA\nتاریخ صورت‌حساب: ۲۰ سپتمبر ۲۰۲۶\nنمبر حساب: ******5678\nاطلاعیه نهایی\nمریض: SAMPLE PATIENT\nتاریخ خدمت: ۲ جولای ۲۰۲۶ - مراجعه به بخش عاجل\nمبلغ قابل پرداخت: $1,240.00\nلطفاً تا ۲۸ اکتبر ۲۰۲۶ پرداخت کنید.\nاین اطلاعیه نهایی شماست. لطفاً مبلغ را پرداخت کنید تا حساب شما به یک شرکت جمع‌آوری قرض فرستاده نشود.\nکمک مالی موجود است. پیش از پرداخت درباره پالیسی کمک مالی ما بپرسید.\nسوال درباره این بل؟ با حساب‌های مریضان به نمبر (703) 555-0142 زنگ بزنید.\nتوجه: اگر به هسپانوی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است.\nتوجه: اگر به عربی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است."
+  ar:
+    summary_title: "فاتورة مستشفى Inova مكتوب عليها إشعار نهائي"
+    summary_body: "هذه فاتورة من Inova Health System لزيارة طوارئ في ٢ يوليو ٢٠٢٦. تقول إن المبلغ المستحق $1,240.00 قبل ٢٨ أكتوبر ٢٠٢٦. وتقول أيضًا إن المساعدة المالية متوفرة."
+    demands:
+      d1: {text: "تقول الفاتورة إن المبلغ المستحق $1,240.00."}
+      d2: {text: "تطلب الفاتورة الدفع قبل ٢٨ أكتوبر ٢٠٢٦."}
+      d3: {text: "تقول الفاتورة إن المساعدة المالية متوفرة. يمكنك السؤال عنها قبل أن تدفع."}
+      d4: {text: "هاتف للأسئلة عن هذه الفاتورة، من ورقتك: (703) 555-0142."}
+    plan_steps:
+      s1: {text: "اطلب من المستشفى فاتورة مفصلة تذكر كل تكلفة."}
+      s2: {text: "اسأل عن المساعدة المالية قبل أن تدفع. المستشفيات التي لديها سياسة تسمح للناس بالتقديم."}
+      s3: {text: "اتصل بالرقم المكتوب على الفاتورة وأسئلتك معك قبل ٢٨ أكتوبر ٢٠٢٦."}
+      s4: {text: "يمكن لمستشار مالي في المستشفى أن يراجع الفاتورة معك."}
+    glossary:
+      "Statement": "ورقة تذكر ما عليك في حساب ما."
+      "Financial assistance": "مساعدة من المستشفى يمكن أن تخفض الفاتورة أو تغطيها لمن يتقدم بطلب."
+      "collection agency": "شركة تحاول تحصيل الفواتير غير المدفوعة."
+    red_flags:
+      - "الفاتورة مكتوب عليها إشعار نهائي. هذا يضغط عليك، لكنها ليست ورقة من المحكمة."
+    questions_to_ask:
+      - "هل يمكنني الحصول على فاتورة مفصلة؟"
+      - "كيف أتقدم بطلب للمساعدة المالية؟"
+      - "هل دفع التأمين جزءًا من هذه الفاتورة؟"
+    translated_pages:
+      - "Inova Health System\nالخدمات المالية للمرضى - Fairfax, VA\nتاريخ الكشف: ٢٠ سبتمبر ٢٠٢٦\nرقم الحساب: ******5678\nإشعار نهائي\nالمريض: SAMPLE PATIENT\nتاريخ الخدمة: ٢ يوليو ٢٠٢٦ - زيارة قسم الطوارئ\nالمبلغ المستحق: $1,240.00\nيرجى الدفع قبل ٢٨ أكتوبر ٢٠٢٦.\nهذا إشعارك النهائي. يرجى دفع المبلغ المستحق حتى لا يُرسل حسابك إلى وكالة تحصيل.\nالمساعدة المالية متوفرة. اسألنا عن سياسة المساعدة المالية قبل أن تدفع.\nأسئلة عن هذه الفاتورة؟ اتصل بحسابات المرضى على (703) 555-0142.\nتنبيه: إذا كنت تتحدث الإسبانية، فخدمات المساعدة اللغوية المجانية متوفرة لك.\nملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا."

@@ -1,4 +1,4 @@
-"""Text-only quick-sheet PDF (WP3). WP0 stub renders the title only."""
+"""Text-only quick-sheet PDF (WP3): reportlab renderer, Noto font registry, DB re-validation."""
 
 from proxyhealth_api.quicksheet.render import render
 

@@ -1,0 +1,28 @@
+id: irs_cp_notice
+title_key: fixture.irs_cp_notice
+title_en: IRS letter about your taxes
+document_type: irs_notice
+category: tax
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/irs_cp_notice/pages/1
+dhash: 00a080440c283403c00e8008818083401c01680060084060018006000e015406
+page_dhashes:
+- 00a080440c283403c00e8008818083401c01680060084060018006000e015406
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - medium
+  nearest_date_iso: '2026-10-26'
+  date_kinds:
+    d2: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: general_information
+  resource_tags_include:
+  - tax_notice

@@ -1,0 +1,27 @@
+id: spanish_lease
+title_key: fixture.spanish_lease
+title_en: Apartment lease written in Spanish
+document_type: lease
+category: housing
+language_of_document: es
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/spanish_lease/pages/1
+dhash: 0188c98cea01e80ce090c0088180cc01040138085014606000c0018006011207
+page_dhashes:
+- 0188c98cea01e80ce090c0088180cc01040138085014606000c0018006011207
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - info
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  detected_language: es
+  warnings_include:
+  - document_language_differs
+  disclaimer_kind: housing_information_only
+  state: VA

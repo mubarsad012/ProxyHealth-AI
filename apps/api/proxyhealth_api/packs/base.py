@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,17 @@ from pydantic import BaseModel
 
 from proxyhealth_api.contracts.config import LanguageInfo
 from proxyhealth_api.contracts.enums import DigitSystem, Direction, PackTier
+
+
+def pack_etag(language_tag: str, pack_version: str, strings: Mapping[str, str]) -> str:
+    """Strong ETag of a pack's content: sha256 of the canonical JSON of tag, base hash, strings."""
+    canonical = json.dumps(
+        {"language_tag": language_tag, "pack_version": pack_version, "strings": dict(strings)},
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class BasePack:
@@ -36,8 +48,14 @@ class BasePack:
         return cls(strings, hashlib.sha256(raw).hexdigest(), contexts)
 
     def chunks(self, size: int = 60) -> list[list[str]]:
+        """Sorted keys in batches of ``size`` (D-25: 60-key language-pack chunks)."""
+        if size < 1:
+            raise ValueError("chunk size must be >= 1")
         keys = sorted(self.strings)
         return [keys[i : i + size] for i in range(0, len(keys), size)]
+
+    def context(self, key: str) -> str:
+        return self.contexts.get(key, "")
 
 
 class LanguageEntry(BaseModel):
@@ -72,7 +90,10 @@ class LanguageTable:
     def is_bundled(self, tag: str) -> bool:
         return (self.langpacks_dir / f"{tag}.json").is_file()
 
-    def info(self, entry: LanguageEntry) -> LanguageInfo:
+    def info(
+        self, entry: LanguageEntry, *, machine_translated: bool | None = None
+    ) -> LanguageInfo:
+        """``machine_translated`` comes from the bundled pack file when the caller knows it."""
         return LanguageInfo(
             tag=entry.tag,
             name_native=entry.name_native,
@@ -83,13 +104,18 @@ class LanguageTable:
             font_hint=entry.font_hint,
             tier=entry.tier,
             bundled=self.is_bundled(entry.tag),
-            machine_translated=entry.tag != "en",
+            machine_translated=(
+                machine_translated if machine_translated is not None else entry.tag != "en"
+            ),
             tts_tag=entry.tts_tag,
             tts_fallback_tag=entry.tts_fallback_tag,
         )
 
-    def infos(self) -> list[LanguageInfo]:
-        return [self.info(e) for e in self.entries.values()]
+    def infos(
+        self, machine_translated: Callable[[str], bool | None] | None = None
+    ) -> list[LanguageInfo]:
+        lookup = machine_translated or (lambda _tag: None)
+        return [self.info(e, machine_translated=lookup(e.tag)) for e in self.entries.values()]
 
     def resolve(self, query: str) -> str | None:
         """Case-insensitive match on tag, English name or native name; ``None`` if unknown."""

@@ -1,10 +1,24 @@
-"""Pure ASGI middlewares plus the consent + tier gate dependency (BUILD_PLAN §4.1, §5.0).
+"""Pure ASGI middlewares plus the consent + tier gate dependency (BUILD_PLAN §4.1).
 
-Middlewares: request id + ``X-Contract-Version``/``X-Data-Use-Tier`` headers + optional
-``X-App-Token`` check, body-size limit (Content-Length only on day 0), content-free access log,
-CORS. The gate is a FastAPI dependency because it needs the JSON body (``demo_sample_id``).
+Order (outermost first): CORS → request context (request id, ``X-Contract-Version`` /
+``X-Data-Use-Tier`` headers, optional ``X-App-Token`` check, content-free access log) →
+unhandled-error guard → body-size limit. CORS is outermost (ARCHITECTURE §2.1 lists it after the
+body limit) so that the 401/413/500 envelopes written by the inner layers still carry CORS
+headers and a browser client can read them. The guard turns any unexpected exception into the
+content-free ``500 internal`` envelope and never re-raises it, so uvicorn has no traceback (and
+no exception text) to print and the access log records the real ``500``.
+
+The body limit answers ``413`` from the declared ``Content-Length`` before any
+byte is read, and for bodies without that header it buffers at most ``MAX_REQUEST_BYTES`` and
+answers ``413`` the moment the stream passes it — in both cases before JSON parsing.
+
+The consent + tier gate is a FastAPI dependency because it needs the JSON body
+(``demo_sample_id``); the rate limit (``ratelimit.py``) is a dependency for the same reason.
+WP2's three gated routers attach both.
 """
 
+import hmac
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable, MutableMapping
@@ -16,7 +30,7 @@ from starlette.datastructures import Headers, MutableHeaders
 
 from proxyhealth_api.contracts.enums import DataUseTier, ErrorCode
 from proxyhealth_api.deps import get_settings
-from proxyhealth_api.errors import ApiError, error_response
+from proxyhealth_api.errors import ApiError, error_response, internal_error_response
 from proxyhealth_api.logging_ import log_event
 from proxyhealth_api.settings import CONTRACT_VERSION, Settings
 
@@ -27,12 +41,30 @@ Send = Callable[[Message], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 _RID_MAX = 64
+_PLATFORMS = frozenset({"ios", "android", "web"})
+_CONSENT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+CORS_ALLOW_HEADERS = [
+    "Content-Type", "Accept-Language", "X-Consent-Version", "X-Install-Id", "X-Request-Id",
+    "X-App-Token", "X-Admin-Token", "X-Client-Platform", "If-None-Match",
+]  # fmt: skip
+CORS_EXPOSE_HEADERS = [
+    "X-Request-Id", "X-Data-Use-Tier", "X-Contract-Version", "Retry-After", "ETag",
+]  # fmt: skip
 
 
-def _clean_request_id(raw: str | None) -> str:
+def clean_request_id(raw: str | None) -> str:
+    """Echo a sane client id (≤ 64 printable chars, no spaces); otherwise mint a UUID v4."""
     if raw and len(raw) <= _RID_MAX and raw.isprintable() and " " not in raw:
         return raw
     return str(uuid.uuid4())
+
+
+def _route_template(scope: Scope) -> str:
+    """The matched route template (``/v1/resources/{id}``); never a raw path with ids in it."""
+    route = scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else "unmatched"
 
 
 class RequestContextMiddleware:
@@ -47,23 +79,12 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
         headers = Headers(scope=scope)
-        request_id = _clean_request_id(headers.get("x-request-id"))
-        scope.setdefault("state", {})["request_id"] = request_id
+        request_id = clean_request_id(headers.get("x-request-id"))
+        state: dict[str, Any] = scope.setdefault("state", {})
+        state["request_id"] = request_id
         tier: DataUseTier = self.settings.data_use_tier
         started = time.perf_counter()
         status_holder = {"status": 0}
-
-        expected = self.settings.app_token.get_secret_value()
-        if expected and headers.get("x-app-token") != expected:
-            response = error_response(
-                request_id=request_id,
-                code=ErrorCode.unauthorized,
-                status=401,
-                message="Missing or invalid X-App-Token.",
-                extra_headers={"X-Data-Use-Tier": tier.value},
-            )
-            await response(scope, receive, send)
-            return
 
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -78,80 +99,195 @@ class RequestContextMiddleware:
             await send(message)
 
         try:
+            expected = self.settings.app_token.get_secret_value()
+            if expected and scope.get("method") != "OPTIONS" and not _token_ok(headers, expected):
+                response = error_response(
+                    request_id=request_id,
+                    code=ErrorCode.unauthorized,
+                    status=401,
+                    message="Missing or invalid X-App-Token.",
+                )
+                await response(scope, receive, send_wrapper)
+                return
             await self.app(scope, receive, send_wrapper)
         finally:
+            platform = headers.get("x-client-platform", "")
             log_event(
                 request_id=request_id,
-                route=scope.get("path", ""),
+                route=_route_template(scope),
                 status=status_holder["status"],
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 data_use_tier=tier,
+                install_id_hash=state.get("install_id_hash"),
+                client_platform=platform if platform in _PLATFORMS else None,
             )
 
 
+def _token_ok(headers: Headers, expected: str) -> bool:
+    given = headers.get("x-app-token", "")
+    return hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8"))
+
+
+class UnhandledErrorMiddleware:
+    """Unexpected exception → ``500 internal`` envelope, logged without content, not re-raised.
+
+    Without it Starlette's ``ServerErrorMiddleware`` (outside every user middleware) sends the
+    envelope and then re-raises, uvicorn prints the traceback with the exception message (e.g.
+    pydantic's ``input_value='…'``) to its error log (ARCHITECTURE §7 item 1), and the response
+    bypasses CORS and the access log's status. If the response had already started, nothing more
+    can be sent; the exception is still swallowed and uvicorn closes the connection.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:  # noqa: BLE001 — every exception type, by design
+            rid = str(scope.get("state", {}).get("request_id") or uuid.uuid4())
+            log_event(
+                request_id=rid, route=_route_template(scope), status=500,
+                error_code=ErrorCode.internal,
+            )  # fmt: skip
+            if not started:
+                await internal_error_response(rid)(scope, receive, send)
+
+
+def _too_large(request_id: str, max_bytes: int) -> ASGIApp:
+    return error_response(
+        request_id=request_id,
+        code=ErrorCode.payload_too_large,
+        status=413,
+        message="Request body exceeds limits.max_request_bytes.",
+        details={"max_request_bytes": max_bytes},
+    )
+
+
 class BodyLimitMiddleware:
-    """413 when the declared ``Content-Length`` exceeds ``MAX_REQUEST_BYTES`` (WP1 streams)."""
+    """``413 payload_too_large`` before parsing (D-21 caps; API_CONTRACT §0.1).
+
+    * ``Content-Length`` declared and too big → 413 without reading a byte. When it is declared
+      and within the cap the server's HTTP layer enforces the framing, so the body passes through.
+    * No ``Content-Length`` (chunked) → the body is buffered up to the cap; one byte more → 413
+      and the rest is never read. The buffered body is then replayed to the app unchanged.
+    """
 
     def __init__(self, app: ASGIApp, max_bytes: int) -> None:
         self.app = app
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            declared = Headers(scope=scope).get("content-length")
-            if declared and declared.isdigit() and int(declared) > self.max_bytes:
-                rid = str(scope.get("state", {}).get("request_id") or uuid.uuid4())
-                response = error_response(
-                    request_id=rid,
-                    code=ErrorCode.payload_too_large,
-                    status=413,
-                    message="Request body exceeds limits.max_request_bytes.",
-                    details={"max_request_bytes": self.max_bytes},
-                )
-                await response(scope, receive, send)
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        rid = str(scope.get("state", {}).get("request_id") or uuid.uuid4())
+        declared = Headers(scope=scope).get("content-length")
+        if declared is not None and declared.strip().isdigit():
+            if int(declared) > self.max_bytes:
+                await _too_large(rid, self.max_bytes)(scope, receive, send)
                 return
-        await self.app(scope, receive, send)
+            await self.app(scope, receive, send)
+            return
+        if scope.get("method") in ("GET", "HEAD", "OPTIONS", "DELETE"):
+            await self.app(scope, receive, send)
+            return
+        chunks: list[bytes] = []
+        seen = 0
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                break  # client disconnected; let the app see an empty body
+            body = message.get("body", b"")
+            seen += len(body)
+            if seen > self.max_bytes:
+                await _too_large(rid, self.max_bytes)(scope, receive, send)
+                return
+            chunks.append(body)
+            if not message.get("more_body", False):
+                break
+        replayed = False
+
+        async def replay() -> Message:
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": b"".join(chunks), "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay, send)
 
 
 def install_middlewares(app: FastAPI, settings: Settings) -> None:
-    """Order (outermost first): request context → body limit → CORS."""
+    """Outermost first: CORS → request context → error guard → body limit (prepends)."""
+    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_request_bytes)
+    app.add_middleware(UnhandledErrorMiddleware)
+    app.add_middleware(RequestContextMiddleware, settings=settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST"],
-        allow_headers=[
-            "Content-Type", "Accept-Language", "X-Consent-Version", "X-Install-Id",
-            "X-Request-Id", "X-App-Token", "X-Admin-Token", "If-None-Match",
-        ],
-        expose_headers=[
-            "X-Request-Id", "X-Data-Use-Tier", "X-Contract-Version", "Retry-After", "ETag",
-        ],
-    )  # fmt: skip
-    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_request_bytes)
-    app.add_middleware(RequestContextMiddleware, settings=settings)
+        allow_headers=CORS_ALLOW_HEADERS,
+        expose_headers=CORS_EXPOSE_HEADERS,
+    )
 
 
 async def _demo_sample_id(request: Request) -> str | None:
+    """The body's ``demo_sample_id`` when it names a bundled fixture, else ``None``.
+
+    Only an id that exists in ``app.state.fixtures`` exempts a request from the gate: an unknown
+    id is treated like no id, so it cannot smuggle real pages past the 428/403 checks.
+    """
     try:
         body = await request.json()
     except Exception:
+        return None  # malformed JSON: the route's own validation answers 400
+    if not isinstance(body, dict):
         return None
-    if isinstance(body, dict):
-        value = body.get("demo_sample_id")
-        if isinstance(value, str) and value:
-            return value
-    return None
+    value = body.get("demo_sample_id")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    fixtures = getattr(request.app.state, "fixtures", None)
+    if fixtures is None or fixtures.get(value) is None:
+        return None
+    return value
+
+
+def consent_is_current(given: str | None, required: str) -> bool:
+    """``X-Consent-Version`` must be a ``YYYY-MM-DD`` date no older than ``CONSENT_VERSION``.
+
+    A non-date ``CONSENT_VERSION`` (operator choice) is compared for exact equality instead.
+    """
+    if not given:
+        return False
+    value = given.strip()
+    if not _CONSENT_RE.match(required):
+        return value == required
+    return bool(_CONSENT_RE.match(value)) and value >= required
 
 
 async def consent_and_tier_gate(
     request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> None:
-    """428 without a current ``X-Consent-Version``; 403 on unpaid/mixed tiers (D-01)."""
-    demo_id = await _demo_sample_id(request)
-    if demo_id is not None:
+    """428 without a current ``X-Consent-Version``; 403 on unpaid/mixed tiers (D-01).
+
+    A request whose ``demo_sample_id`` names a bundled fixture is exempt from both: the server
+    loads the fixture from disk, so no user paper is needed. An unknown id gets no exemption.
+    """
+    if await _demo_sample_id(request) is not None:
         return
-    consent = request.headers.get("x-consent-version")
-    if not consent or consent < settings.consent_version:
+    if not consent_is_current(request.headers.get("x-consent-version"), settings.consent_version):
         raise ApiError(
             ErrorCode.consent_required,
             428,
@@ -159,7 +295,17 @@ async def consent_and_tier_gate(
             details={"consent_version": settings.consent_version},
         )
     tier = settings.data_use_tier
-    if tier in (DataUseTier.unpaid, DataUseTier.mixed) and not settings.allow_unpaid_real_documents:
+    if tier not in (DataUseTier.unpaid, DataUseTier.mixed):
+        return
+    if tier is DataUseTier.mixed:
+        for index in settings.unbilled_slot_indexes:  # D-01: warn per request per unbilled slot
+            log_event(
+                request_id=getattr(request.state, "request_id", None),
+                route="gate.mixed_pool_unbilled_slot",
+                data_use_tier=tier,
+                slot_index=index,
+            )
+    if not settings.allow_unpaid_real_documents:
         raise ApiError(
             ErrorCode.unpaid_tier_real_documents_disabled,
             403,

@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "unknown",
+  "category": "other",
+  "document_type_confidence": "low",
+  "sender_as_written": null,
+  "sender_kind": "unknown",
+  "detected_language": "und",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": ""
+    }
+  ],
+  "summary_title": "This page is too blurry to read",
+  "summary_body": "The photo is blurry and pale. I could not read the words. Try again in brighter light with the page flat and the camera held still.",
+  "summary_body_en": "The photo is blurry and pale. I could not read the words. Try again in brighter light with the page flat and the camera held still.",
+  "summary_span_ids": [],
+  "demands": [],
+  "plan_steps": [],
+  "glossary": [],
+  "red_flags": [],
+  "questions_to_ask": [],
+  "clerk_need_en": "understanding a paper I received",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [],
+  "institutions_as_written": [],
+  "form_numbers": [],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "poor",
+  "readable_reason": "blur",
+  "blocks": []
+}

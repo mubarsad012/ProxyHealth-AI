@@ -1,0 +1,27 @@
+id: portal_file_too_large
+title_key: fixture.portal_file_too_large
+title_en: 'Benefits portal: file too large'
+document_type: unknown
+category: benefits
+language_of_document: en
+pages: 1
+kind: screenshot
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/portal_file_too_large/pages/1
+dhash: 1304010093008c00d800e002e002c002e003c020c060c190c3a0c100d2003c00
+page_dhashes:
+- 1304010093008c00d800e002e002c002e003c020c060c190c3a0c100d2003c00
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  steps_targets:
+  - Choose File
+  - Upload
+  - Back
+  caution_mentions: Submit Application
+  emergency: false
+  scam_risk: none

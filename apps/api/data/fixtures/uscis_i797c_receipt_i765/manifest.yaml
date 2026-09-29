@@ -1,0 +1,26 @@
+id: uscis_i797c_receipt_i765
+title_key: fixture.uscis_i797c_receipt_i765
+title_en: USCIS receipt notice for a work permit (Form I-765)
+document_type: uscis_receipt
+category: immigration
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/uscis_i797c_receipt_i765/pages/1
+dhash: 00248430ca00e000c622848ec1c4ec40fc80e001401100d00380140018001002
+page_dhashes:
+- 00248430ca00e000c622848ec1c4ec40fc80e001401100d00380140018001002
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - info
+  demands_count: 2
+  scam_risk: none
+  readable: true
+  fixed_keys:
+  - fixed.uscis_receipt_i765
+  fixed_severity: high
+  disclaimer_kind: legal_information_only

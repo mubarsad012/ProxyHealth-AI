@@ -1,242 +1,192 @@
-"""``FixtureStore`` (BUILD_PLAN §4.1). WP0: one inline fixture, no ``data/fixtures/`` needed.
+"""``FixtureStore`` (BUILD_PLAN §4.1; ARCHITECTURE §2 ``demo/``; D-29).
 
-The page PNG is generated with Pillow at first use and kept in memory only (never on disk).
+Loads ``data/fixtures/<id>/manifest.yaml`` for every sample paper at boot. Everything else — page
+PNGs, ``transcript.txt``, ``out.<lang>.json`` — is read from disk on first use and cached in
+memory. Fixture files are committed, synthetic and watermarked SAMPLE; nothing user-supplied is
+ever read or written here (ARCHITECTURE §7).
+
+``out(lang)`` returns the recorded model output with the ``_meta`` object removed (AI_PROMPTS
+§10.2); ``match_dhash`` compares an uploaded page against the precomputed page hashes of the
+fixtures of one ``kind`` and returns the nearest one within ``max_hamming`` (ties → manifest
+order), so a photographed printed SAMPLE sheet resolves to its fixture in zero-key mode.
 """
 
-import io
+from __future__ import annotations
+
+import json
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
+from typing import Any, Literal
 
-from PIL import Image, ImageDraw, ImageFont
+import yaml
+from pydantic import BaseModel, ValidationError
 
-from proxyhealth_api.contracts.analysis import GlossaryTerm
-from proxyhealth_api.contracts.common import TextBlock, TranslatedPage
 from proxyhealth_api.contracts.demo import DemoFixture
-from proxyhealth_api.contracts.enums import (
-    Confidence,
-    DemandKind,
-    DocumentCategory,
-    DocumentType,
-    Legibility,
-    PlanStepKind,
-    SenderKind,
-)
-from proxyhealth_api.contracts.model_out import (
-    AnalysisModelOut,
-    DemandOut,
-    PlanStepOut,
-    TroubleshootModelOut,
-)
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, TroubleshootModelOut
+from proxyhealth_api.demo.phash import HashError, dhash, hamming, hex_to_hash
 
-INLINE_FIXTURE_ID = "medicaid_address_confirmation"
+FixtureKind = Literal["document", "screenshot"]
+FixtureOut = AnalysisModelOut | TroubleshootModelOut
 
-_LINES: list[tuple[str, str]] = [
-    ("b1", "Virginia Department of Medical Assistance Services"),
-    ("b2", "Cover Virginia - Medicaid and FAMIS"),
-    ("b3", "Date: September 10, 2026"),
-    ("b4", "IMPORTANT: Please confirm your address"),
-    ("b5", "We need your correct mailing address so you do not miss letters about your "
-           "Medicaid coverage."),
-    ("b6", "Please confirm or update your address within 30 days of the date of this letter."),
-    ("b7", "You can confirm your address online, by phone using the number on your Medicaid "
-           "card, or by mailing the enclosed form."),
-    ("b8", "If we do not hear from you, we may not be able to send you your renewal packet."),
-    ("b9", "Case number: ******1234"),
-    ("b10", "SAMPLE - This is a synthetic document for demonstration only."),
-]  # fmt: skip
+# The fixture everything falls back to when a caller needs "some" sample (hour-one behaviour).
+DEFAULT_FIXTURE_ID = "medicaid_address_confirmation"
 
 
-def _blocks() -> list[TextBlock]:
-    out: list[TextBlock] = []
-    for i, (bid, text) in enumerate(_LINES):
-        y0 = 0.08 + i * 0.07
-        out.append(
-            TextBlock(
-                id=bid, page=1, text=text, bbox=[0.08, y0, 0.92, y0 + 0.05],
-                is_handwriting=False, is_unclear=False,
-            )
-        )  # fmt: skip
-    return out
-
-
-def _transcript() -> str:
-    return "\n".join(text for _, text in _LINES)
-
-
-def medicaid_address_confirmation_out() -> AnalysisModelOut:
-    """English ``AnalysisModelOut`` for the inline fixture (validator-clean by construction)."""
-    return AnalysisModelOut(
-        document_type=DocumentType.medicaid_renewal,
-        category=DocumentCategory.benefits,
-        document_type_confidence=Confidence.high,
-        sender_as_written="Virginia Department of Medical Assistance Services",
-        sender_kind=SenderKind.state_agency,
-        detected_language="en",
-        translated_pages=[TranslatedPage(page=1, text=_transcript())],
-        summary_title="Medicaid asks you to confirm your address",
-        summary_body=(
-            "This letter is from Virginia Medicaid. It asks you to confirm your mailing "
-            "address within 30 days. If you do not, you may miss your renewal papers."
-        ),
-        summary_body_en=(
-            "This letter is from Virginia Medicaid. It asks you to confirm your mailing "
-            "address within 30 days. If you do not, you may miss your renewal papers."
-        ),
-        summary_span_ids=["b1", "b6", "b8"],
-        demands=[
-            DemandOut(
-                id="d1", kind=DemandKind.relative_deadline,
-                text="Confirm or update your address within 30 days of the letter date.",
-                value_verbatim="within 30 days",
-                source_quote=(
-                    "Please confirm or update your address within 30 days of the date of this "
-                    "letter."
-                ),
-                span_ids=["b6"], page=1, date_text=None, time_text=None,
-                relative_rule_text="within 30 days of the date of this letter",
-                anchor_span_id="b3", amount_text=None, currency=None, documents=[], role=None,
-                confidence=Confidence.high, ambiguity_note=None,
-            ),
-            DemandOut(
-                id="d2", kind=DemandKind.action,
-                text="Confirm your address online, by phone, or by mailing the enclosed form.",
-                value_verbatim="confirm or update your address",
-                source_quote=(
-                    "You can confirm your address online, by phone using the number on your "
-                    "Medicaid card, or by mailing the enclosed form."
-                ),
-                span_ids=["b7"], page=1, date_text=None, time_text=None, relative_rule_text=None,
-                anchor_span_id=None, amount_text=None, currency=None,
-                documents=["the enclosed form"], role=None, confidence=Confidence.high,
-                ambiguity_note=None,
-            ),
-        ],  # fmt: skip
-        plan_steps=[
-            PlanStepOut(
-                id="p1",
-                text="Check the address printed on the letter. If it is right, confirm it.",
-                kind=PlanStepKind.verify, resource_tags=["medicaid_renewal"], span_ids=["b5"],
-                demand_id="d2",
-            ),
-            PlanStepOut(
-                id="p2", text="Go online, call, or mail the enclosed form to confirm your address.",
-                kind=PlanStepKind.submit_online, resource_tags=["change_of_address"],
-                span_ids=["b7"], demand_id="d2",
-            ),
-            PlanStepOut(
-                id="p3", text="If you need help, ask a benefits office or call 211.",
-                kind=PlanStepKind.ask, resource_tags=["benefits_navigation"], span_ids=["b8"],
-                demand_id=None,
-            ),
-        ],  # fmt: skip
-        glossary=[
-            GlossaryTerm(
-                term_as_written="Medicaid",
-                explanation="Free or low-cost health coverage from the state.",
-            ),
-            GlossaryTerm(
-                term_as_written="renewal packet",
-                explanation="The forms the state sends each year to keep your coverage.",
-            ),
-            GlossaryTerm(
-                term_as_written="FAMIS",
-                explanation="Virginia's health coverage program for children.",
-            ),
-        ],
-        red_flags=[],
-        questions_to_ask=[
-            "Is the address you have for me correct?",
-            "What happens if I miss the 30 days?",
-            "Can I confirm my address by phone?",
-        ],
-        clerk_need_en=(
-            "I received a letter asking me to confirm my address for Medicaid. "
-            "I want to confirm or update my address."
-        ),
-        emergency_terms_found=[],
-        is_likely_scam=False,
-        scam_signals=[],
-        resource_tags=["medicaid_renewal", "change_of_address"],
-        institutions_as_written=[
-            "Virginia Department of Medical Assistance Services", "Cover Virginia",
-        ],  # fmt: skip
-        form_numbers=[],
-        geo_state="VA",
-        geo_county=None,
-        geo_city=None,
-        geo_zip=None,
-        legibility=Legibility.good,
-        readable_reason=None,
-        blocks=_blocks(),
-    )
-
-
-def render_sample_png(lines: list[str], width: int = 600, height: int = 800) -> bytes:
-    """Synthetic page watermarked SAMPLE, built in memory with Pillow."""
-    img = Image.new("RGB", (width, height), "white")
-    draw = ImageDraw.Draw(img)
-    body = ImageFont.load_default(size=14)
-    big = ImageFont.load_default(size=96)
-    draw.text((width // 2, height // 2), "SAMPLE", fill=(215, 215, 215), font=big, anchor="mm")
-    y = 60
-    for line in lines:
-        draw.text((48, y), line[:70], fill="black", font=body)
-        if len(line) > 70:
-            y += 18
-            draw.text((48, y), line[70:140], fill="black", font=body)
-        y += 40
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
-    return buf.getvalue()
+class FixtureError(Exception):
+    """A fixture folder is malformed (bad manifest, unreadable output). Boot fails loudly."""
 
 
 @dataclass
 class Fixture:
+    """One sample paper or screenshot on disk."""
+
     manifest: DemoFixture
-    transcript: str
-    outs: dict[str, AnalysisModelOut | TroubleshootModelOut]
-    dhash: int = 0
-    _png: bytes | None = field(default=None, repr=False)
+    dir: Path
+    dhash: int
+    page_dhashes: list[int]
+    today: date
+    expected: dict[str, Any] = field(default_factory=dict)
+    recorded_on: str | None = None
+    _pngs: dict[int, bytes] = field(default_factory=dict, repr=False)
+    _outs: dict[str, FixtureOut | None] = field(default_factory=dict, repr=False)
+    _metas: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    _transcript: str | None = field(default=None, repr=False)
+
+    @property
+    def id(self) -> str:
+        return self.manifest.id
+
+    @property
+    def kind(self) -> FixtureKind:
+        return self.manifest.kind
+
+    @property
+    def languages(self) -> list[str]:
+        return list(self.manifest.available_target_languages)
 
     def page_png(self, n: int) -> bytes:
-        if n != 1:
+        """PNG bytes of page ``n`` (1-based); ``KeyError`` for a page that does not exist."""
+        if not 1 <= n <= self.manifest.pages:
             raise KeyError(n)
-        if self._png is None:
-            self._png = render_sample_png(self.transcript.splitlines())
-        return self._png
+        cached = self._pngs.get(n)
+        if cached is None:
+            path = self.dir / f"page-{n}.png"
+            if not path.is_file():
+                raise KeyError(n)
+            cached = path.read_bytes()
+            self._pngs[n] = cached
+        return cached
 
-    def out(self, lang: str) -> AnalysisModelOut | TroubleshootModelOut | None:
-        return self.outs.get(lang)
+    @property
+    def transcript(self) -> str:
+        if self._transcript is None:
+            path = self.dir / "transcript.txt"
+            self._transcript = path.read_text("utf-8") if path.is_file() else ""
+        return self._transcript
+
+    def _load(self, lang: str) -> None:
+        path = self.dir / f"out.{lang}.json"
+        if not path.is_file():
+            self._outs[lang] = None
+            return
+        try:
+            raw: dict[str, Any] = json.loads(path.read_text("utf-8"))
+        except ValueError as exc:
+            raise FixtureError(f"{path}: not valid JSON ({exc})") from exc
+        meta = raw.pop("_meta", None)
+        self._metas[lang] = dict(meta) if isinstance(meta, dict) else {}
+        schema: type[BaseModel] = (
+            TroubleshootModelOut if self.kind == "screenshot" else AnalysisModelOut
+        )
+        try:
+            parsed = schema.model_validate(raw)
+        except ValidationError as exc:
+            raise FixtureError(f"{path}: {exc.error_count()} validation error(s)") from exc
+        assert isinstance(parsed, AnalysisModelOut | TroubleshootModelOut)
+        self._outs[lang] = parsed
+
+    def out(self, lang: str) -> FixtureOut | None:
+        """The recorded output for exactly ``lang`` (``None`` when not recorded).
+
+        Only the manifest's ``available_target_languages`` are ever loaded or cached, so an
+        arbitrary (pattern-valid) request tag cannot grow the per-fixture cache.
+        """
+        if lang not in self.manifest.available_target_languages:
+            return None
+        if lang not in self._outs:
+            self._load(lang)
+        return self._outs.get(lang)
+
+    def analysis_out(self, lang: str) -> AnalysisModelOut | None:
+        out = self.out(lang)
+        return out if isinstance(out, AnalysisModelOut) else None
+
+    def troubleshoot_out(self, lang: str) -> TroubleshootModelOut | None:
+        out = self.out(lang)
+        return out if isinstance(out, TroubleshootModelOut) else None
+
+    def meta(self, lang: str) -> dict[str, Any]:
+        """The ``_meta`` object of ``out.<lang>.json`` (empty when absent)."""
+        self.out(lang)
+        return dict(self._metas.get(lang, {}))
+
+    def distance(self, value: int) -> int:
+        """Smallest Hamming distance between ``value`` and any page of this fixture."""
+        return min(hamming(value, h) for h in (self.page_dhashes or [self.dhash]))
 
 
-def _inline_fixture() -> Fixture:
-    manifest = DemoFixture(
-        id=INLINE_FIXTURE_ID,
-        title_key="fixture.medicaid_address_confirmation",
-        title_en="Medicaid letter asking to confirm your address",
-        document_type=DocumentType.medicaid_renewal,
-        category=DocumentCategory.benefits,
-        language_of_document="en",
-        pages=1,
-        available_target_languages=["en"],
-        thumbnail_url=f"/v1/demo/fixtures/{INLINE_FIXTURE_ID}/pages/1",
-        kind="document",
-    )
+def _manifest(path: Path) -> Fixture:
+    try:
+        raw = yaml.safe_load(path.read_text("utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise FixtureError(f"{path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise FixtureError(f"{path}: manifest must be a mapping")
+    try:
+        manifest = DemoFixture.model_validate(
+            {k: raw[k] for k in DemoFixture.model_fields if k in raw}
+        )
+        page_hashes = [hex_to_hash(str(h)) for h in raw.get("page_dhashes") or [raw["dhash"]]]
+        today = date.fromisoformat(str(raw["today"]))
+        main_hash = hex_to_hash(str(raw["dhash"]))
+    except (KeyError, ValueError, ValidationError) as exc:
+        raise FixtureError(f"{path}: {exc}") from exc
+    if manifest.id != path.parent.name:
+        raise FixtureError(f"{path}: id {manifest.id!r} does not match its folder")
+    expected = raw.get("expected") or {}
     return Fixture(
         manifest=manifest,
-        transcript=_transcript(),
-        outs={"en": medicaid_address_confirmation_out()},
+        dir=path.parent,
+        dhash=main_hash,
+        page_dhashes=page_hashes,
+        today=today,
+        expected=dict(expected) if isinstance(expected, dict) else {},
+        recorded_on=str(raw["recorded_on"]) if raw.get("recorded_on") else None,
     )
 
 
 class FixtureStore:
+    """All sample papers, in id order (the sample picker's order)."""
+
     def __init__(self, fixtures: list[Fixture]) -> None:
         self._by_id = {f.manifest.id: f for f in fixtures}
 
     @classmethod
-    def load(cls, dir: Path) -> "FixtureStore":  # noqa: A002 - name fixed by BUILD_PLAN §4.1
-        """WP7 reads ``dir/*/manifest.yaml``; WP0 serves the inline fixture only."""
-        return cls([_inline_fixture()])
+    def load(cls, dir: Path) -> FixtureStore:  # noqa: A002 - name fixed by BUILD_PLAN §4.1
+        """Read every ``dir/*/manifest.yaml``; a missing directory gives an empty store."""
+        if not dir.is_dir():
+            return cls([])
+        return cls([_manifest(p) for p in sorted(dir.glob("*/manifest.yaml"))])
+
+    def __len__(self) -> int:
+        return len(self._by_id)
+
+    def ids(self) -> list[str]:
+        return list(self._by_id)
+
+    def all(self) -> list[Fixture]:
+        return list(self._by_id.values())
 
     def list(self) -> list[DemoFixture]:
         return [f.manifest for f in self._by_id.values()]
@@ -244,8 +194,33 @@ class FixtureStore:
     def get(self, id: str) -> Fixture | None:  # noqa: A002 - name fixed by BUILD_PLAN §4.1
         return self._by_id.get(id)
 
-    def default(self) -> Fixture:
-        return self._by_id[INLINE_FIXTURE_ID]
+    def default(self) -> Fixture | None:
+        return self._by_id.get(DEFAULT_FIXTURE_ID) or next(iter(self._by_id.values()), None)
 
-    def match_dhash(self, png_or_jpeg: bytes, max_hamming: int) -> Fixture | None:
-        return None
+    def match_dhash(
+        self, png_or_jpeg: bytes, max_hamming: int, *, kind: FixtureKind | None = "document"
+    ) -> Fixture | None:
+        """Nearest fixture of ``kind`` (any kind when ``None``) within ``max_hamming`` bits."""
+        try:
+            value = dhash(png_or_jpeg)
+        except HashError:
+            return None
+        best: Fixture | None = None
+        best_distance = max_hamming + 1
+        for fixture in self._by_id.values():
+            if kind is not None and fixture.kind != kind:
+                continue
+            d = fixture.distance(value)
+            if d < best_distance:
+                best, best_distance = fixture, d
+        return best
+
+
+__all__ = [
+    "DEFAULT_FIXTURE_ID",
+    "Fixture",
+    "FixtureError",
+    "FixtureKind",
+    "FixtureOut",
+    "FixtureStore",
+]

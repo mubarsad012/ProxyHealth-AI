@@ -1,0 +1,28 @@
+id: prescription_label
+title_key: fixture.prescription_label
+title_en: Prescription label from a pharmacy
+document_type: prescription_label
+category: medical
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/prescription_label/pages/1
+dhash: 2360c30ec206a98cc010c00888800301060018085014606000e0018002011102
+page_dhashes:
+- 2360c30ec206a98cc010c00888800301060018085014606000e0018002011102
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - info
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: medical_information_only
+  clerk_appended_keys:
+  - clerk.interpreter_hhs
+  glossary_terms:
+  - Refills
+  - Discard

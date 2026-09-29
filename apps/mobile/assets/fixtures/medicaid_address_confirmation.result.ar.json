@@ -1,0 +1,380 @@
+{
+  "analysis_id": "sample-medicaid_address_confirmation-ar",
+  "category": "benefits",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a Medicaid letter asking me to confirm my address by October 14, 2026",
+    "need_line_source": "ai",
+    "translated": "⟦ar⟧ a Medicaid letter asking me to confirm my address by October 14, 2026"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 14, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d1",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "response_due",
+      "source_quote": "Please confirm or update your address by October 14, 2026.",
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "أكّد عنوانك أو حدّثه قبل ١٤ أكتوبر ٢٠٢٦.",
+      "value_verbatim": "October 14, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [
+        "the enclosed form"
+      ],
+      "id": "d2",
+      "kind": "action",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "You can confirm your address online, by phone using the number on your Medicaid card, or by mailing the enclosed form.",
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "أكّد عنوانك عبر الإنترنت أو الهاتف أو بإرسال النموذج المرفق بالبريد.",
+      "value_verbatim": "confirm your address online, by phone",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "benefits_information_only",
+  "disclaimers": [
+    "benefits_information_only",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "medicaid_renewal",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": "VA",
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "Virginia Department of Medical Assistance Services",
+      "Cover Virginia"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "تغطية صحية مجانية أو منخفضة التكلفة من الولاية.",
+      "term_as_written": "Medicaid"
+    },
+    {
+      "explanation": "النماذج التي ترسلها الولاية كل سنة لاستمرار تغطيتك.",
+      "term_as_written": "renewal packet"
+    },
+    {
+      "explanation": "برنامج فرجينيا للتغطية الصحية للأطفال.",
+      "term_as_written": "FAMIS"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.1562,
+            0.058,
+            0.8013,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Virginia Department of Medical Assistance Services"
+        },
+        {
+          "bbox": [
+            0.1562,
+            0.086,
+            0.4412,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Cover Virginia - Medicaid and FAMIS"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.2956,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date: September 10, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1329,
+            0.2994,
+            0.1517
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Case number: ******1234"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1691,
+            0.5706,
+            0.1937
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "IMPORTANT: Please confirm your address"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2043,
+            0.8606,
+            0.244
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "We need your correct mailing address so you do not miss letters about your Medicaid coverage."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2556,
+            0.64,
+            0.2754
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Please confirm or update your address by October 14, 2026."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.287,
+            0.92,
+            0.3266
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You can confirm your address online, by phone using the number on your Medicaid card, or by mailing the enclosed form."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3382,
+            0.8231,
+            0.358
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "If we do not hear from you, we may not be able to send you your renewal packet."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3696,
+            0.5269,
+            0.3894
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "This letter does not change your coverage today."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.399,
+            0.3456,
+            0.415
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Enclosed: Address confirmation form"
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d2",
+      "id": "s1",
+      "kind": "verify",
+      "resource_tags": [
+        "medicaid_renewal"
+      ],
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "راجع العنوان المطبوع في الرسالة. إذا كان صحيحًا، أكّده."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s2",
+      "kind": "submit_online",
+      "resource_tags": [
+        "change_of_address"
+      ],
+      "span_ids": [
+        "p1b8",
+        "p1b7"
+      ],
+      "text": "ادخل إلى الإنترنت أو اتصل أو أرسل النموذج المرفق قبل ١٤ أكتوبر ٢٠٢٦."
+    },
+    {
+      "demand_id": null,
+      "id": "s3",
+      "kind": "ask",
+      "resource_tags": [
+        "benefits_navigation"
+      ],
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "إذا احتجت مساعدة، اسأل مكتب الإعانات. يمكنك طلب مترجم مجانًا."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "هل العنوان الذي لديكم صحيح؟",
+    "ماذا يحدث إذا وصل النموذج بعد ١٤ أكتوبر؟",
+    "هل يمكنني تأكيد عنواني عبر الهاتف؟"
+  ],
+  "red_flags": [],
+  "request_id": "offline-medicaid_address_confirmation-ar",
+  "resource_preview": [],
+  "resource_tags": [
+    "medicaid_renewal",
+    "change_of_address",
+    "benefits_navigation"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Virginia Department of Medical Assistance Services",
+  "sender_kind": "state_agency",
+  "summary": {
+    "body": "هذه الرسالة من ميديكيد فرجينيا. تطلب منك تأكيد عنوانك البريدي قبل ١٤ أكتوبر ٢٠٢٦. إذا لم تفعل، قد تفوتك أوراق التجديد.",
+    "body_en": "This letter is from Virginia Medicaid. It asks you to confirm your mailing address by October 14, 2026. If you do not, you may miss your renewal papers.",
+    "span_ids": [
+      "p1b1",
+      "p1b7",
+      "p1b9"
+    ],
+    "title": "ميديكيد يطلب منك تأكيد عنوانك"
+  },
+  "target_language": "ar",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "إدارة خدمات المساعدة الطبية في فرجينيا\nCover Virginia - ميديكيد و FAMIS\nالتاريخ: ١٠ سبتمبر ٢٠٢٦\nرقم الحالة: ******1234\nمهم: يرجى تأكيد عنوانك\nنحتاج عنوانك البريدي الصحيح حتى لا تفوتك رسائل عن تغطية ميديكيد.\nيرجى تأكيد عنوانك أو تحديثه قبل ١٤ أكتوبر ٢٠٢٦.\nيمكنك تأكيد عنوانك عبر الإنترنت، أو بالهاتف باستخدام الرقم على بطاقة ميديكيد، أو بإرسال النموذج المرفق بالبريد.\nإذا لم نسمع منك، قد لا نستطيع إرسال حزمة التجديد.\nهذه الرسالة لا تغيّر تغطيتك اليوم.\nمرفق: نموذج تأكيد العنوان"
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 2,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

@@ -1,0 +1,63 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional employer and worker; the SSN box is printed already masked.
+id: w2_form
+kind: document
+title_en: "W-2 wage and tax form from an employer"
+document_type: w2_1099
+category: employment
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [150, 20, 40], logo: none, watermark_angle: 16}
+pages:
+  - - {text: "Form W-2 Wage and Tax Statement 2025", style: heading, ref: heading}
+    - {text: "Copy B - To Be Filed With Employee's FEDERAL Tax Return", style: small, ref: copy_b}
+    - {text: "a Employee's social security number | XXX-XX-4321", style: row, ref: ssn}
+    - {text: "b Employer identification number (EIN) | 12-3456789", style: row, ref: ein}
+    - {text: "c Employer's name | Sample Hardware Store LLC, Manassas, VA", style: row, ref: employer}
+    - {text: "e Employee's name | SAMPLE WORKER", style: row, ref: employee}
+    - {text: "1 Wages, tips, other compensation | 28,450.00", style: row, ref: box1}
+    - {text: "2 Federal income tax withheld | 1,912.00", style: row, ref: box2}
+    - {text: "3 Social security wages | 28,450.00", style: row, ref: box3}
+    - {text: "4 Social security tax withheld | 1,763.90", style: row, ref: box4}
+    - {text: "5 Medicare wages and tips | 28,450.00", style: row, ref: box5}
+    - {text: "6 Medicare tax withheld | 412.53", style: row, ref: box6}
+    - {text: "15 State | VA", style: row, ref: box15}
+    - {text: "16 State wages, tips, etc. | 28,450.00", style: row, ref: box16}
+    - {text: "17 State income tax | 1,020.00", style: row, ref: box17}
+    - {text: "Department of the Treasury - Internal Revenue Service", style: small, ref: irs}
+expected:
+  urgency_level: [info]
+  demands_count: 0
+  scam_risk: none
+  readable: true
+  disclaimer_kind: legal_information_only
+  glossary_terms: ["Employer identification number (EIN)", "Federal income tax withheld"]
+  resource_tags_include: [itin]
+out:
+  base:
+    sender_as_written: "Sample Hardware Store LLC"
+    sender_kind: employer
+    summary_title: "W-2 tax form from Sample Hardware Store LLC for 2025"
+    summary_body: "This is your W-2 from Sample Hardware Store LLC for 2025. It shows what you were paid and what tax was taken out. It is a form you keep for filing taxes."
+    summary_span_ids: ["@heading", "@employer", "@box1"]
+    demands: []
+    plan_steps:
+      - {id: s1, text: "Keep this form with your tax papers. You use it when you file taxes.", kind: gather, resource_tags: [tax_notice], span_ids: ["@copy_b"], demand_id: null}
+      - {id: s2, text: "A free tax-help site or a tax professional can explain the boxes with you.", kind: professional, resource_tags: [tax_notice, itin], span_ids: ["@heading"], demand_id: null}
+    glossary:
+      - {term_as_written: "Employer identification number (EIN)", explanation: "The number the IRS uses for your employer."}
+      - {term_as_written: "Federal income tax withheld", explanation: "Tax your employer took out of your pay and sent to the IRS."}
+      - {term_as_written: "Wages, tips, other compensation", explanation: "The money you were paid for work in the year."}
+      - {term_as_written: "Medicare tax withheld", explanation: "Tax taken out of your pay for Medicare."}
+    red_flags: []
+    questions_to_ask:
+      - "Is the name on this form spelled right?"
+      - "Can you send me a corrected form if a box is wrong?"
+    clerk_need_en: "a tax form from my employer (W-2 or 1099) - what the boxes mean"
+    resource_tags: [tax_notice, itin]
+    institutions_as_written: ["Sample Hardware Store LLC", "Internal Revenue Service"]
+    form_numbers: ["W-2"]
+    geo_state: VA
+    geo_city: Manassas
+    legibility: good

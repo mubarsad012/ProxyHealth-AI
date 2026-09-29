@@ -1,0 +1,429 @@
+{
+  "analysis_id": "sample-va_pay_or_quit_14d-es",
+  "category": "housing",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a notice from my landlord about rent - what it says and the date on it",
+    "need_line_source": "ai",
+    "translated": "⟦es⟧ a notice from my landlord about rent - what it says and the date on it"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": {
+        "amount_minor": 145000,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d1",
+      "kind": "amount",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "You owe rent of $1,450.00 for September 2026.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "El aviso dice que usted debe $1,450.00 de renta de septiembre de 2026.",
+      "value_verbatim": "$1,450.00",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 8, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d2",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "response_due",
+      "source_quote": "You must pay the full amount by October 8, 2026, or your lease will be terminated.",
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "El aviso da el 8 de octubre de 2026 como la fecha para pagar el monto completo.",
+      "value_verbatim": "October 8, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "within 14 days of the date of this notice",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d3",
+      "kind": "relative_deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "response_due",
+      "source_quote": "If the rent is not paid within 14 days of the date of this notice, the landlord may file an eviction case in court.",
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "El aviso también menciona 14 días desde la fecha del aviso. Pregunte al arrendador qué fecha significa.",
+      "value_verbatim": "within 14 days of the date of this notice",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d4",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Pay at the leasing office or call (703) 555-0175 with questions.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "Teléfono de la oficina, de su papel: (703) 555-0175.",
+      "value_verbatim": "(703) 555-0175",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "housing_information_only",
+  "disclaimers": [
+    "housing_information_only",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "pay_or_quit",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": "Alexandria",
+      "county": null,
+      "state": "VA",
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "Oak Hollow Property Management LLC"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "Pague la renta o múdese. Es una advertencia del arrendador.",
+      "term_as_written": "PAY RENT OR QUIT"
+    },
+    {
+      "explanation": "Terminado.",
+      "term_as_written": "terminated"
+    },
+    {
+      "explanation": "Un caso en la corte que un arrendador presenta para que un inquilino se vaya. Solo un juez puede ordenarlo.",
+      "term_as_written": "eviction case"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.075,
+            0.058,
+            0.56,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Oak Hollow Property Management LLC"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.086,
+            0.4319,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Oak Hollow Apartments - Alexandria, Virginia"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.2956,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date: September 24, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1493,
+            0.6631,
+            0.1816
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "14-DAY NOTICE TO PAY RENT OR QUIT"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.199,
+            0.57,
+            0.2188
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "To: SAMPLE TENANT, Oak Hollow Apartments, Unit 12"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2304,
+            0.5181,
+            0.2502
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You owe rent of $1,450.00 for September 2026."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2618,
+            0.8606,
+            0.2816
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You must pay the full amount by October 8, 2026, or your lease will be terminated."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2932,
+            0.8694,
+            0.3329
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "If the rent is not paid within 14 days of the date of this notice, the landlord may file an eviction case in court."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3425,
+            0.4525,
+            0.3585
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "This notice is given under Virginia Code § 55.1-1245."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3681,
+            0.6406,
+            0.3879
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Pay at the leasing office or call (703) 555-0175 with questions."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3995,
+            0.6837,
+            0.4193
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Signed: Property Manager, Oak Hollow Property Management LLC"
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d2",
+      "id": "s1",
+      "kind": "professional",
+      "resource_tags": [
+        "eviction",
+        "housing_counseling"
+      ],
+      "span_ids": [
+        "p1b4"
+      ],
+      "text": "Hable con un abogado o consejero de vivienda antes de la fecha de este papel."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s2",
+      "kind": "call",
+      "resource_tags": [
+        "rent_assistance"
+      ],
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "Llame a un programa de ayuda con la renta. Muchas veces piden este aviso y su contrato."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s3",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "Reúna su contrato de renta y sus recibos de pago."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "¿Puedo pagar parte de la renta ahora y el resto después?",
+    "¿Dónde y cómo puedo pagar los $1,450.00?",
+    "¿Me dará un recibo cuando pague?"
+  ],
+  "red_flags": [],
+  "request_id": "offline-va_pay_or_quit_14d-es",
+  "resource_preview": [],
+  "resource_tags": [
+    "eviction",
+    "housing_counseling",
+    "rent_assistance"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Oak Hollow Property Management LLC",
+  "sender_kind": "landlord",
+  "summary": {
+    "body": "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del 8 de octubre de 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte.",
+    "body_en": "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order.",
+    "span_ids": [
+      "p1b1",
+      "p1b6",
+      "p1b7"
+    ],
+    "title": "Aviso del arrendador sobre renta no pagada"
+  },
+  "target_language": "es",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 4,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

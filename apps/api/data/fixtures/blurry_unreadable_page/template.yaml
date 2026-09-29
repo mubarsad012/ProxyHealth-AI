@@ -1,0 +1,50 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# A generic letter rendered, then Gaussian-blurred and washed out so nothing can be read. The model
+# output reports `legibility: poor` with no blocks, so the pipeline stops after one call.
+id: blurry_unreadable_page
+kind: document
+title_en: "Blurry page that cannot be read"
+document_type: unknown
+category: other
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [80, 80, 80], logo: left, watermark_angle: 48, blur: 9.0, contrast: 0.35, brightness: 1.15, font_scale: 1.2}
+pages:
+  - - {text: "Sample Office of Community Services", style: letterhead}
+    - {text: "Notice about your account", style: letterhead_sub}
+    - {text: "Date: September 12, 2026", style: right}
+    - {text: "Please read this notice carefully", style: title}
+    - {text: "We are writing to tell you about a change to your account. Please review the information below.", style: body}
+    - {text: "You may need to send us more information by the date shown on the next page.", style: body}
+    - {text: "If you have questions, call the office during business hours.", style: body}
+    - {text: "Thank you.", style: body}
+expected:
+  urgency_level: [info]
+  demands_count: 0
+  scam_risk: none
+  readable: false
+  model_calls: 1
+  warnings_include: [low_quality_image]
+  disclaimer_kind: general_information
+out:
+  base:
+    document_type_confidence: low
+    sender_as_written: null
+    sender_kind: unknown
+    detected_language: und
+    summary_title: "This page is too blurry to read"
+    summary_body: "The photo is blurry and pale. I could not read the words. Try again in brighter light with the page flat and the camera held still."
+    summary_span_ids: []
+    demands: []
+    plan_steps: []
+    glossary: []
+    red_flags: []
+    questions_to_ask: []
+    clerk_need_en: "understanding a paper I received"
+    resource_tags: []
+    institutions_as_written: []
+    form_numbers: []
+    legibility: poor
+    readable_reason: blur
+    blocks: false

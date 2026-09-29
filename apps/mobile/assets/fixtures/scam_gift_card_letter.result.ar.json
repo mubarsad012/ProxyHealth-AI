@@ -1,0 +1,331 @@
+{
+  "analysis_id": "sample-scam_gift_card_letter-ar",
+  "category": "immigration",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "understanding a paper I received",
+    "need_line_source": "ai",
+    "translated": "⟦ar⟧ understanding a paper I received"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": {
+        "amount_minor": 95000,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d1",
+      "kind": "amount",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "Our records show you owe an unpaid immigration processing fee of $950.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "text": "تطلب الرسالة $950.",
+      "value_verbatim": "$950",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "legal_information_only",
+  "disclaimers": [
+    "legal_information_only",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "other_notice",
+  "document_type_confidence": "medium",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": null,
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "U.S. Immigration Services Department"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "بطاقات متجر عليها مال. الجهات الحكومية الحقيقية لا تقبلها للدفع.",
+      "term_as_written": "gift cards"
+    },
+    {
+      "explanation": "سري.",
+      "term_as_written": "confidential"
+    }
+  ],
+  "is_likely_scam": true,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.1562,
+            0.058,
+            0.6375,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "U.S. Immigration Services Department"
+        },
+        {
+          "bbox": [
+            0.1562,
+            0.086,
+            0.4831,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Office of Immigration Fees and Penalties"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.2956,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date: September 29, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1493,
+            0.8081,
+            0.1816
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "FINAL WARNING - IMMIGRATION FEE PAST DUE"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.199,
+            0.2169,
+            0.2188
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Dear Applicant,"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2304,
+            0.7575,
+            0.2502
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Our records show you owe an unpaid immigration processing fee of $950."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2618,
+            0.9056,
+            0.3014
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You must pay today with Google Play gift cards or you will be deported unless payment is received within 48 hours."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.313,
+            0.9237,
+            0.3329
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Call Officer Daniel Sample at (202) 555-0147 and read the gift card numbers over the phone."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3444,
+            0.6356,
+            0.3643
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "USCIS payment portal: www.uscis-fee-payment.example.com"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3758,
+            0.6844,
+            0.3957
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Do not tell anyone about this letter. Keep this matter confidential."
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d1",
+      "id": "s1",
+      "kind": "verify",
+      "resource_tags": [
+        "scam_report"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "لا تدفع ولا تتصل بالرقم المكتوب في هذه الرسالة. تحقق مع الجهة الحقيقية من خلال قسم المساعدة."
+    },
+    {
+      "demand_id": null,
+      "id": "s2",
+      "kind": "professional",
+      "resource_tags": [
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b1"
+      ],
+      "text": "يمكن لمحامٍ مرخّص أو ممثل معتمد من وزارة العدل أن يخبرك بما تحتاجه الجهة الحقيقية."
+    },
+    {
+      "demand_id": null,
+      "id": "s3",
+      "kind": "gather",
+      "resource_tags": [
+        "scam_report"
+      ],
+      "span_ids": [
+        "p1b4"
+      ],
+      "text": "احتفظ بالرسالة والظرف. سيساعدانك عند الإبلاغ عنها."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [],
+  "red_flags": [],
+  "request_id": "offline-scam_gift_card_letter-ar",
+  "resource_preview": [],
+  "resource_tags": [
+    "scam_report",
+    "immigration_legal_help"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [
+    "gift_card",
+    "deportation_threat",
+    "non_gov_domain",
+    "urgency_pressure"
+  ],
+  "scam_risk": "likely",
+  "schema_version": 1,
+  "sender_as_written": "U.S. Immigration Services Department",
+  "sender_kind": "federal_agency",
+  "summary": {
+    "body": "تقول هذه الرسالة إنها من \"U.S. Immigration Services Department\". تطلب $950 ببطاقات هدايا Google Play وتهدد بالترحيل. لم أستطع مطابقتها مع نوع معروف من الأوراق.",
+    "body_en": "This letter says it is from the \"U.S. Immigration Services Department\". It asks for $950 in Google Play gift cards and threatens deportation. I could not match this to a known kind of paper.",
+    "span_ids": [
+      "p1b1",
+      "p1b6",
+      "p1b7"
+    ],
+    "title": "رسالة تطلب بطاقات هدايا وتقول إنها من دائرة الهجرة"
+  },
+  "target_language": "ar",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "U.S. Immigration Services Department\nمكتب رسوم وغرامات الهجرة\nالتاريخ: ٢٩ سبتمبر ٢٠٢٦\nتحذير نهائي - رسوم هجرة متأخرة\nعزيزي مقدم الطلب،\nتُظهر سجلاتنا أن عليك رسوم معالجة هجرة غير مدفوعة بقيمة $950.\nيجب أن تدفع اليوم ببطاقات هدايا Google Play وإلا سيتم ترحيلك ما لم يصلنا الدفع خلال ٤٨ ساعة.\nاتصل بالضابط Daniel Sample على (202) 555-0147 واقرأ أرقام بطاقات الهدايا عبر الهاتف.\nبوابة الدفع لـ USCIS: www.uscis-fee-payment.example.com\nلا تخبر أحدًا عن هذه الرسالة. أبقِ هذا الأمر سريًا."
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 1,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

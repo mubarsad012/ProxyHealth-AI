@@ -1,0 +1,389 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "uscis_rfe",
+  "category": "immigration",
+  "document_type_confidence": "high",
+  "sender_as_written": "U.S. Citizenship and Immigration Services",
+  "sender_kind": "federal_agency",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Servicio de Ciudadanía e Inmigración de los Estados Unidos\nDepartamento de Seguridad Nacional\nI-797E, Aviso de Acción\nFecha del aviso: 18 de julio de 2026\nNúmero de recibo: IOE0987654321\nSOLICITUD DE EVIDENCIA\nNecesitamos más evidencia antes de tomar una decisión sobre su Formulario I-485.\nDebe presentar la evidencia solicitada dentro de 87 días. Su respuesta debe recibirse a más tardar el 13 de octubre de 2026.\nPresente la siguiente evidencia:\n1. Una copia de su acta de nacimiento con una traducción certificada al inglés.\n2. Dos fotos tamaño pasaporte tomadas en los últimos 30 días.\n3. Una copia de su declaración federal de impuestos más reciente.\nColoque este aviso encima de su respuesta.\nEnvíe toda la evidencia junta en un solo paquete.\nSi no responde antes de la fecha indicada, podemos considerar su caso abandonado."
+    }
+  ],
+  "summary_title": "USCIS pide más papeles para su Formulario I-485",
+  "summary_body": "Esta es una Solicitud de Evidencia de USCIS. Necesitan más papeles antes de decidir sobre su Formulario I-485. Su caso no está negado. Deben recibir su respuesta antes del 13 de octubre de 2026.",
+  "summary_body_en": "This is a Request for Evidence from USCIS. They need more papers before they decide on your Form I-485. Your case is not denied. They must receive your answer by October 13, 2026.",
+  "summary_span_ids": [
+    "p1b6",
+    "p1b7",
+    "p1b8"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "USCIS debe recibir su respuesta antes del 13 de octubre de 2026.",
+      "value_verbatim": "October 13, 2026",
+      "source_quote": "Your response must be received by October 13, 2026.",
+      "span_ids": [
+        "p1b8"
+      ],
+      "page": 1,
+      "date_text": "October 13, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b4",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "document_requested",
+      "text": "Envíe los tres papeles de la lista: acta de nacimiento con traducción, dos fotos y su declaración de impuestos.",
+      "value_verbatim": "birth certificate",
+      "source_quote": "1. A copy of your birth certificate with a certified English translation.",
+      "span_ids": [
+        "p1b10",
+        "p1b11",
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [
+        "A copy of your birth certificate with a certified English translation.",
+        "Two passport-style photos taken within the last 30 days.",
+        "A copy of your most recent federal tax return."
+      ],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "action",
+      "text": "Ponga este aviso encima de su respuesta.",
+      "value_verbatim": "place this notice on top of your response",
+      "source_quote": "Please place this notice on top of your response.",
+      "span_ids": [
+        "p1b13"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Reúna cada papel de la lista. Haga copias para usted.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b10",
+        "p1b11",
+        "p1b12"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s2",
+      "text": "Anote preguntas sobre los papeles que no tenga y pregunte a una persona que ayude.",
+      "kind": "ask",
+      "resource_tags": [
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b9"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s3",
+      "text": "Envíe todo en un solo paquete, con este aviso encima, para que llegue antes del 13 de octubre de 2026.",
+      "kind": "mail",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b13",
+        "p1b14",
+        "p1b8"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s4",
+      "text": "Hable con un abogado con licencia o un representante acreditado por el DOJ antes de enviar su respuesta.",
+      "kind": "professional",
+      "resource_tags": [
+        "immigration_legal_help",
+        "green_card"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "evidence",
+      "explanation": "Papeles que muestran que algo es verdad."
+    },
+    {
+      "term_as_written": "abandoned",
+      "explanation": "USCIS puede dejar de trabajar en su caso si no recibe respuesta."
+    },
+    {
+      "term_as_written": "certified English translation",
+      "explanation": "Una traducción completa al inglés con una nota firmada que dice que es correcta."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "¿Qué puedo enviar si no tengo mi acta de nacimiento?",
+    "¿Mi respuesta debe llegar antes del 13 de octubre o enviarse antes de esa fecha?",
+    "¿Puedo enviar los papeles en más de un paquete?"
+  ],
+  "clerk_need_en": "a USCIS request for evidence and what I must send before the date on it",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "immigration_legal_help",
+    "green_card"
+  ],
+  "institutions_as_written": [
+    "U.S. Citizenship and Immigration Services",
+    "Department of Homeland Security"
+  ],
+  "form_numbers": [
+    "I-797E",
+    "I-485"
+  ],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "U.S. Citizenship and Immigration Services",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.675,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Department of Homeland Security",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.43,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "I-797E, Notice of Action",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.275,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Notice Date: July 18, 2026",
+      "bbox": [
+        0.075,
+        0.1329,
+        0.2931,
+        0.1517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Receipt Number: IOE0987654321",
+      "bbox": [
+        0.075,
+        0.1575,
+        0.3575,
+        0.1763
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "REQUEST FOR EVIDENCE",
+      "bbox": [
+        0.075,
+        0.1986,
+        0.445,
+        0.2309
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "We need more evidence before we can make a decision on your Form I-485.",
+      "bbox": [
+        0.075,
+        0.2483,
+        0.7725,
+        0.2681
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "You must submit the requested evidence within 87 days. Your response must be received by October 13, 2026.",
+      "bbox": [
+        0.075,
+        0.2797,
+        0.9219,
+        0.3193
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Please submit the following evidence:",
+      "bbox": [
+        0.075,
+        0.3357,
+        0.4706,
+        0.357
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "1. A copy of your birth certificate with a certified English translation.",
+      "bbox": [
+        0.1125,
+        0.3638,
+        0.7394,
+        0.3836
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "2. Two passport-style photos taken within the last 30 days.",
+      "bbox": [
+        0.1125,
+        0.3894,
+        0.6525,
+        0.4092
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "3. A copy of your most recent federal tax return.",
+      "bbox": [
+        0.1125,
+        0.415,
+        0.5563,
+        0.4348
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "Please place this notice on top of your response.",
+      "bbox": [
+        0.075,
+        0.4435,
+        0.5331,
+        0.4633
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b14",
+      "page": 1,
+      "text": "Send all of the evidence together in one package.",
+      "bbox": [
+        0.075,
+        0.4749,
+        0.5319,
+        0.4947
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b15",
+      "page": 1,
+      "text": "If you do not respond by the date above, we may consider your case abandoned.",
+      "bbox": [
+        0.075,
+        0.5063,
+        0.8194,
+        0.5261
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

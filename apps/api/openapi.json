@@ -4883,6 +4883,7 @@
     },
     "/v1/quicksheet/pdf": {
       "post": {
+        "description": "Resources are re-validated against the DB inside ``render`` (RESOURCE_DB §7).",
         "operationId": "quicksheet_pdf_v1_quicksheet_pdf_post",
         "requestBody": {
           "content": {
@@ -4935,6 +4936,7 @@
     },
     "/v1/resources": {
       "get": {
+        "description": "Browse the DB: ``tag`` exact; ``state`` keeps national + serving entries; ``q`` substring.",
         "operationId": "list_resources_v1_resources_get",
         "parameters": [
           {
@@ -5057,6 +5059,7 @@
     },
     "/v1/resources/match": {
       "post": {
+        "description": "Deterministic matcher (RESOURCE_DB §6); 200 always — an empty ``results`` is fine.",
         "operationId": "match_resources_v1_resources_match_post",
         "requestBody": {
           "content": {

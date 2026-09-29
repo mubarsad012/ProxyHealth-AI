@@ -1,0 +1,5 @@
+{
+  "NSCameraUsageDescription": "يستخدم ProxyHealth AI الكاميرا فقط لتصوير الورقة التي تريد شرحها. لا تُحفظ الصور على خوادمنا.",
+  "NSPhotoLibraryUsageDescription": "يتيح لك ProxyHealth AI اختيار صورة ورقة لشرحها. لا نصل إلى صورك الأخرى.",
+  "perm_notifications": "يذكّرك ProxyHealth AI بالمواعيد التي وجدها في أوراقك. نص التذكير عام إلا إذا اخترت غير ذلك."
+}

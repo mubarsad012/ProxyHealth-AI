@@ -1,0 +1,337 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "immunization_notice",
+  "category": "school",
+  "document_type_confidence": "high",
+  "sender_as_written": "Maple Grove Elementary School",
+  "sender_kind": "school",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Maple Grove Elementary School\nSample County Public Schools, Virginia - Office of the School Nurse\nDate: September 25, 2026\nImmunization Compliance Notice\nDear Parent or Guardian of: SAMPLE STUDENT, Grade 3\nOur records show your child is missing the following vaccines:\n- Tdap (tetanus, diphtheria, pertussis) booster\n- MMR (measles, mumps, rubella) dose 2\nPlease give the school a record of these vaccines by October 23, 2026.\nIf we do not receive the record by that date, your child may be excluded from school until the record is received.\nVaccine records can often be found at your child's doctor's office or the state health department.\nQuestions? Call the school nurse at (703) 555-0118."
+    }
+  ],
+  "summary_title": "School asks for your child's vaccine record",
+  "summary_body": "This notice is from Maple Grove Elementary School. The school says your child needs 2 vaccines on file by October 23, 2026. Nothing has changed at school yet.",
+  "summary_body_en": "This notice is from Maple Grove Elementary School. The school says your child needs 2 vaccines on file by October 23, 2026. Nothing has changed at school yet.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b6",
+    "p1b9"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "Give the school a record of the vaccines by October 23, 2026.",
+      "value_verbatim": "October 23, 2026",
+      "source_quote": "Please give the school a record of these vaccines by October 23, 2026.",
+      "span_ids": [
+        "p1b9"
+      ],
+      "page": 1,
+      "date_text": "October 23, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b3",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "document_requested",
+      "text": "The school lists 2 vaccines: a Tdap booster and MMR dose 2.",
+      "value_verbatim": "Tdap (tetanus, diphtheria, pertussis) booster",
+      "source_quote": "- Tdap (tetanus, diphtheria, pertussis) booster",
+      "span_ids": [
+        "p1b7",
+        "p1b8"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [
+        "Tdap (tetanus, diphtheria, pertussis) booster",
+        "MMR (measles, mumps, rubella) dose 2"
+      ],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "contact",
+      "text": "School nurse phone, from your paper: (703) 555-0118.",
+      "value_verbatim": "(703) 555-0118",
+      "source_quote": "Questions? Call the school nurse at (703) 555-0118.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Look for your child's vaccine record at home or ask your child's doctor for a copy.",
+      "kind": "gather",
+      "resource_tags": [
+        "vaccine_records"
+      ],
+      "span_ids": [
+        "p1b11"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s2",
+      "text": "If a vaccine on the list is missing, call a clinic or the health department to ask about it.",
+      "kind": "call",
+      "resource_tags": [
+        "vaccine_records"
+      ],
+      "span_ids": [
+        "p1b7",
+        "p1b8"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s3",
+      "text": "Bring the record to the school before October 23, 2026.",
+      "kind": "bring",
+      "resource_tags": [
+        "school_enrollment"
+      ],
+      "span_ids": [
+        "p1b9"
+      ],
+      "demand_id": "d1"
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Immunization",
+      "explanation": "Another word for vaccine or shot."
+    },
+    {
+      "term_as_written": "booster",
+      "explanation": "An extra dose of a vaccine given later."
+    },
+    {
+      "term_as_written": "excluded",
+      "explanation": "Not allowed to come to school for a time."
+    },
+    {
+      "term_as_written": "Tdap",
+      "explanation": "A vaccine for tetanus, diphtheria and whooping cough."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "Can I bring the record in person or send a photo?",
+    "Which clinic can give the missing vaccines?",
+    "What happens if the appointment is after October 23?"
+  ],
+  "clerk_need_en": "a school vaccine notice - which vaccines it lists and the date",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "vaccine_records",
+    "school_enrollment"
+  ],
+  "institutions_as_written": [
+    "Maple Grove Elementary School",
+    "Sample County Public Schools"
+  ],
+  "form_numbers": [],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Maple Grove Elementary School",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.5537,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Sample County Public Schools, Virginia - Office of the School Nurse",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.6869,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Date: September 25, 2026",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.2956,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Immunization Compliance Notice",
+      "bbox": [
+        0.075,
+        0.1493,
+        0.5956,
+        0.1816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Dear Parent or Guardian of: SAMPLE STUDENT, Grade 3",
+      "bbox": [
+        0.075,
+        0.199,
+        0.5837,
+        0.2188
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Our records show your child is missing the following vaccines:",
+      "bbox": [
+        0.075,
+        0.2304,
+        0.6444,
+        0.2502
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "- Tdap (tetanus, diphtheria, pertussis) booster",
+      "bbox": [
+        0.1125,
+        0.2589,
+        0.5363,
+        0.2787
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "- MMR (measles, mumps, rubella) dose 2",
+      "bbox": [
+        0.1125,
+        0.2845,
+        0.4819,
+        0.3043
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Please give the school a record of these vaccines by October 23, 2026.",
+      "bbox": [
+        0.075,
+        0.313,
+        0.7338,
+        0.3329
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "If we do not receive the record by that date, your child may be excluded from school until the record is received.",
+      "bbox": [
+        0.075,
+        0.3444,
+        0.8988,
+        0.3841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "Vaccine records can often be found at your child's doctor's office or the state health department.",
+      "bbox": [
+        0.075,
+        0.3957,
+        0.8488,
+        0.4353
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "Questions? Call the school nurse at (703) 555-0118.",
+      "bbox": [
+        0.075,
+        0.4469,
+        0.5431,
+        0.4667
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

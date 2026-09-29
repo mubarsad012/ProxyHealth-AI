@@ -1,42 +1,204 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "ProxyHealth AI",
+    "slug": "proxyhealth",
+    "scheme": "proxyhealth",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "org.proxyhealth.app",
+      "supportsTablet": true,
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ProxyHealth AI uses the camera only to photograph the paper you want explained. Photos are not saved on our servers.",
+        "NSPhotoLibraryUsageDescription": "ProxyHealth AI lets you choose a photo of a paper to explain. We do not access your other photos."
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
+          }
+        ]
+      }
     },
     "android": {
+      "package": "org.proxyhealth.app",
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "ProxyHealth AI",
+      "shortName": "ProxyHealth",
+      "themeColor": "#0B4F8A",
+      "backgroundColor": "#FFFFFF"
+    },
+    "locales": {
+      "en": "./locales/en.json",
+      "ar": "./locales/ar.json",
+      "es": "./locales/es.json",
+      "prs": "./locales/prs.json",
+      "ps": "./locales/ps.json"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 76,
+          "dark": {
+            "backgroundColor": "#0F1720",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ],
       "expo-sharing",
       "expo-secure-store",
       "expo-sqlite",
-      "expo-localization"
+      [
+        "expo-localization",
+        {
+          "supportsRTL": true,
+          "supportedLocales": {
+            "ios": [
+              "en",
+              "es",
+              "zh-Hans",
+              "zh-Hant",
+              "vi",
+              "tl",
+              "ar",
+              "ht",
+              "pt-BR",
+              "ru",
+              "uk",
+              "ko",
+              "fr",
+              "prs",
+              "ps",
+              "fa",
+              "ur",
+              "hi",
+              "pa",
+              "bn",
+              "so",
+              "sw",
+              "am",
+              "my",
+              "ne",
+              "rw"
+            ],
+            "android": [
+              "en",
+              "es",
+              "zh-Hans",
+              "zh-Hant",
+              "vi",
+              "tl",
+              "ar",
+              "ht",
+              "pt-BR",
+              "ru",
+              "uk",
+              "ko",
+              "fr",
+              "prs",
+              "ps",
+              "fa",
+              "ur",
+              "hi",
+              "pa",
+              "bn",
+              "so",
+              "sw",
+              "am",
+              "my",
+              "ne",
+              "rw"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ProxyHealth AI uses the camera only to photograph the paper you want explained. Photos are not saved on our servers.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ProxyHealth AI lets you choose a photo of a paper to explain. We do not access your other photos.",
+          "cameraPermission": "ProxyHealth AI uses the camera only to photograph the paper you want explained.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1F5F8B",
+          "defaultChannel": "dates"
+        }
+      ],
+      "expo-document-picker",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/NotoSans-Regular.ttf",
+            "./assets/fonts/NotoSans-Bold.ttf",
+            "./assets/fonts/NotoNaskhArabic-Regular.ttf",
+            "./assets/fonts/NotoNaskhArabic-Bold.ttf",
+            "./assets/fonts/NotoNastaliqUrdu-Regular.ttf",
+            "./assets/fonts/NotoNastaliqUrdu-Bold.ttf",
+            "./assets/fonts/NotoSansEthiopic-Regular.ttf",
+            "./assets/fonts/NotoSansEthiopic-Bold.ttf",
+            "./assets/fonts/NotoSansMyanmar-Regular.ttf",
+            "./assets/fonts/NotoSansMyanmar-Bold.ttf",
+            "./assets/fonts/NotoSansDevanagari-Regular.ttf",
+            "./assets/fonts/NotoSansDevanagari-Bold.ttf",
+            "./assets/fonts/NotoSansBengali-Regular.ttf",
+            "./assets/fonts/NotoSansBengali-Bold.ttf",
+            "./assets/fonts/NotoSansGurmukhi-Regular.ttf",
+            "./assets/fonts/NotoSansGurmukhi-Bold.ttf",
+            "./assets/fonts/NotoSansHanifiRohingya-Regular.ttf",
+            "./assets/fonts/NotoSansHanifiRohingya-Bold.ttf"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

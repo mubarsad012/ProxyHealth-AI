@@ -1,0 +1,86 @@
+# Synthetic screenshot (D-29). Rendered by scripts/make_fixtures.py. No real portal, no real data.
+id: portal_file_too_large
+kind: screenshot
+title_en: "Benefits portal: file too large"
+document_type: unknown
+category: benefits
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [23, 76, 140], band_height: 96, watermark_angle: 30}
+pages:
+  - - {text: "Sample State Benefits Portal", style: band}
+    - {text: "Step 3 of 5: Upload your documents", style: heading}
+    - {text: "Document type: Proof of income", style: field}
+    - {text: "File exceeds the maximum size of 5 MB", style: error}
+    - {text: "Your file: paystub_photo.jpg (8.4 MB)", style: body}
+    - {text: "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.", style: small}
+    - {text: "Choose File", style: button}
+    - {text: "Upload", style: button}
+    - {text: "Back", style: button}
+    - {text: "Submit Application", style: button}
+expected:
+  steps_targets: ["Choose File", "Upload", "Back"]
+  caution_mentions: "Submit Application"
+  emergency: false
+  scam_risk: none
+out:
+  base:
+    screen_summary: "This is step 3 of 5 on a benefits website. It asks you to upload proof of income. The file you picked was not accepted because it is too big."
+    screen_text:
+      - "Sample State Benefits Portal"
+      - "Step 3 of 5: Upload your documents"
+      - "Document type: Proof of income"
+      - "File exceeds the maximum size of 5 MB"
+      - "Your file: paystub_photo.jpg (8.4 MB)"
+      - "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB."
+      - "Choose File"
+      - "Upload"
+      - "Back"
+      - "Submit Application"
+    error_text_quoted: "File exceeds the maximum size of 5 MB"
+    error_meaning: "The photo you picked is 8.4 MB. This website only takes files up to 5 MB, so it did not upload."
+    steps:
+      - {order: 1, text: "Make the photo smaller, or take a new photo that is not zoomed in. A PDF scan also works.", ui_target_as_written: null}
+      - {order: 2, text: "Tap Choose File and pick the smaller file.", ui_target_as_written: "Choose File"}
+      - {order: 3, text: "Tap Upload and wait for the file name to show.", ui_target_as_written: "Upload"}
+      - {order: 4, text: "If it still does not work, tap Back and start this step again.", ui_target_as_written: "Back"}
+    cautions:
+      - "The Submit Application button sends your whole application. Tap it only when every step is done."
+    asks_for_credentials_or_payment: false
+    is_likely_scam: false
+    scam_signals: []
+    needs_human_help: false
+    red_flags: []
+    resource_tags: [benefits_navigation]
+    confidence: high
+  es:
+    screen_summary: "Este es el paso 3 de 5 en un sitio web de beneficios. Le pide subir un comprobante de ingresos. El archivo que eligió no fue aceptado porque es muy grande."
+    error_meaning: "La foto que eligió pesa 8.4 MB. Este sitio solo acepta archivos de hasta 5 MB, por eso no se subió."
+    steps:
+      1: "Haga la foto más pequeña o tome una foto nueva sin acercar la cámara. Un escaneo en PDF también sirve."
+      2: "Toque Choose File y elija el archivo más pequeño."
+      3: "Toque Upload y espere a que aparezca el nombre del archivo."
+      4: "Si todavía no funciona, toque Back y empiece este paso otra vez."
+    cautions:
+      - "El botón Submit Application envía toda su solicitud. Tóquelo solo cuando haya terminado todos los pasos."
+  prs:
+    screen_summary: "این مرحله ۳ از ۵ در یک ویب‌سایت امتیازات است. از شما می‌خواهد سند عاید را بارگذاری کنید. فایلی که انتخاب کردید قبول نشد چون خیلی بزرگ است."
+    error_meaning: "عکسی که انتخاب کردید 8.4 MB است. این ویب‌سایت فقط فایل‌های تا 5 MB را قبول می‌کند، برای همین بارگذاری نشد."
+    steps:
+      1: "عکس را کوچک‌تر کنید، یا یک عکس نو بدون زوم بگیرید. اسکن PDF هم کار می‌دهد."
+      2: "روی Choose File بزنید و فایل کوچک‌تر را انتخاب کنید."
+      3: "روی Upload بزنید و صبر کنید تا نام فایل نشان داده شود."
+      4: "اگر باز هم کار نکرد، روی Back بزنید و این مرحله را دوباره شروع کنید."
+    cautions:
+      - "دکمه Submit Application تمام درخواست شما را می‌فرستد. فقط وقتی همه مراحل تمام شد آن را بزنید."
+  ar:
+    screen_summary: "هذه الخطوة ٣ من ٥ في موقع للإعانات. يطلب منك رفع إثبات الدخل. الملف الذي اخترته لم يُقبل لأنه كبير جدًا."
+    error_meaning: "الصورة التي اخترتها حجمها 8.4 MB. هذا الموقع يقبل الملفات حتى 5 MB فقط، لذلك لم تُرفع."
+    steps:
+      1: "صغّر الصورة، أو التقط صورة جديدة دون تكبير. المسح الضوئي بصيغة PDF يصلح أيضًا."
+      2: "اضغط على Choose File واختر الملف الأصغر."
+      3: "اضغط على Upload وانتظر حتى يظهر اسم الملف."
+      4: "إذا لم ينجح ذلك، اضغط على Back وابدأ هذه الخطوة من جديد."
+    cautions:
+      - "زر Submit Application يرسل طلبك كله. اضغط عليه فقط عندما تنتهي كل الخطوات."

@@ -1,33 +1,57 @@
-"""``GET/POST /v1/language-packs`` (API_CONTRACT §3.3, §3.4). WP1 adds chunking, QA, disk cache."""
+"""``GET/POST /v1/language-packs`` (API_CONTRACT §3.3, §3.4; D-25).
 
-import hashlib
-import json
-import re
-from datetime import UTC, datetime
+Route functions carry no docstrings on purpose: FastAPI turns them into OpenAPI descriptions,
+and ``openapi.json`` is a frozen snapshot.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
 from proxyhealth_api.ai.failover import AIService
-from proxyhealth_api.ai.provider import Part, Task
-from proxyhealth_api.analysis.pipeline import parsed_as
 from proxyhealth_api.contracts.common import LanguageTag
-from proxyhealth_api.contracts.enums import DigitSystem, Direction, ErrorCode, PackSource, PackTier
+from proxyhealth_api.contracts.enums import ErrorCode
 from proxyhealth_api.contracts.langpack import LanguagePack, LanguagePackRequest
-from proxyhealth_api.contracts.model_out import LanguagePackModelOut, LanguageResolveOut
 from proxyhealth_api.deps import get_ai, get_languages, get_pack_cache, get_packs, get_request_id
 from proxyhealth_api.errors import ApiError, error_responses
+from proxyhealth_api.logging_ import log_event
 from proxyhealth_api.packs.base import BasePack, LanguageTable
 from proxyhealth_api.packs.cache import PackCache
+from proxyhealth_api.packs.generator import Target, generate_pack
+from proxyhealth_api.packs.resolve import Resolution, resolve_language
+from proxyhealth_api.ratelimit import rate_limit_dependency
 
 router = APIRouter(prefix="/v1/language-packs", tags=["language-packs"])
-
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def _pack_response(pack: LanguagePack) -> JSONResponse:
     return JSONResponse(content=pack.model_dump(mode="json"), headers={"ETag": pack.etag})
+
+
+def etag_matches(if_none_match: str | None, etag: str) -> bool:
+    """RFC 9110 weak comparison over a list; accepts quoted or bare tags and ``*``."""
+    if not if_none_match:
+        return False
+    for raw in if_none_match.split(","):
+        candidate = raw.strip()
+        if candidate == "*":
+            return True
+        if candidate.startswith("W/"):
+            candidate = candidate[2:]
+        if candidate.strip('"') == etag:
+            return True
+    return False
+
+
+def _check_version(given: str | None, base: BasePack) -> None:
+    if given is not None and given != base.version:
+        raise ApiError(
+            ErrorCode.pack_version_mismatch,
+            409,
+            "Client base pack hash differs from the server's.",
+            details={"server_pack_version": base.version},
+        )
 
 
 @router.get(
@@ -45,45 +69,41 @@ async def get_language_pack(
     base: Annotated[BasePack, Depends(get_packs)],
     pack_version: str | None = None,
 ) -> Response:
-    if pack_version is not None and pack_version != base.version:
-        raise ApiError(
-            ErrorCode.pack_version_mismatch,
-            409,
-            "Client base pack hash differs from the server's.",
-            details={"server_pack_version": base.version},
-        )
-    pack = cache.bundled(tag) or cache.get(tag, base.version)
+    _check_version(pack_version, base)
+    pack = cache.lookup(tag)
     if pack is None:
-        raise ApiError(ErrorCode.not_found, 404, f"No language pack for tag {tag!r}.")
-    if request.headers.get("if-none-match") == pack.etag:
+        raise ApiError(ErrorCode.not_found, 404, "No bundled or cached pack for this tag.")
+    if etag_matches(request.headers.get("if-none-match"), pack.etag):
         return Response(status_code=304, headers={"ETag": pack.etag})
     return _pack_response(pack)
 
 
-async def _resolve_tag(
-    req: LanguagePackRequest, languages: LanguageTable, ai: AIService, rid: str
-) -> str:
-    if req.hint_tag:
-        return req.hint_tag
-    known = languages.resolve(req.language_query)
-    if known:
-        return known
-    outcome = await ai.generate(
-        task=Task.resolve_language, parts=[Part.of_text(req.language_query)], system="",
-        schema=LanguageResolveOut, request_id=rid, hints={"language_query": req.language_query},
-    )  # fmt: skip
-    resolved = parsed_as(outcome, LanguageResolveOut)
-    if resolved.language_tag:
-        return resolved.language_tag
-    slug = _SLUG_RE.sub("-", req.language_query.lower()).strip("-")[:32]
-    if not slug:
-        raise ApiError(
-            ErrorCode.language_unresolved, 422, "The typed language could not be resolved."
-        )
-    return f"x-{slug}"
+def _hinted(req: LanguagePackRequest, languages: LanguageTable, cache: PackCache) -> str | None:
+    """The client's ``hint_tag`` counts only when the server already knows that tag."""
+    hint = req.hint_tag
+    if hint and (languages.get(hint) is not None or cache.lookup(hint) is not None):
+        return hint
+    return None
 
 
-@router.post("", response_model=LanguagePack, responses=error_responses(400, 409, 422, 429, 503))
+def _target(resolution: Resolution, languages: LanguageTable) -> Target:
+    return Target(
+        tag=resolution.tag,
+        name_en=resolution.name_en,
+        name_native=resolution.name_native,
+        entry=languages.get(resolution.tag),
+        direction=resolution.direction,
+        script=resolution.script,
+        digit_system=resolution.digit_system,
+    )
+
+
+@router.post(
+    "",
+    response_model=LanguagePack,
+    responses=error_responses(400, 409, 422, 429, 503),
+    dependencies=[Depends(rate_limit_dependency())],  # generation spends fast-tier quota (D-08)
+)
 async def create_language_pack(
     req: LanguagePackRequest,
     rid: Annotated[str, Depends(get_request_id)],
@@ -92,58 +112,26 @@ async def create_language_pack(
     base: Annotated[BasePack, Depends(get_packs)],
     languages: Annotated[LanguageTable, Depends(get_languages)],
 ) -> Response:
-    if req.pack_version != base.version:
-        raise ApiError(
-            ErrorCode.pack_version_mismatch,
-            409,
-            "Client base pack hash differs from the server's.",
-            details={"server_pack_version": base.version},
+    _check_version(req.pack_version, base)
+    hinted = _hinted(req, languages, cache)
+    if hinted is not None:
+        entry = languages.get(hinted)
+        resolution = Resolution(
+            tag=hinted,
+            source="table",
+            name_en=entry.name_en if entry else req.language_query,
+            name_native=entry.name_native if entry else req.language_query,
         )
-    tag = await _resolve_tag(req, languages, ai, rid)
-    existing = cache.bundled(tag) or cache.get(tag, base.version)
+    else:
+        resolution = await resolve_language(req.language_query, languages, ai, request_id=rid)
+    existing = cache.lookup(resolution.tag)
     if existing is not None:
         return _pack_response(existing)
-    async with cache.single_flight(tag):
-        cached = cache.get(tag, base.version)
+    async with cache.single_flight(resolution.tag):
+        cached = cache.get(resolution.tag, base.version)
         if cached is not None:
             return _pack_response(cached)
-        entry = languages.get(tag)
-        strings_json = json.dumps(base.strings, ensure_ascii=False, sort_keys=True)
-        outcome = await ai.generate(
-            task=Task.langpack_chunk, parts=[Part.of_text(strings_json)], system="",
-            schema=LanguagePackModelOut, request_id=rid,
-            hints={
-                "language_tag": tag, "strings_json": strings_json,
-                "language_name_en": entry.name_en if entry else req.language_query,
-                "language_name_native": entry.name_native if entry else req.language_query,
-            },
-        )  # fmt: skip
-        out = parsed_as(outcome, LanguagePackModelOut)
-        strings = dict(base.strings)
-        translated = {kv.key: kv.value for kv in out.strings if kv.key in strings and kv.value}
-        strings.update(translated)
-        fallback = sorted(k for k in strings if k not in translated)
-        pack = LanguagePack(
-            language_tag=tag,
-            language_name_native=entry.name_native if entry else out.language_name_native,
-            language_name_en=entry.name_en if entry else out.language_name_en,
-            direction=entry.direction if entry else Direction(out.direction),
-            script=entry.script if entry else out.script,
-            digit_system=entry.digit_system if entry else DigitSystem(out.digit_system),
-            font_hint=entry.font_hint if entry else None,
-            tier=entry.tier if entry else PackTier.tier_3,
-            source=PackSource.generated,
-            pack_version=base.version,
-            etag=hashlib.sha256(json.dumps(strings, sort_keys=True).encode()).hexdigest(),
-            strings=strings,
-            fallback_keys=fallback,
-            coverage=1 - len(fallback) / max(len(strings), 1),
-            machine_translated=True,
-            reviewed_by=None,
-            confidence=out.confidence,
-            generated_at=datetime.now(UTC),
-            tts_tag=entry.tts_tag if entry else None,
-            tts_fallback_tag=entry.tts_fallback_tag if entry else None,
-        )
-        cache.put(pack)
-        return _pack_response(pack)
+        generated = await generate_pack(_target(resolution, languages), base, ai, request_id=rid)
+        cache.put(generated.pack)
+        log_event(request_id=rid, route="langpack.generated", target_language=resolution.tag)
+        return _pack_response(generated.pack)

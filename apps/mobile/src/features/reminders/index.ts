@@ -1,26 +1,42 @@
-// Seam stub (BUILD_PLAN §4.2 / §5.0). Owner after M0: WP6. Keep every export name and signature.
+// Reminders feature (WP6 lane 6A; BUILD_PLAN §4.2 seam, PRODUCT_SPEC §10 / S14).
+// Fixed seam: `useReminders(): { scheduleForDemand, list, remove }` and `ScheduleOutcome`.
+// Additions (widenings only): S14 screen, own dates, toggles, .ics helpers, pure schedule math,
+// notification-tap routing and the app-start reschedule.
 
-import type { AnalysisResult, Demand } from '@/api/types';
-import type { Reminder } from '@/storage';
-
-export type ScheduleOutcome = 'scheduled' | 'ics' | 'denied' | 'not_eligible';
-
-export interface RemindersApi {
-  /** 7/3/1-day 9 am reminders on native; `.ics` on web; generic bodies unless opted in. */
-  scheduleForDemand(
-    analysis: AnalysisResult,
-    demand: Demand,
-    documentId?: string,
-  ): Promise<ScheduleOutcome>;
-  list(): Promise<Reminder[]>;
-  remove(id: string): Promise<void>;
-}
-
-/** Day-0 stub: nothing is eligible and the list is empty. */
-export function useReminders(): RemindersApi {
-  return {
-    scheduleForDemand: () => Promise.resolve('not_eligible'),
-    list: () => Promise.resolve([]),
-    remove: () => Promise.resolve(),
-  };
-}
+export { RemindersScreen } from './RemindersScreen';
+export { useReminderTapRouting } from './useReminderTapRouting';
+export {
+  rescheduleLostReminders,
+  remindersApi,
+  remindersDeps,
+  useReminders,
+  type RemindersApi,
+  type ScheduleOutcome,
+} from './useReminders';
+export {
+  computeFireTimes,
+  daysUntil,
+  nextStatedDate,
+  notificationText,
+  parseLocalDay,
+  REMINDER_HOUR,
+  REMINDER_OFFSETS_DAYS,
+  reminderEligibility,
+  reminderUrl,
+  toIsoDay,
+  type Eligibility,
+  type FireSlot,
+} from './schedule';
+export {
+  createRemindersService,
+  eventDateOf,
+  findDemand,
+  isOwnReminder,
+  ownDateOf,
+  validateOwnDate,
+  OWN_NOTE_MAX,
+  OWN_TITLE_MAX,
+  type OwnDateInput,
+  type RemindersDeps,
+} from './service';
+export { icsEvents, rescheduleMissing, setReminderEnabled } from './manage';

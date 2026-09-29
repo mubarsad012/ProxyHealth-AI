@@ -1,0 +1,99 @@
+# data/rules/fixed_notices.yaml — WP2 (D-20; DOCUMENT_TAXONOMY §7).
+#
+# Fixed high-severity red-flag cards. The client renders `t(fixed_copy_key)`; the server fills
+# `RedFlag.text` with the target-language copy (English fallback). Every `fixed_copy_key` must
+# start with `fixed.` and exist in `data/langpacks/en.json` (`test_keys_exist.py`).
+#
+# Condition grammar (`when`), evaluated by `analysis/fixed_notices.py`:
+#   always · form_numbers_any (hyphen-insensitive, against entities.form_numbers)
+#   text_regex_any / text_regex_none (case-insensitive, NFKC-normalized transcript)
+#   date_on_or_after: {role, iso, when_missing: show|hide}  (a verified *stated* Demand of that role)
+#   has_verified_role · has_red_flag · scam_risk (likely|possible)
+#   document_type_confidence_min (default medium: a low-confidence type shows no type card)
+# `document_types: [any]` applies to every type (used with a non-trivial condition only).
+version: "2026-09-27"
+notices:
+  - id: jury_citizenship
+    document_types: [jury_summons]
+    when: always
+    kind: jury_citizenship_warning
+    severity: high
+    fixed_copy_key: fixed.jury_summons
+
+  - id: ead_receipt
+    document_types: [uscis_receipt, ead_related, i9]
+    when:
+      form_numbers_any: ["I-765"]
+      text_regex_any: ["I-?797C", "receipt notice", "we received your"]
+      text_regex_none: ["Temporary Protected Status", "\\bA12\\b", "\\bC19\\b"]
+      date_on_or_after: {role: notice_date, iso: "2025-10-30", when_missing: show}
+    kind: ead_receipt_not_work_authorization
+    severity: high
+    fixed_copy_key: fixed.uscis_receipt_i765
+
+  - id: not_a_court_order
+    document_types: [pay_or_quit]
+    when: always
+    kind: not_a_court_order
+    severity: high
+    fixed_copy_key: fixed.pay_or_quit
+
+  - id: court_date_deadline_eviction
+    document_types: [eviction_summons]
+    when: always
+    kind: court_date_is_the_deadline
+    severity: high
+    fixed_copy_key: fixed.eviction_summons
+
+  - id: no_fee_waiver
+    document_types: [asylum_fee_notice]
+    when: always
+    kind: no_fee_waiver
+    severity: high
+    fixed_copy_key: fixed.asylum_fee_notice
+
+  - id: address_multi_agency
+    document_types: [nta, hearing_notice]
+    when: always
+    kind: address_change_multi_agency
+    severity: high
+    fixed_copy_key: fixed.address_change_multi_agency
+
+  # §7.2 additions — enabled because WP0 added the keys at M0 (DECISIONS §14 CL-010/CL-011).
+  - id: court_date_deadline_immigration
+    document_types: [nta, hearing_notice]
+    when:
+      has_verified_role: hearing_date
+    kind: court_date_is_the_deadline
+    severity: high
+    fixed_copy_key: fixed.court_date_is_the_deadline
+
+  - id: eob_not_a_bill
+    document_types: [eob]
+    when: always
+    kind: other
+    severity: medium
+    fixed_copy_key: fixed.eob_not_a_bill
+
+  - id: traffic_immigration
+    document_types: [traffic_court]
+    when: always
+    kind: other
+    severity: high
+    fixed_copy_key: fixed.traffic_court_immigration
+
+  - id: conditional_card
+    document_types: [green_card_related]
+    when:
+      text_regex_any: ["conditional", "\\bCR[1-9]\\b", "2-?year"]
+    kind: other
+    severity: medium
+    fixed_copy_key: fixed.conditional_card
+
+  - id: notario_not_lawyer
+    document_types: [any]
+    when:
+      has_red_flag: notario
+    kind: notario
+    severity: high
+    fixed_copy_key: fixed.notario_not_a_lawyer

@@ -1,4 +1,4 @@
-"""Sample papers (D-29; WP7). WP0 ships one inline fixture so the mock works from hour one."""
+"""Sample papers (D-29; WP7): fixture store, perceptual hash and the mock's canned outputs."""
 
 from proxyhealth_api.demo.fixtures import Fixture, FixtureStore
 

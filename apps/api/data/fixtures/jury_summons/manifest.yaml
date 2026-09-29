@@ -1,0 +1,34 @@
+id: jury_summons
+title_key: fixture.jury_summons
+title_en: Jury summons from a court
+document_type: jury_summons
+category: civic
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/jury_summons/pages/1
+dhash: 814085901921f406c018c048008007000c0138005018206001c0038004012206
+page_dhashes:
+- 814085901921f406c018c048008007000c0138005018206001c0038004012206
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - medium
+  nearest_date_iso: '2026-10-23'
+  date_kinds:
+    d1: stated
+    d2: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  fixed_keys:
+  - fixed.jury_summons
+  fixed_severity: high
+  disclaimer_kind: legal_information_only
+  state: VA

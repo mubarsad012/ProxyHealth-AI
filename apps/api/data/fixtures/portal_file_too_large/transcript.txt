@@ -1,0 +1,10 @@
+Sample State Benefits Portal
+Step 3 of 5: Upload your documents
+Document type: Proof of income
+File exceeds the maximum size of 5 MB
+Your file: paystub_photo.jpg (8.4 MB)
+Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.
+Choose File
+Upload
+Back
+Submit Application

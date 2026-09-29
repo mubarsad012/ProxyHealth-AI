@@ -1,1 +1,278 @@
-[]
+[
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "other",
+    "document_type": "unknown",
+    "id": "blurry_unreadable_page",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/blurry_unreadable_page/pages/1",
+    "title_en": "Blurry page that cannot be read",
+    "title_key": "fixture.blurry_unreadable_page"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "medical",
+    "document_type": "medical_bill",
+    "id": "inova_final_notice",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/inova_final_notice/pages/1",
+    "title_en": "Hospital bill marked final notice",
+    "title_key": "fixture.inova_final_notice"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "medical",
+    "document_type": "insurance_denial",
+    "id": "insurance_denial_180d",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/insurance_denial_180d/pages/1",
+    "title_en": "Insurance denial letter with 180 days to appeal",
+    "title_key": "fixture.insurance_denial_180d"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "tax",
+    "document_type": "irs_notice",
+    "id": "irs_cp_notice",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/irs_cp_notice/pages/1",
+    "title_en": "IRS letter about your taxes",
+    "title_key": "fixture.irs_cp_notice"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "civic",
+    "document_type": "jury_summons",
+    "id": "jury_summons",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/jury_summons/pages/1",
+    "title_en": "Jury summons from a court",
+    "title_key": "fixture.jury_summons"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "benefits",
+    "document_type": "medicaid_renewal",
+    "id": "medicaid_address_confirmation",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/medicaid_address_confirmation/pages/1",
+    "title_en": "Medicaid letter asking to confirm your address",
+    "title_key": "fixture.medicaid_address_confirmation"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "court",
+    "document_type": "nta",
+    "id": "nta_hearing_date",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/nta_hearing_date/pages/1",
+    "title_en": "Immigration court notice with a hearing date",
+    "title_key": "fixture.nta_hearing_date"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "benefits",
+    "document_type": "unknown",
+    "id": "portal_file_too_large",
+    "kind": "screenshot",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/portal_file_too_large/pages/1",
+    "title_en": "Benefits portal: file too large",
+    "title_key": "fixture.portal_file_too_large"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "medical",
+    "document_type": "prescription_label",
+    "id": "prescription_label",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/prescription_label/pages/1",
+    "title_en": "Prescription label from a pharmacy",
+    "title_key": "fixture.prescription_label"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "immigration",
+    "document_type": "other_notice",
+    "id": "scam_gift_card_letter",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/scam_gift_card_letter/pages/1",
+    "title_en": "Letter claiming to be USCIS and demanding gift cards",
+    "title_key": "fixture.scam_gift_card_letter"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "school",
+    "document_type": "immunization_notice",
+    "id": "school_immunization_notice",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/school_immunization_notice/pages/1",
+    "title_en": "School notice about your child's vaccines",
+    "title_key": "fixture.school_immunization_notice"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "benefits",
+    "document_type": "snap_notice",
+    "id": "snap_interview_notice",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/snap_interview_notice/pages/1",
+    "title_en": "SNAP letter with an interview appointment",
+    "title_key": "fixture.snap_interview_notice"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "housing",
+    "document_type": "lease",
+    "id": "spanish_lease",
+    "kind": "document",
+    "language_of_document": "es",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/spanish_lease/pages/1",
+    "title_en": "Apartment lease written in Spanish",
+    "title_key": "fixture.spanish_lease"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "court",
+    "document_type": "traffic_court",
+    "id": "traffic_court_notice",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/traffic_court_notice/pages/1",
+    "title_en": "Traffic court notice with a court date",
+    "title_key": "fixture.traffic_court_notice"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "immigration",
+    "document_type": "uscis_receipt",
+    "id": "uscis_i797c_receipt_i765",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/uscis_i797c_receipt_i765/pages/1",
+    "title_en": "USCIS receipt notice for a work permit (Form I-765)",
+    "title_key": "fixture.uscis_i797c_receipt_i765"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "immigration",
+    "document_type": "uscis_rfe",
+    "id": "uscis_rfe_87d",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/uscis_rfe_87d/pages/1",
+    "title_en": "USCIS request for evidence with an 87-day deadline",
+    "title_key": "fixture.uscis_rfe_87d"
+  },
+  {
+    "available_target_languages": [
+      "en",
+      "es",
+      "prs",
+      "ar"
+    ],
+    "category": "housing",
+    "document_type": "pay_or_quit",
+    "id": "va_pay_or_quit_14d",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/va_pay_or_quit_14d/pages/1",
+    "title_en": "Virginia 14-day pay-or-quit notice from a landlord",
+    "title_key": "fixture.va_pay_or_quit_14d"
+  },
+  {
+    "available_target_languages": [
+      "en"
+    ],
+    "category": "employment",
+    "document_type": "w2_1099",
+    "id": "w2_form",
+    "kind": "document",
+    "language_of_document": "en",
+    "pages": 1,
+    "thumbnail_url": "/v1/demo/fixtures/w2_form/pages/1",
+    "title_en": "W-2 wage and tax form from an employer",
+    "title_key": "fixture.w2_form"
+  }
+]

@@ -1,0 +1,167 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional landlord and address. The printed pay-by date makes the date `stated` (D-11: no
+# eviction period is ever computed).
+id: va_pay_or_quit_14d
+kind: document
+title_en: "Virginia 14-day pay-or-quit notice from a landlord"
+document_type: pay_or_quit
+category: housing
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [120, 30, 30], logo: none, watermark_angle: 22}
+pages:
+  - - {text: "Oak Hollow Property Management LLC", style: letterhead, ref: sender}
+    - {text: "Oak Hollow Apartments - Alexandria, Virginia", style: letterhead_sub, ref: property}
+    - {text: "Date: September 24, 2026", style: right, ref: notice_date}
+    - {text: "14-DAY NOTICE TO PAY RENT OR QUIT", style: title, ref: heading}
+    - {text: "To: SAMPLE TENANT, Oak Hollow Apartments, Unit 12", style: body, ref: to}
+    - {text: "You owe rent of $1,450.00 for September 2026.", style: bold, ref: owed}
+    - {text: "You must pay the full amount by October 8, 2026, or your lease will be terminated.", style: bold, ref: pay_by}
+    - {text: "If the rent is not paid within 14 days of the date of this notice, the landlord may file an eviction case in court.", style: body, ref: relative}
+    - {text: "This notice is given under Virginia Code § 55.1-1245.", style: small, ref: code}
+    - {text: "Pay at the leasing office or call (703) 555-0175 with questions.", style: body, ref: phone}
+    - {text: "Signed: Property Manager, Oak Hollow Property Management LLC", style: body, ref: signed}
+expected:
+  urgency_level: [high]
+  nearest_date_iso: "2026-10-08"
+  date_kinds: {d2: stated, d3: unresolved}
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  fixed_keys: [fixed.pay_or_quit]
+  disclaimer_kind: housing_information_only
+  resource_tags_include: [eviction]
+  state: VA
+out:
+  base:
+    sender_as_written: "Oak Hollow Property Management LLC"
+    sender_kind: landlord
+    summary_title: "Landlord notice about unpaid rent"
+    summary_body: "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order."
+    summary_span_ids: ["@sender", "@owed", "@pay_by"]
+    demands:
+      - id: d1
+        kind: amount
+        text: "The notice says you owe $1,450.00 in rent for September 2026."
+        value_verbatim: "$1,450.00"
+        source_quote: "You owe rent of $1,450.00 for September 2026."
+        span_ids: ["@owed"]
+        amount_text: "$1,450.00"
+        currency: USD
+        role: payment_due
+        confidence: high
+      - id: d2
+        kind: deadline
+        text: "The notice gives October 8, 2026 as the date to pay the full amount."
+        value_verbatim: "October 8, 2026"
+        source_quote: "You must pay the full amount by October 8, 2026, or your lease will be terminated."
+        span_ids: ["@pay_by"]
+        date_text: "October 8, 2026"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d3
+        kind: relative_deadline
+        text: "The notice also mentions 14 days from the date of the notice. Ask the landlord which date this means."
+        value_verbatim: "within 14 days of the date of this notice"
+        source_quote: "If the rent is not paid within 14 days of the date of this notice, the landlord may file an eviction case in court."
+        span_ids: ["@relative"]
+        relative_rule_text: "within 14 days of the date of this notice"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d4
+        kind: contact
+        text: "Leasing office phone, from your paper: (703) 555-0175."
+        value_verbatim: "(703) 555-0175"
+        source_quote: "Pay at the leasing office or call (703) 555-0175 with questions."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Talk to a housing lawyer or counselor before the date on this paper.", kind: professional, resource_tags: [eviction, housing_counseling], span_ids: ["@heading"], demand_id: d2}
+      - {id: s2, text: "Call a rent help program. They often need this notice and your lease.", kind: call, resource_tags: [rent_assistance], span_ids: ["@owed"], demand_id: d1}
+      - {id: s3, text: "Gather your lease and any rent receipts.", kind: gather, resource_tags: [], span_ids: ["@owed"], demand_id: d1}
+    glossary:
+      - {term_as_written: "PAY RENT OR QUIT", explanation: "Pay the rent, or move out. It is a warning from the landlord."}
+      - {term_as_written: "terminated", explanation: "Ended."}
+      - {term_as_written: "eviction case", explanation: "A court case a landlord files to make a tenant leave. Only a judge can order it."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I pay part of the rent now and the rest later?"
+      - "Where and how can I pay the $1,450.00?"
+      - "Will you give me a receipt when I pay?"
+    clerk_need_en: "a notice from my landlord about rent - what it says and the date on it"
+    resource_tags: [eviction, housing_counseling, rent_assistance]
+    institutions_as_written: ["Oak Hollow Property Management LLC"]
+    form_numbers: []
+    geo_state: VA
+    geo_city: Alexandria
+    legibility: good
+  es:
+    summary_title: "Aviso del arrendador sobre renta no pagada"
+    summary_body: "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del 8 de octubre de 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte."
+    demands:
+      d1: {text: "El aviso dice que usted debe $1,450.00 de renta de septiembre de 2026."}
+      d2: {text: "El aviso da el 8 de octubre de 2026 como la fecha para pagar el monto completo."}
+      d3: {text: "El aviso también menciona 14 días desde la fecha del aviso. Pregunte al arrendador qué fecha significa."}
+      d4: {text: "Teléfono de la oficina, de su papel: (703) 555-0175."}
+    plan_steps:
+      s1: {text: "Hable con un abogado o consejero de vivienda antes de la fecha de este papel."}
+      s2: {text: "Llame a un programa de ayuda con la renta. Muchas veces piden este aviso y su contrato."}
+      s3: {text: "Reúna su contrato de renta y sus recibos de pago."}
+    glossary:
+      "PAY RENT OR QUIT": "Pague la renta o múdese. Es una advertencia del arrendador."
+      "terminated": "Terminado."
+      "eviction case": "Un caso en la corte que un arrendador presenta para que un inquilino se vaya. Solo un juez puede ordenarlo."
+    questions_to_ask:
+      - "¿Puedo pagar parte de la renta ahora y el resto después?"
+      - "¿Dónde y cómo puedo pagar los $1,450.00?"
+      - "¿Me dará un recibo cuando pague?"
+    translated_pages:
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
+  prs:
+    summary_title: "اطلاعیه صاحب‌خانه درباره کرایه پرداخت‌نشده"
+    summary_body: "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا ۸ اکتبر ۲۰۲۶ پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست."
+    demands:
+      d1: {text: "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید."}
+      d2: {text: "اطلاعیه ۸ اکتبر ۲۰۲۶ را روز پرداخت کامل مبلغ می‌گوید."}
+      d3: {text: "اطلاعیه ۱۴ روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است."}
+      d4: {text: "تلفون دفتر کرایه، از کاغذ شما: (703) 555-0175."}
+    plan_steps:
+      s1: {text: "پیش از تاریخ این کاغذ با یک وکیل یا مشاور مسکن صحبت کنید."}
+      s2: {text: "با یک برنامه کمک کرایه تماس بگیرید. آنها اکثراً این اطلاعیه و قرارداد کرایه شما را می‌خواهند."}
+      s3: {text: "قرارداد کرایه و رسیدهای پرداخت خود را جمع کنید."}
+    glossary:
+      "PAY RENT OR QUIT": "کرایه را بپردازید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است."
+      "terminated": "پایان یافته."
+      "eviction case": "قضیه‌ای در محکمه که صاحب‌خانه برای بیرون کردن کرایه‌نشین ثبت می‌کند. تنها قاضی می‌تواند آن را حکم کند."
+    questions_to_ask:
+      - "آیا می‌توانم بخشی از کرایه را حالا و باقی را بعداً بپردازم؟"
+      - "$1,450.00 را کجا و چطور پرداخت کنم؟"
+      - "وقتی پرداخت کنم به من رسید می‌دهید؟"
+    translated_pages:
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: ۲۴ سپتمبر ۲۰۲۶\nاطلاعیه ۱۴ روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد ۱۲\nشما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید.\nشما باید تمام مبلغ را تا ۸ اکتبر ۲۰۲۶ پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف ۱۴ روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
+  ar:
+    summary_title: "إشعار من المالك عن إيجار غير مدفوع"
+    summary_body: "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل ٨ أكتوبر ٢٠٢٦ أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة."
+    demands:
+      d1: {text: "يقول الإشعار إن عليك $1,450.00 إيجار شهر سبتمبر ٢٠٢٦."}
+      d2: {text: "يذكر الإشعار ٨ أكتوبر ٢٠٢٦ موعدًا لدفع المبلغ كاملًا."}
+      d3: {text: "يذكر الإشعار أيضًا ١٤ يومًا من تاريخ الإشعار. اسأل المالك عن التاريخ المقصود."}
+      d4: {text: "هاتف مكتب التأجير، من ورقتك: (703) 555-0175."}
+    plan_steps:
+      s1: {text: "تحدث مع محامٍ أو مستشار إسكان قبل التاريخ المكتوب على هذه الورقة."}
+      s2: {text: "اتصل ببرنامج للمساعدة في الإيجار. غالبًا يطلبون هذا الإشعار وعقد الإيجار."}
+      s3: {text: "اجمع عقد الإيجار وإيصالات الدفع."}
+    glossary:
+      "PAY RENT OR QUIT": "ادفع الإيجار أو اخرج من السكن. هذا تحذير من المالك."
+      "terminated": "منتهٍ."
+      "eviction case": "قضية في المحكمة يرفعها المالك لإخراج المستأجر. القاضي وحده يمكنه أن يأمر بذلك."
+    questions_to_ask:
+      - "هل يمكنني دفع جزء من الإيجار الآن والباقي لاحقًا؟"
+      - "أين وكيف أدفع $1,450.00؟"
+      - "هل ستعطيني إيصالًا عندما أدفع؟"
+    translated_pages:
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الإسكندرية، فرجينيا\nالتاريخ: ٢٤ سبتمبر ٢٠٢٦\nإشعار لمدة ١٤ يومًا بدفع الإيجار أو الإخلاء\nإلى: SAMPLE TENANT، Oak Hollow Apartments، الوحدة ١٢\nعليك إيجار قدره $1,450.00 عن شهر سبتمبر ٢٠٢٦.\nيجب أن تدفع المبلغ كاملًا قبل ٨ أكتوبر ٢٠٢٦، وإلا سينتهي عقد الإيجار.\nإذا لم يُدفع الإيجار خلال ١٤ يومًا من تاريخ هذا الإشعار، قد يرفع المالك قضية إخلاء في المحكمة.\nيُعطى هذا الإشعار بموجب قانون فرجينيا § 55.1-1245.\nادفع في مكتب التأجير أو اتصل على (703) 555-0175 إذا كانت لديك أسئلة.\nالتوقيع: مدير العقار، Oak Hollow Property Management LLC"

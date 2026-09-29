@@ -1,0 +1,35 @@
+id: inova_final_notice
+title_key: fixture.inova_final_notice
+title_en: Hospital bill marked final notice
+document_type: medical_bill
+category: medical
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/inova_final_notice/pages/1
+dhash: 14c200600e10f201c0028008c8808740bc80e0014010006802900c0018019005
+page_dhashes:
+- 14c200600e10f201c0028008c8808740bc80e0014010006802900c0018019005
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - medium
+  nearest_date_iso: '2026-10-28'
+  date_kinds:
+    d2: stated
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  red_flag_kinds:
+  - urgency_pressure
+  clerk_appended_keys:
+  - clerk.interpreter_hhs
+  disclaimer_kind: medical_information_only
+  first_resource_id: inova_fa
+  state: VA

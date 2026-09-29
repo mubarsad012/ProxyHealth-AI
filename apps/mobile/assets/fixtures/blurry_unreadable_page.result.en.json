@@ -1,0 +1,118 @@
+{
+  "analysis_id": "sample-blurry_unreadable_page-en",
+  "category": "other",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "understanding a paper I received",
+    "need_line_source": "ai",
+    "translated": "⟦en⟧ understanding a paper I received"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [],
+  "detected_language": "und",
+  "disclaimer_kind": "general_information",
+  "disclaimers": [
+    "general_information",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "unknown",
+  "document_type_confidence": "low",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": null,
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": []
+  },
+  "glossary": [],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [],
+  "quality": {
+    "legibility": "poor",
+    "pages_received": 1,
+    "pages_unreadable": [
+      1
+    ],
+    "readable": false,
+    "reason": "blur"
+  },
+  "questions_to_ask": [],
+  "red_flags": [],
+  "request_id": "offline-blurry_unreadable_page-en",
+  "resource_preview": [],
+  "resource_tags": [],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": null,
+  "sender_kind": "unknown",
+  "summary": {
+    "body": "The photo is blurry and pale. I could not read the words. Try again in brighter light with the page flat and the camera held still.",
+    "body_en": "The photo is blurry and pale. I could not read the words. Try again in brighter light with the page flat and the camera held still.",
+    "span_ids": [],
+    "title": "This page is too blurry to read"
+  },
+  "target_language": "en",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": ""
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 0,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

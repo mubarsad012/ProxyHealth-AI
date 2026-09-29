@@ -1,0 +1,97 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional insurer. The notice date is chosen so the 180-day estimate lands 15 days after `today`.
+id: insurance_denial_180d
+kind: document
+title_en: "Insurance denial letter with 180 days to appeal"
+document_type: insurance_denial
+category: medical
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [90, 40, 120], logo: right, watermark_angle: 36}
+pages:
+  - - {text: "Blue Ridge Sample Health Plan", style: letterhead, ref: sender}
+    - {text: "Member Appeals Department", style: letterhead_sub, ref: dept}
+    - {text: "Date of this notice: April 20, 2026", style: right, ref: notice_date}
+    - {text: "Member ID: ******2468", style: right, ref: member_id}
+    - {text: "Notice of Adverse Benefit Determination", style: title, ref: heading}
+    - {text: "Member: SAMPLE MEMBER", style: body, ref: member}
+    - {text: "Service requested: MRI of the lower back", style: body, ref: service}
+    - {text: "Decision: Denied. The plan found that the service was not medically necessary.", style: bold, ref: decision}
+    - {text: "You have the right to appeal this decision.", style: subheading, ref: right}
+    - {text: "You must ask for an internal appeal within 180 days of the date of this notice.", style: body, ref: window}
+    - {text: "To appeal, send the enclosed appeal form and any letters from your doctor to the Member Appeals Department.", style: body, ref: how}
+    - {text: "Questions? Call Member Services at (804) 555-0199.", style: body, ref: phone}
+    - {text: "You may also ask for a copy of the rules the plan used to make this decision, free of charge.", style: small, ref: rules}
+expected:
+  urgency_level: [medium]
+  nearest_date_iso: "2026-10-17"
+  date_kinds: {d1: stated, d2: estimated}
+  rule_ids: {d2: aca_internal_appeal_180d}
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  disclaimer_kind: medical_information_only
+out:
+  base:
+    sender_as_written: "Blue Ridge Sample Health Plan"
+    sender_kind: insurer
+    summary_title: "Your health plan decided not to pay for an MRI"
+    summary_body: "Blue Ridge Sample Health Plan decided not to pay for an MRI of the lower back. The letter gives a reason and says how to ask the plan to look again."
+    summary_span_ids: ["@sender", "@service", "@decision"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "The date of this notice is April 20, 2026."
+        value_verbatim: "April 20, 2026"
+        source_quote: "Date of this notice: April 20, 2026"
+        span_ids: ["@notice_date"]
+        date_text: "April 20, 2026"
+        role: notice_date
+        confidence: high
+      - id: d2
+        kind: relative_deadline
+        text: "The letter says to ask for an internal appeal within 180 days of the date of this notice."
+        value_verbatim: "within 180 days of the date of this notice"
+        source_quote: "You must ask for an internal appeal within 180 days of the date of this notice."
+        span_ids: ["@window"]
+        relative_rule_text: "within 180 days of the date of this notice"
+        anchor_span_id: "@notice_date"
+        role: response_due
+        confidence: high
+      - id: d3
+        kind: document_requested
+        text: "The letter lists what to send for an appeal: the appeal form and letters from your doctor."
+        value_verbatim: "the enclosed appeal form"
+        source_quote: "To appeal, send the enclosed appeal form and any letters from your doctor to the Member Appeals Department."
+        span_ids: ["@how"]
+        documents: ["the enclosed appeal form", "any letters from your doctor"]
+        role: response_due
+        confidence: high
+      - id: d4
+        kind: contact
+        text: "Phone for questions, from your paper: (804) 555-0199."
+        value_verbatim: "(804) 555-0199"
+        source_quote: "Questions? Call Member Services at (804) 555-0199."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Call the number on the letter and ask which date your appeal must arrive by.", kind: call, resource_tags: [], span_ids: ["@phone", "@window"], demand_id: d2}
+      - {id: s2, text: "Gather the letter, the enclosed appeal form, and any notes from your doctor.", kind: gather, resource_tags: [], span_ids: ["@how"], demand_id: d3}
+      - {id: s3, text: "Ask your doctor's office for a letter that explains why you need the MRI.", kind: ask, resource_tags: [], span_ids: ["@decision"], demand_id: d3}
+      - {id: s4, text: "A patient advocate or your state's consumer help program can help with an appeal.", kind: professional, resource_tags: [insurance_denial], span_ids: ["@right"], demand_id: null}
+    glossary:
+      - {term_as_written: "internal appeal", explanation: "Asking the health plan itself to look at its decision again."}
+      - {term_as_written: "medically necessary", explanation: "Care the plan agrees is needed for your health."}
+      - {term_as_written: "Adverse Benefit Determination", explanation: "A decision by the plan not to pay for a service."}
+    red_flags: []
+    questions_to_ask:
+      - "What is the exact last day to send my appeal?"
+      - "Can my doctor send the letter to you directly?"
+      - "Can I get a copy of the rules you used for this decision?"
+    clerk_need_en: "an insurance denial letter and the appeal date on it"
+    resource_tags: [insurance_denial]
+    institutions_as_written: ["Blue Ridge Sample Health Plan"]
+    form_numbers: []
+    legibility: good

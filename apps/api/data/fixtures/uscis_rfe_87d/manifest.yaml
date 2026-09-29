@@ -1,0 +1,34 @@
+id: uscis_rfe_87d
+title_key: fixture.uscis_rfe_87d
+title_en: USCIS request for evidence with an 87-day deadline
+document_type: uscis_rfe
+category: immigration
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+- es
+- prs
+- ar
+thumbnail_url: /v1/demo/fixtures/uscis_rfe_87d/pages/1
+dhash: 0140908808302ccee114c0086480d30084013808501c202000c0030007011206
+page_dhashes:
+- 0140908808302ccee114c0086480d30084013808501c202000c0030007011206
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - high
+  - critical
+  nearest_date_iso: '2026-10-13'
+  date_kinds:
+    d1: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  prepare_keys:
+  - bring_notice
+  - bring_receipt_number
+  disclaimer_kind: legal_information_only
+  verify_resource_id: uscis_contact

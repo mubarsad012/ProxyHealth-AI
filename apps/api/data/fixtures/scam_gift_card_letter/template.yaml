@@ -1,0 +1,135 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# A made-up scam letter impersonating an immigration agency. The "agency", the officer, the phone
+# (555-01xx) and the site (a subdomain of the reserved example.com) are all fictional.
+id: scam_gift_card_letter
+kind: document
+title_en: "Letter claiming to be USCIS and demanding gift cards"
+document_type: other_notice
+category: immigration
+language_of_document: en
+languages: [en, es, prs, ar]
+today: 2026-10-02
+render: {accent: [150, 20, 20], logo: left, watermark_angle: 20}
+pages:
+  - - {text: "U.S. Immigration Services Department", style: letterhead, ref: sender}
+    - {text: "Office of Immigration Fees and Penalties", style: letterhead_sub, ref: office}
+    - {text: "Date: September 29, 2026", style: right, ref: date}
+    - {text: "FINAL WARNING - IMMIGRATION FEE PAST DUE", style: title, ref: heading}
+    - {text: "Dear Applicant,", style: body, ref: dear}
+    - {text: "Our records show you owe an unpaid immigration processing fee of $950.", style: body, ref: owe}
+    - {text: "You must pay today with Google Play gift cards or you will be deported unless payment is received within 48 hours.", style: bold, ref: gift}
+    - {text: "Call Officer Daniel Sample at (202) 555-0147 and read the gift card numbers over the phone.", style: body, ref: call}
+    - {text: "USCIS payment portal: www.uscis-fee-payment.example.com", style: body, ref: url}
+    - {text: "Do not tell anyone about this letter. Keep this matter confidential.", style: body, ref: secret}
+expected:
+  urgency_level: [info]
+  demands_count: 1
+  scam_risk: likely
+  readable: true
+  resource_tags_first: scam_report
+  first_resource_ids: [dhs_oig, ftc_reportfraud]
+  disclaimer_kind: legal_information_only
+out:
+  base:
+    document_type_confidence: medium
+    sender_as_written: "U.S. Immigration Services Department"
+    sender_kind: federal_agency
+    summary_title: "Letter that asks for gift cards and says it is from immigration"
+    summary_body: "This letter says it is from the \"U.S. Immigration Services Department\". It asks for $950 in Google Play gift cards and threatens deportation. I could not match this to a known kind of paper."
+    summary_span_ids: ["@sender", "@owe", "@gift"]
+    demands:
+      - id: d1
+        kind: amount
+        text: "The letter asks for $950."
+        value_verbatim: "$950"
+        source_quote: "Our records show you owe an unpaid immigration processing fee of $950."
+        span_ids: ["@owe"]
+        amount_text: "$950"
+        currency: USD
+        role: payment_due
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Do not pay and do not call the number on this letter. Check with the real agency through Get help.", kind: verify, resource_tags: [scam_report], span_ids: ["@gift"], demand_id: d1}
+      - {id: s2, text: "A licensed lawyer or a DOJ-accredited representative can tell you what the real agency needs.", kind: professional, resource_tags: [immigration_legal_help], span_ids: ["@sender"], demand_id: null}
+      - {id: s3, text: "Keep the letter and the envelope. They can help when you report it.", kind: gather, resource_tags: [scam_report], span_ids: ["@heading"], demand_id: null}
+    glossary:
+      - {term_as_written: "gift cards", explanation: "Store cards with money on them. Real agencies do not take them as payment."}
+      - {term_as_written: "confidential", explanation: "Kept secret."}
+    red_flags:
+      - kind: scam_payment_method
+        text: "The letter asks for payment with gift cards."
+        source_quote: "You must pay today with Google Play gift cards"
+        span_ids: ["@gift"]
+      - kind: impersonation
+        text: "The letter uses an agency name that does not match the real immigration office, and its website does not end in .gov."
+        source_quote: "USCIS payment portal: www.uscis-fee-payment.example.com"
+        span_ids: ["@url"]
+      - kind: urgency_pressure
+        text: "The letter tells you to keep it secret and pay fast."
+        source_quote: "Do not tell anyone about this letter."
+        span_ids: ["@secret"]
+    questions_to_ask: []
+    clerk_need_en: "understanding a paper I received"
+    is_likely_scam: true
+    scam_signals: [gift_card, deportation_threat, non_gov_domain, urgency_pressure]
+    resource_tags: [scam_report, immigration_legal_help]
+    institutions_as_written: ["U.S. Immigration Services Department"]
+    form_numbers: []
+    legibility: good
+  es:
+    summary_title: "Carta que pide tarjetas de regalo y dice ser de inmigración"
+    summary_body: "Esta carta dice que es del \"U.S. Immigration Services Department\". Pide $950 en tarjetas de regalo de Google Play y amenaza con deportación. No pude relacionarla con un tipo conocido de papel."
+    demands:
+      d1: {text: "La carta pide $950."}
+    plan_steps:
+      s1: {text: "No pague y no llame al número de esta carta. Consulte con la agencia real por medio de Buscar ayuda."}
+      s2: {text: "Un abogado con licencia o un representante acreditado por el DOJ puede decirle qué necesita la agencia real."}
+      s3: {text: "Guarde la carta y el sobre. Le servirán cuando lo reporte."}
+    glossary:
+      "gift cards": "Tarjetas de tienda con dinero. Las agencias reales no las aceptan como pago."
+      "confidential": "Secreto."
+    red_flags:
+      - "La carta pide el pago con tarjetas de regalo."
+      - "La carta usa un nombre de agencia que no es el de la oficina de inmigración real, y su sitio web no termina en .gov."
+      - "La carta le dice que lo guarde en secreto y que pague rápido."
+    questions_to_ask: []
+    translated_pages:
+      - "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: 29 de septiembre de 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
+  prs:
+    summary_title: "نامه‌ای که کارت تحفه می‌خواهد و می‌گوید از اداره مهاجرت است"
+    summary_body: "این نامه می‌گوید از \"U.S. Immigration Services Department\" است. $950 به شکل کارت تحفه Google Play می‌خواهد و به اخراج تهدید می‌کند. نتوانستم آن را با یک نوع شناخته‌شده کاغذ مطابقت دهم."
+    demands:
+      d1: {text: "نامه $950 می‌خواهد."}
+    plan_steps:
+      s1: {text: "پول ندهید و با نمبر این نامه زنگ نزنید. از طریق بخش کمک با اداره واقعی تماس بگیرید."}
+      s2: {text: "یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه می‌تواند بگوید اداره واقعی چه می‌خواهد."}
+      s3: {text: "نامه و پاکت آن را نگه دارید. هنگام گزارش دادن کمک می‌کنند."}
+    glossary:
+      "gift cards": "کارت‌های فروشگاه که پول در آنها است. اداره‌های واقعی آنها را به حیث پرداخت قبول نمی‌کنند."
+      "confidential": "مخفی."
+    red_flags:
+      - "نامه پرداخت با کارت تحفه می‌خواهد."
+      - "نامه نام اداره‌ای را به کار می‌برد که با اداره واقعی مهاجرت مطابقت ندارد، و ویب‌سایت آن به .gov ختم نمی‌شود."
+      - "نامه می‌گوید آن را مخفی نگه دارید و زود پول بدهید."
+    questions_to_ask: []
+    translated_pages:
+      - "U.S. Immigration Services Department\nدفتر فیس‌ها و جریمه‌های مهاجرت\nتاریخ: ۲۹ سپتمبر ۲۰۲۶\nهشدار نهایی - فیس مهاجرت پرداخت‌نشده\nمتقاضی گرامی،\nسوابق ما نشان می‌دهد که شما یک فیس پرداخت‌نشده رسیدگی مهاجرت به مبلغ $950 بدهکار هستید.\nشما باید امروز با کارت‌های تحفه Google Play پرداخت کنید، ورنه اگر پرداخت در ظرف ۴۸ ساعت نرسد اخراج می‌شوید.\nبه افسر Daniel Sample به نمبر (202) 555-0147 زنگ بزنید و نمبرهای کارت تحفه را تلفونی بخوانید.\nپورتال پرداخت USCIS: www.uscis-fee-payment.example.com\nدرباره این نامه به هیچ کس نگویید. این موضوع را مخفی نگه دارید."
+  ar:
+    summary_title: "رسالة تطلب بطاقات هدايا وتقول إنها من دائرة الهجرة"
+    summary_body: "تقول هذه الرسالة إنها من \"U.S. Immigration Services Department\". تطلب $950 ببطاقات هدايا Google Play وتهدد بالترحيل. لم أستطع مطابقتها مع نوع معروف من الأوراق."
+    demands:
+      d1: {text: "تطلب الرسالة $950."}
+    plan_steps:
+      s1: {text: "لا تدفع ولا تتصل بالرقم المكتوب في هذه الرسالة. تحقق مع الجهة الحقيقية من خلال قسم المساعدة."}
+      s2: {text: "يمكن لمحامٍ مرخّص أو ممثل معتمد من وزارة العدل أن يخبرك بما تحتاجه الجهة الحقيقية."}
+      s3: {text: "احتفظ بالرسالة والظرف. سيساعدانك عند الإبلاغ عنها."}
+    glossary:
+      "gift cards": "بطاقات متجر عليها مال. الجهات الحكومية الحقيقية لا تقبلها للدفع."
+      "confidential": "سري."
+    red_flags:
+      - "تطلب الرسالة الدفع ببطاقات الهدايا."
+      - "تستخدم الرسالة اسم جهة لا يطابق مكتب الهجرة الحقيقي، وموقعها لا ينتهي بـ .gov."
+      - "تطلب منك الرسالة إبقاء الأمر سرًا والدفع بسرعة."
+    questions_to_ask: []
+    translated_pages:
+      - "U.S. Immigration Services Department\nمكتب رسوم وغرامات الهجرة\nالتاريخ: ٢٩ سبتمبر ٢٠٢٦\nتحذير نهائي - رسوم هجرة متأخرة\nعزيزي مقدم الطلب،\nتُظهر سجلاتنا أن عليك رسوم معالجة هجرة غير مدفوعة بقيمة $950.\nيجب أن تدفع اليوم ببطاقات هدايا Google Play وإلا سيتم ترحيلك ما لم يصلنا الدفع خلال ٤٨ ساعة.\nاتصل بالضابط Daniel Sample على (202) 555-0147 واقرأ أرقام بطاقات الهدايا عبر الهاتف.\nبوابة الدفع لـ USCIS: www.uscis-fee-payment.example.com\nلا تخبر أحدًا عن هذه الرسالة. أبقِ هذا الأمر سريًا."

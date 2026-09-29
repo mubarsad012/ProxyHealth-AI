@@ -1,0 +1,197 @@
+# data/safety/phrasing.yaml — WP2 (D-17; DOCUMENT_TAXONOMY §8). Schema: §8.6.
+#
+# Every model-authored sentence is linted per language (`en` always; a target language only when
+# it has a section here). A hit triggers one `phrasing_rewrite` call; a second hit substitutes the
+# family's fixed hedge (`hedge_key_by_family`, existing `chat.refusal.*` keys). Fixed copy never
+# passes through the linter. Regexes are case-insensitive; `\b` boundaries are written explicitly.
+version: "2026-09-27"
+attribution_regex: "\\b(the|this|your|it) ?(paper|letter|notice|form|bill|summons|order|lease|label|court|judge|office|school|landlord|insurer|plan|irs|uscis|ice|social security)? ?(says|asks|lists|states|tells you|orders|warns)\\b"
+professional_by_category:
+  immigration: "a licensed lawyer or a DOJ-accredited representative"
+  court: "a licensed lawyer or a DOJ-accredited representative"
+  civic: "a licensed lawyer or a DOJ-accredited representative"
+  employment: "a licensed lawyer or a DOJ-accredited representative"
+  medical: "your doctor, nurse or pharmacist"
+  housing: "a housing lawyer or counselor"
+  benefits: "the office that sent this paper"
+  school: "the school office or a parent center"
+  tax: "the IRS or a free tax helper"
+  other: "a professional"
+refer_to_by_category:
+  immigration: lawyer_or_accredited_rep
+  court: lawyer_or_accredited_rep
+  civic: lawyer_or_accredited_rep
+  employment: lawyer_or_accredited_rep
+  medical: clinician
+  housing: housing_counselor
+  benefits: benefits_office
+  school: sender
+  tax: sender
+  other: sender
+hedge_key_by_family:
+  eligibility: chat.refusal.eligibility
+  outcome: chat.refusal.outcome
+  advice_verb: chat.refusal.filing_advice
+  negated_duty: chat.refusal.filing_advice
+  medical_interpret: chat.refusal.medical_interpretation
+  legal_status: chat.refusal.filing_advice
+  benefits_decision: chat.refusal.eligibility
+  housing_law: chat.refusal.filing_advice
+  tax_work_conclusion: chat.refusal.filing_advice
+  school_decision: chat.refusal.eligibility
+  contact_like: chat.refusal.contact_request
+  dramatize: null
+# Words that mark a `professional` plan step as already naming a professional (§8.4).
+professional_words:
+  - lawyer
+  - attorney
+  - representative
+  - doctor
+  - nurse
+  - pharmacist
+  - clinician
+  - counselor
+  - counsellor
+  - office
+  - helper
+  - advocate
+  - navigator
+  - clinic
+  - center
+  - centre
+  - agency
+  - hotline
+  - helpline
+languages:
+  en:
+    reviewed_by: null
+    families:
+      - id: eligibility
+        domains: [all]
+        skip_when_attributed: false
+        patterns:
+          - "\\byou (are|aren't|are not|'re) (eligible|not eligible|ineligible|entitled)\\b"
+          - "\\byou (do|don't|do not) qualify\\b"
+          - "\\byou qualify\\b"
+          - "\\byour (child|children|family|husband|wife|son|daughter) (qualif(y|ies)|is eligible|are eligible|will get|won't get)\\b"
+          - "\\byou (will|won't|will not|can|cannot|can't) (get|receive|keep|lose) (your )?(benefits|coverage|medicaid|snap|wic|ssi|asylum|a green card|your permit)\\b"
+      - id: outcome
+        domains: [all]
+        skip_when_attributed: false
+        patterns:
+          - "\\byou (will|won't|will not|are going to|are likely to|are unlikely to) (win|lose|be (approved|denied|deported|removed|evicted|arrested|fined))\\b"
+          - "\\byour (case|appeal|application) (will|is likely to|should) (be )?(approved|denied|succeed|fail|win|lose)\\b"
+          - "\\byou have (a strong|a weak|no|a good) (case|chance)\\b"
+          - "\\bnothing (will happen|to worry about)\\b"
+          - "\\b(don't|do not) worry\\b"
+          - "\\byou('ll| will) be (fine|okay|ok)\\b"
+      - id: advice_verb
+        domains: [all]
+        skip_when_attributed: true
+        patterns:
+          - "\\byou (should|must|need to|have to|ought to|had better|are required to) (file|appeal|apply|pay|sign|send|submit|plead|accept|refuse|leave|move( out)?|stop|start|take|register|check the box)\\b"
+      - id: negated_duty
+        domains: [all]
+        skip_when_attributed: true
+        patterns:
+          - "\\byou (do not|don't|do not need to|need not|never) have to\\b"
+          - "\\b(does not|doesn't) require you to\\b"
+          - "\\byou (can|may) (ignore|skip|throw away)\\b"
+          - "\\bthis means (that )?you (have|owe|must|are|will|can|cannot)\\b"
+      - id: dramatize
+        domains: [all]
+        skip_when_attributed: false
+        patterns:
+          - "\\byou (may|might|could|will) be deported\\b"
+          - "(?-i:\\b(URGENT|WARNING|IMMEDIATELY)\\b)"
+          - "!"
+          - "\\b(catastroph\\w*|disaster|ruin\\w*)\\b"
+      - id: medical_interpret
+        domains: [medical]
+        skip_when_attributed: false
+        patterns:
+          # "you have <condition>" (D-17 diagnosis), not "you have an appointment / questions /
+          # 30 days / to pay / them" nor a sentence-final "the papers you have".
+          - "\\byou (have|might have|may have|could have|probably have|likely have)\\s+(?!\\d|(to|got|gotten|been|had|done|made|given|taken|told|received|paid|missed|filed|sent|used|reached|met|signed|submitted|returned|completed|applied|asked|requested|scheduled|chosen|called|moved|changed|already|until|till|through|up to|one|two|three|four|five|six|seven|eight|nine|ten|fourteen|fifteen|twenty|thirty|sixty|ninety|any|some|questions?|concerns?|them|it|this|that|these|those|time|days?|weeks?|months?|years?|insurance|coverage|medicaid|medicare|children|kids|an? (appointment|question|concern|bill|balance|copay|co-pay|payment|hearing|meeting|visit|interview|right|choice|option|account|deadline|refill|prescription|referral|insurance|plan|card|form|letter|few|week|month|day|year|child|doctor|provider)s?|the (right|option|choice|form|letter|paper|card|bill|appointment)s?|your (appointment|card|form|letter|paper|papers|bill|insurance|id))\\b)\\w"
+          - "\\byou are (suffering from|diabetic|anemic|pregnant|infected|allergic|contagious)\\b"
+          - "\\b(your|the) (\\w+ )?(results?|levels?|values?|numbers?|readings?) (are|is|show|shows|mean|means|indicate|suggests?) (normal|abnormal|high|low|fine|good|bad|healthy|dangerous|too (high|low)|that)\\b"
+          - "\\b(is a sign of|means you have|points to) \\w+"
+          - "\\byou (need|should|must|can|may) (take|stop|skip|double|increase|decrease|reduce|mix) (the|your|this) (dose|medicine|medication|pill|tablet)\\b"
+          - "\\bit is (safe|not safe|okay|fine) to (take|stop|mix|drink|drive)\\b"
+          - "\\byour (?!balance|bill|amount|payment|copay|deductible|premium|rent|appointment)\\w+ (level |levels |count |reading )?(is|are) (too |very |a little )?(high|low|abnormal|normal|elevated|dangerous|fine|healthy)\\b"
+          - "\\b(which |that |this )?(can|could|may|might) be (dangerous|serious|life-threatening)\\b"
+        medical_words: "\\b(dose|medicine|medication|pill|tablet|test|results?|levels?|mg|ml|diagnos\\w*|prescription|lab)\\b"
+      - id: legal_status
+        domains: [immigration, court, civic, employment]
+        skip_when_attributed: true
+        patterns:
+          - "\\byou (are|are not|aren't) (deportable|removable|in status|out of status|undocumented|legal|illegal|authorized to work|allowed to work|allowed to travel)\\b"
+          - "\\byou (can|cannot|can't|may|may not) (work|stay|travel|be deported|be removed|vote)\\b"
+          - "\\b(plead|you should plead) (guilty|not guilty)\\b"
+          - "\\bcheck (the box|'citizen')\\b"
+          - "^(file|submit) (form \\w+|an appeal|a motion)\\b"
+      - id: benefits_decision
+        domains: [benefits, medical]
+        skip_when_attributed: true
+        patterns:
+          - "\\byour (benefits|coverage|case|food stamps) (will|won't|will not) (end|stop|be cut|continue|be approved|be renewed)\\b"
+          - "\\byou (are|aren't|are not) (over|under) the (income )?limit\\b"
+          - "\\byou (do|don't|do not) count\\b"
+          - "\\byou (will|won't) (get|receive) (snap|wic|medicaid|ssi|a check|back pay)\\b"
+      - id: housing_law
+        domains: [housing]
+        skip_when_attributed: true
+        patterns:
+          - "\\byou (have to|must|need to|do not have to|don't have to|can|cannot|can't) (leave|move out|stay|be evicted|pay (the|this) (fee|increase))\\b"
+          - "\\bthe landlord (can|cannot|can't|has to|must|is allowed to|is not allowed to)\\b"
+          - "\\b(illegal|unlawful|legal|valid|invalid) (eviction|notice|increase|fee|lease)\\b"
+          - "\\bwithin \\d+ days you (must|have to)\\b"
+      - id: tax_work_conclusion
+        domains: [tax, employment]
+        skip_when_attributed: true
+        patterns:
+          - "\\byou (owe|don't owe|do not owe|will get a refund|are owed)\\b"
+          - "\\byou (should|must) (agree|disagree|sign|pay the irs)\\b"
+          - "\\b(this is|it is|that is) (wage theft|illegal|discrimination|retaliation|fraud)\\b"
+          - "\\byou (can|cannot|can't) (be fired|sue|be paid less)\\b"
+          - "\\byou were (underpaid|cheated|not paid enough)\\b"
+      - id: school_decision
+        domains: [school]
+        skip_when_attributed: true
+        patterns:
+          - "\\byour child (needs|does not need|doesn't need|qualifies for|is eligible for|should be in|must be in) (special education|an iep|a 504|services|this school)\\b"
+          - "\\bthe school (must|cannot|can't|has to) (enroll|exclude|test|evaluate)\\b"
+  es:
+    reviewed_by: null
+    families:
+      - id: eligibility
+        domains: [all]
+        skip_when_attributed: false
+        patterns:
+          - "\\b(usted )?(es|no es) elegible\\b"
+          - "\\b(usted )?(no )?califica\\b"
+          - "\\btiene(s)? derecho a\\b"
+      - id: outcome
+        domains: [all]
+        skip_when_attributed: false
+        patterns:
+          - "\\b(usted )?(va a|no va a) (ganar|perder|ser (aprobad|negad|deportad|desalojad)[oa])\\b"
+          - "\\bno se preocupe\\b"
+          - "\\bsu caso (ser[aá]|va a ser) (aprobado|negado)\\b"
+      - id: advice_verb
+        domains: [all]
+        skip_when_attributed: true
+        patterns:
+          - "\\b(usted )?(debe|tiene que|necesita|deber[ií]a) (presentar|apelar|solicitar|pagar|firmar|enviar|mudarse|irse|declararse)\\b"
+      - id: negated_duty
+        domains: [all]
+        skip_when_attributed: true
+        patterns:
+          - "\\b(usted )?no tiene que\\b"
+          - "\\besto significa que (usted )?(tiene|debe|puede|va a)\\b"
+      - id: medical_interpret
+        domains: [medical]
+        skip_when_attributed: false
+        patterns:
+          - "\\b(usted )?(tiene|padece|sufre de) (diabetes|anemia|una infecci[oó]n|c[aá]ncer)\\b"
+          - "\\bsus (resultados|niveles|valores) (son|est[aá]n|indican|muestran) (normales|anormales|altos|bajos|peligrosos)\\b"

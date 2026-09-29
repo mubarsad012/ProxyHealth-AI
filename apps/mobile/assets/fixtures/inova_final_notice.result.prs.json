@@ -1,0 +1,470 @@
+{
+  "analysis_id": "sample-inova_final_notice-prs",
+  "category": "medical",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a hospital bill - the amount, what it is for, and help paying it",
+    "need_line_source": "ai",
+    "translated": "⟦prs⟧ a hospital bill - the amount, what it is for, and help paying it"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": {
+        "amount_minor": 124000,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d1",
+      "kind": "amount",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "Amount due: $1,240.00",
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "بل می‌گوید مبلغ قابل پرداخت $1,240.00 است.",
+      "value_verbatim": "$1,240.00",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 28, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d2",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "Please pay by October 28, 2026.",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "بل پرداخت را تا ۲۸ اکتبر ۲۰۲۶ می‌خواهد.",
+      "value_verbatim": "October 28, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d3",
+      "kind": "action",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Financial assistance is available. Ask us about our financial assistance policy before you pay.",
+      "span_ids": [
+        "p1b11"
+      ],
+      "text": "بل می‌گوید کمک مالی موجود است. پیش از پرداخت می‌توانید درباره آن بپرسید.",
+      "value_verbatim": "Financial assistance is available.",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d4",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Questions about this bill? Call Patient Accounts at (703) 555-0142.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "text": "تلفون برای سوال درباره این بل، از کاغذ شما: (703) 555-0142.",
+      "value_verbatim": "(703) 555-0142",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "medical_information_only",
+  "disclaimers": [
+    "medical_information_only",
+    "ai_generated",
+    "machine_translation",
+    "demo_sample"
+  ],
+  "document_type": "medical_bill",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": "Fairfax",
+      "county": null,
+      "state": "VA",
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "Inova Health System"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "کاغذی که نشان می‌دهد در یک حساب چقدر بدهکار هستید.",
+      "term_as_written": "Statement"
+    },
+    {
+      "explanation": "کمک شفاخانه که می‌تواند بل را برای کسانی که درخواست می‌کنند کم یا پوشش کند.",
+      "term_as_written": "Financial assistance"
+    },
+    {
+      "explanation": "شرکتی که کوشش می‌کند بل‌های پرداخت‌نشده را جمع کند.",
+      "term_as_written": "collection agency"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.075,
+            0.0145,
+            0.335,
+            0.0406
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Inova Health System"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.0406,
+            0.5519,
+            0.0667
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Patient Financial Services - Fairfax, VA"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.0947,
+            0.3862,
+            0.1135
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Statement date: September 20, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1193,
+            0.3275,
+            0.1382
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Account number: ******5678"
+        },
+        {
+          "bbox": [
+            0.3794,
+            0.1556,
+            0.6206,
+            0.2029
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "FINAL NOTICE"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2232,
+            0.3094,
+            0.243
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Patient: SAMPLE PATIENT"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2546,
+            0.6038,
+            0.2744
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date of service: July 2, 2026 - Emergency department visit"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2947,
+            0.3463,
+            0.3193
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Amount due: $1,240.00"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.33,
+            0.3738,
+            0.3498
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Please pay by October 28, 2026."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3614,
+            0.8656,
+            0.401
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "This is your final notice. Please pay the amount due to avoid being sent to a collection agency."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4135,
+            0.925,
+            0.4507
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Financial assistance is available. Ask us about our financial assistance policy before you pay."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4633,
+            0.6756,
+            0.4831
+          ],
+          "id": "p1b12",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Questions about this bill? Call Patient Accounts at (703) 555-0142."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4928,
+            0.7581,
+            0.5087
+          ],
+          "id": "p1b13",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "ATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.5164,
+            0.5481,
+            0.5324
+          ],
+          "id": "p1b14",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "ملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا."
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d1",
+      "id": "s1",
+      "kind": "ask",
+      "resource_tags": [
+        "medical_bill"
+      ],
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "از شفاخانه یک بل مفصل بخواهید که هر هزینه را نشان دهد."
+    },
+    {
+      "demand_id": "d3",
+      "id": "s2",
+      "kind": "ask",
+      "resource_tags": [
+        "charity_care"
+      ],
+      "span_ids": [
+        "p1b11"
+      ],
+      "text": "پیش از پرداخت درباره کمک مالی بپرسید. شفاخانه‌هایی که پالیسی دارند اجازه درخواست می‌دهند."
+    },
+    {
+      "demand_id": "d2",
+      "id": "s3",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12",
+        "p1b9"
+      ],
+      "text": "پیش از ۲۸ اکتبر ۲۰۲۶ با نمبر روی بل زنگ بزنید و سوال‌های خود را بپرسید."
+    },
+    {
+      "demand_id": null,
+      "id": "s4",
+      "kind": "professional",
+      "resource_tags": [
+        "charity_care",
+        "medical_bill"
+      ],
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "یک مشاور مالی شفاخانه می‌تواند بل را با شما مرور کند."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "آیا می‌توانم یک بل مفصل بگیرم؟",
+    "چطور برای کمک مالی درخواست کنم؟",
+    "آیا بیمه من بخشی از این بل را پرداخت کرده است؟"
+  ],
+  "red_flags": [],
+  "request_id": "offline-inova_final_notice-prs",
+  "resource_preview": [],
+  "resource_tags": [
+    "medical_bill",
+    "charity_care"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "Inova Health System",
+  "sender_kind": "hospital_or_clinic",
+  "summary": {
+    "body": "این یک بل از Inova Health System برای مراجعه عاجل در ۲ جولای ۲۰۲۶ است. می‌گوید مبلغ قابل پرداخت $1,240.00 تا ۲۸ اکتبر ۲۰۲۶ است. همچنین می‌گوید کمک مالی موجود است.",
+    "body_en": "This is a bill from Inova Health System for an emergency visit on July 2, 2026. It says the amount due is $1,240.00 by October 28, 2026. It also says financial assistance is available.",
+    "span_ids": [
+      "p1b1",
+      "p1b7",
+      "p1b8",
+      "p1b9"
+    ],
+    "title": "بل شفاخانه Inova با نشان اطلاعیه نهایی"
+  },
+  "target_language": "prs",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "Inova Health System\nخدمات مالی مریضان - Fairfax, VA\nتاریخ صورت‌حساب: ۲۰ سپتمبر ۲۰۲۶\nنمبر حساب: ******5678\nاطلاعیه نهایی\nمریض: SAMPLE PATIENT\nتاریخ خدمت: ۲ جولای ۲۰۲۶ - مراجعه به بخش عاجل\nمبلغ قابل پرداخت: $1,240.00\nلطفاً تا ۲۸ اکتبر ۲۰۲۶ پرداخت کنید.\nاین اطلاعیه نهایی شماست. لطفاً مبلغ را پرداخت کنید تا حساب شما به یک شرکت جمع‌آوری قرض فرستاده نشود.\nکمک مالی موجود است. پیش از پرداخت درباره پالیسی کمک مالی ما بپرسید.\nسوال درباره این بل؟ با حساب‌های مریضان به نمبر (703) 555-0142 زنگ بزنید.\nتوجه: اگر به هسپانوی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است.\nتوجه: اگر به عربی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است."
+    }
+  ],
+  "translation_confidence": "medium",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 4,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

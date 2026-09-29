@@ -1,0 +1,359 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "snap_notice",
+  "category": "benefits",
+  "document_type_confidence": "high",
+  "sender_as_written": "Sample County Department of Social Services",
+  "sender_kind": "local_agency",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Sample County Department of Social Services\nSupplemental Nutrition Assistance Program (SNAP) - Sample County, Virginia\nDate: September 28, 2026\nCase number: ******4321\nNotice of Interview\nYour SNAP interview is by phone on October 9, 2026 at 10:00 AM.\nWe will call you at the phone number we have on file.\nBefore your interview, please have these papers ready:\n- Photo ID for the head of household\n- Pay stubs for the last 30 days\n- Your lease or a rent receipt\nIf you cannot keep this appointment, call us at (703) 555-0126 before your interview.\nIf you miss the interview, your application may be denied."
+    }
+  ],
+  "summary_title": "SNAP phone interview on October 9, 2026",
+  "summary_body": "This letter is about your SNAP (food) benefits. It sets a phone interview on October 9, 2026 at 10:00 AM. It lists papers to have ready. Nothing is decided yet.",
+  "summary_body_en": "This letter is about your SNAP (food) benefits. It sets a phone interview on October 9, 2026 at 10:00 AM. It lists papers to have ready. Nothing is decided yet.",
+  "summary_span_ids": [
+    "p1b2",
+    "p1b5",
+    "p1b6"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "appointment",
+      "text": "Be ready for a phone interview on October 9, 2026 at 10:00 AM.",
+      "value_verbatim": "October 9, 2026",
+      "source_quote": "Your SNAP interview is by phone on October 9, 2026 at 10:00 AM.",
+      "span_ids": [
+        "p1b6"
+      ],
+      "page": 1,
+      "date_text": "October 9, 2026",
+      "time_text": "10:00 AM",
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b3",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "appointment",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "document_requested",
+      "text": "Have these papers ready: a photo ID, pay stubs for the last 30 days, and your lease or a rent receipt.",
+      "value_verbatim": "Photo ID for the head of household",
+      "source_quote": "- Photo ID for the head of household",
+      "span_ids": [
+        "p1b9",
+        "p1b10",
+        "p1b11"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [
+        "Photo ID for the head of household",
+        "Pay stubs for the last 30 days",
+        "Your lease or a rent receipt"
+      ],
+      "role": "appointment",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "contact",
+      "text": "Phone to change the appointment, from your paper: (703) 555-0126.",
+      "value_verbatim": "(703) 555-0126",
+      "source_quote": "If you cannot keep this appointment, call us at (703) 555-0126 before your interview.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Gather the papers on the list and keep them near your phone.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b9",
+        "p1b10",
+        "p1b11"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s2",
+      "text": "Keep your phone on and near you on October 9, 2026 at 10:00 AM.",
+      "kind": "wait",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b6",
+        "p1b7"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s3",
+      "text": "If you cannot be there, call the number on the letter before the interview.",
+      "kind": "call",
+      "resource_tags": [
+        "snap"
+      ],
+      "span_ids": [
+        "p1b12"
+      ],
+      "demand_id": "d3"
+    },
+    {
+      "id": "s4",
+      "text": "Ask a benefits helper if you have questions about the papers.",
+      "kind": "ask",
+      "resource_tags": [
+        "benefits_navigation",
+        "snap"
+      ],
+      "span_ids": [
+        "p1b8"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "SNAP",
+      "explanation": "A program that helps families buy food. Some people call it food stamps."
+    },
+    {
+      "term_as_written": "interview",
+      "explanation": "A talk with a caseworker about your application."
+    },
+    {
+      "term_as_written": "head of household",
+      "explanation": "The main adult on the application."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "Can you call me at a different phone number?",
+    "Can I send the papers before the interview?",
+    "How do I move my interview to another day?"
+  ],
+  "clerk_need_en": "a SNAP (food assistance) notice - my interview or the papers it asks for",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "snap",
+    "food",
+    "benefits_navigation"
+  ],
+  "institutions_as_written": [
+    "Sample County Department of Social Services"
+  ],
+  "form_numbers": [],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Sample County Department of Social Services",
+      "bbox": [
+        0.1562,
+        0.058,
+        0.7238,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Supplemental Nutrition Assistance Program (SNAP) - Sample County, Virginia",
+      "bbox": [
+        0.1562,
+        0.086,
+        0.7669,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Date: September 28, 2026",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.2956,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Case number: ******4321",
+      "bbox": [
+        0.075,
+        0.1329,
+        0.2994,
+        0.1517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Notice of Interview",
+      "bbox": [
+        0.075,
+        0.1739,
+        0.3762,
+        0.2063
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Your SNAP interview is by phone on October 9, 2026 at 10:00 AM.",
+      "bbox": [
+        0.075,
+        0.2237,
+        0.6919,
+        0.2435
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "We will call you at the phone number we have on file.",
+      "bbox": [
+        0.075,
+        0.2551,
+        0.5663,
+        0.2749
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Before your interview, please have these papers ready:",
+      "bbox": [
+        0.075,
+        0.2913,
+        0.65,
+        0.3126
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "- Photo ID for the head of household",
+      "bbox": [
+        0.1125,
+        0.3193,
+        0.4525,
+        0.3391
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "- Pay stubs for the last 30 days",
+      "bbox": [
+        0.1125,
+        0.3449,
+        0.3925,
+        0.3647
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "- Your lease or a rent receipt",
+      "bbox": [
+        0.1125,
+        0.3705,
+        0.3738,
+        0.3903
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "If you cannot keep this appointment, call us at (703) 555-0126 before your interview.",
+      "bbox": [
+        0.075,
+        0.399,
+        0.8531,
+        0.4188
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "If you miss the interview, your application may be denied.",
+      "bbox": [
+        0.075,
+        0.4304,
+        0.6069,
+        0.4502
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

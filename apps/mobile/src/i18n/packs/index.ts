@@ -2,10 +2,20 @@
 
 // Static require map of the bundled language packs (BUILD_PLAN §4.3, D-25).
 
+// `en.json` is a flat key → string map; the other packs are full `LanguagePack` dumps
+// (`strings` holds the keys). `i18n/store.ts` `fromBundled` accepts both shapes.
 export type BundledPackStrings = Record<string, string>;
+export type BundledLanguagePack = { readonly strings: BundledPackStrings } & Readonly<
+  Record<string, unknown>
+>;
+export type BundledPack = BundledPackStrings | BundledLanguagePack;
 
-export const bundledPacks: Record<string, BundledPackStrings> = {
-  'en': require('./en.json') as BundledPackStrings,
+export const bundledPacks: Record<string, BundledPack> = {
+  'ar': require('./ar.json') as BundledPack,
+  'en': require('./en.json') as BundledPack,
+  'es': require('./es.json') as BundledPack,
+  'prs': require('./prs.json') as BundledPack,
+  'ps': require('./ps.json') as BundledPack,
 };
 
 export const bundledPackTags: readonly string[] = Object.keys(bundledPacks);

@@ -1,0 +1,29 @@
+id: snap_interview_notice
+title_key: fixture.snap_interview_notice
+title_en: SNAP letter with an interview appointment
+document_type: snap_notice
+category: benefits
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/snap_interview_notice/pages/1
+dhash: 0074a4600e10f4c0c002400ec884c6403c80e001401100c803c0150098009006
+page_dhashes:
+- 0074a4600e10f4c0c002400ec884c6403c80e001401100c803c0150098009006
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - high
+  nearest_date_iso: '2026-10-09'
+  date_kinds:
+    d1: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: benefits_information_only
+  state: VA
+  bring_list:
+    d2: 3

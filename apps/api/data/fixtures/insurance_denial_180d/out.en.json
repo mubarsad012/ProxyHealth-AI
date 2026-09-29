@@ -1,0 +1,370 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "insurance_denial",
+  "category": "medical",
+  "document_type_confidence": "high",
+  "sender_as_written": "Blue Ridge Sample Health Plan",
+  "sender_kind": "insurer",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Blue Ridge Sample Health Plan\nMember Appeals Department\nDate of this notice: April 20, 2026\nMember ID: ******2468\nNotice of Adverse Benefit Determination\nMember: SAMPLE MEMBER\nService requested: MRI of the lower back\nDecision: Denied. The plan found that the service was not medically necessary.\nYou have the right to appeal this decision.\nYou must ask for an internal appeal within 180 days of the date of this notice.\nTo appeal, send the enclosed appeal form and any letters from your doctor to the Member Appeals Department.\nQuestions? Call Member Services at (804) 555-0199.\nYou may also ask for a copy of the rules the plan used to make this decision, free of charge."
+    }
+  ],
+  "summary_title": "Your health plan decided not to pay for an MRI",
+  "summary_body": "Blue Ridge Sample Health Plan decided not to pay for an MRI of the lower back. The letter gives a reason and says how to ask the plan to look again.",
+  "summary_body_en": "Blue Ridge Sample Health Plan decided not to pay for an MRI of the lower back. The letter gives a reason and says how to ask the plan to look again.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b7",
+    "p1b8"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "The date of this notice is April 20, 2026.",
+      "value_verbatim": "April 20, 2026",
+      "source_quote": "Date of this notice: April 20, 2026",
+      "span_ids": [
+        "p1b3"
+      ],
+      "page": 1,
+      "date_text": "April 20, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "notice_date",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "relative_deadline",
+      "text": "The letter says to ask for an internal appeal within 180 days of the date of this notice.",
+      "value_verbatim": "within 180 days of the date of this notice",
+      "source_quote": "You must ask for an internal appeal within 180 days of the date of this notice.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": "within 180 days of the date of this notice",
+      "anchor_span_id": "p1b3",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "document_requested",
+      "text": "The letter lists what to send for an appeal: the appeal form and letters from your doctor.",
+      "value_verbatim": "the enclosed appeal form",
+      "source_quote": "To appeal, send the enclosed appeal form and any letters from your doctor to the Member Appeals Department.",
+      "span_ids": [
+        "p1b11"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [
+        "the enclosed appeal form",
+        "any letters from your doctor"
+      ],
+      "role": "response_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d4",
+      "kind": "contact",
+      "text": "Phone for questions, from your paper: (804) 555-0199.",
+      "value_verbatim": "(804) 555-0199",
+      "source_quote": "Questions? Call Member Services at (804) 555-0199.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Call the number on the letter and ask which date your appeal must arrive by.",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12",
+        "p1b10"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s2",
+      "text": "Gather the letter, the enclosed appeal form, and any notes from your doctor.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b11"
+      ],
+      "demand_id": "d3"
+    },
+    {
+      "id": "s3",
+      "text": "Ask your doctor's office for a letter that explains why you need the MRI.",
+      "kind": "ask",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b8"
+      ],
+      "demand_id": "d3"
+    },
+    {
+      "id": "s4",
+      "text": "A patient advocate or your state's consumer help program can help with an appeal.",
+      "kind": "professional",
+      "resource_tags": [
+        "insurance_denial"
+      ],
+      "span_ids": [
+        "p1b9"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "internal appeal",
+      "explanation": "Asking the health plan itself to look at its decision again."
+    },
+    {
+      "term_as_written": "medically necessary",
+      "explanation": "Care the plan agrees is needed for your health."
+    },
+    {
+      "term_as_written": "Adverse Benefit Determination",
+      "explanation": "A decision by the plan not to pay for a service."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "What is the exact last day to send my appeal?",
+    "Can my doctor send the letter to you directly?",
+    "Can I get a copy of the rules you used for this decision?"
+  ],
+  "clerk_need_en": "an insurance denial letter and the appeal date on it",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "insurance_denial"
+  ],
+  "institutions_as_written": [
+    "Blue Ridge Sample Health Plan"
+  ],
+  "form_numbers": [],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Blue Ridge Sample Health Plan",
+      "bbox": [
+        0.075,
+        0.058,
+        0.4575,
+        0.0841
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Member Appeals Department",
+      "bbox": [
+        0.075,
+        0.086,
+        0.31,
+        0.1034
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Date of this notice: April 20, 2026",
+      "bbox": [
+        0.075,
+        0.1082,
+        0.3581,
+        0.1271
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Member ID: ******2468",
+      "bbox": [
+        0.075,
+        0.1329,
+        0.2825,
+        0.1517
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Notice of Adverse Benefit Determination",
+      "bbox": [
+        0.075,
+        0.1739,
+        0.7075,
+        0.2063
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Member: SAMPLE MEMBER",
+      "bbox": [
+        0.075,
+        0.2237,
+        0.3225,
+        0.2435
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Service requested: MRI of the lower back",
+      "bbox": [
+        0.075,
+        0.2551,
+        0.4506,
+        0.2749
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Decision: Denied. The plan found that the service was not medically necessary.",
+      "bbox": [
+        0.075,
+        0.2865,
+        0.8213,
+        0.3063
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "You have the right to appeal this decision.",
+      "bbox": [
+        0.075,
+        0.3227,
+        0.5138,
+        0.344
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "You must ask for an internal appeal within 180 days of the date of this notice.",
+      "bbox": [
+        0.075,
+        0.3536,
+        0.7887,
+        0.3734
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "To appeal, send the enclosed appeal form and any letters from your doctor to the Member Appeals Department.",
+      "bbox": [
+        0.075,
+        0.385,
+        0.9137,
+        0.4246
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "Questions? Call Member Services at (804) 555-0199.",
+      "bbox": [
+        0.075,
+        0.4362,
+        0.5475,
+        0.456
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "You may also ask for a copy of the rules the plan used to make this decision, free of charge.",
+      "bbox": [
+        0.075,
+        0.4657,
+        0.7456,
+        0.4816
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

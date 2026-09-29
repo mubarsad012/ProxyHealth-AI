@@ -1,0 +1,397 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "medical_bill",
+  "category": "medical",
+  "document_type_confidence": "high",
+  "sender_as_written": "Inova Health System",
+  "sender_kind": "hospital_or_clinic",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Inova Health System\nالخدمات المالية للمرضى - Fairfax, VA\nتاريخ الكشف: ٢٠ سبتمبر ٢٠٢٦\nرقم الحساب: ******5678\nإشعار نهائي\nالمريض: SAMPLE PATIENT\nتاريخ الخدمة: ٢ يوليو ٢٠٢٦ - زيارة قسم الطوارئ\nالمبلغ المستحق: $1,240.00\nيرجى الدفع قبل ٢٨ أكتوبر ٢٠٢٦.\nهذا إشعارك النهائي. يرجى دفع المبلغ المستحق حتى لا يُرسل حسابك إلى وكالة تحصيل.\nالمساعدة المالية متوفرة. اسألنا عن سياسة المساعدة المالية قبل أن تدفع.\nأسئلة عن هذه الفاتورة؟ اتصل بحسابات المرضى على (703) 555-0142.\nتنبيه: إذا كنت تتحدث الإسبانية، فخدمات المساعدة اللغوية المجانية متوفرة لك.\nملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا."
+    }
+  ],
+  "summary_title": "فاتورة مستشفى Inova مكتوب عليها إشعار نهائي",
+  "summary_body": "هذه فاتورة من Inova Health System لزيارة طوارئ في ٢ يوليو ٢٠٢٦. تقول إن المبلغ المستحق $1,240.00 قبل ٢٨ أكتوبر ٢٠٢٦. وتقول أيضًا إن المساعدة المالية متوفرة.",
+  "summary_body_en": "This is a bill from Inova Health System for an emergency visit on July 2, 2026. It says the amount due is $1,240.00 by October 28, 2026. It also says financial assistance is available.",
+  "summary_span_ids": [
+    "p1b1",
+    "p1b7",
+    "p1b8",
+    "p1b9"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "amount",
+      "text": "تقول الفاتورة إن المبلغ المستحق $1,240.00.",
+      "value_verbatim": "$1,240.00",
+      "source_quote": "Amount due: $1,240.00",
+      "span_ids": [
+        "p1b8"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": "$1,240.00",
+      "currency": "USD",
+      "documents": [],
+      "role": "payment_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "deadline",
+      "text": "تطلب الفاتورة الدفع قبل ٢٨ أكتوبر ٢٠٢٦.",
+      "value_verbatim": "October 28, 2026",
+      "source_quote": "Please pay by October 28, 2026.",
+      "span_ids": [
+        "p1b9"
+      ],
+      "page": 1,
+      "date_text": "October 28, 2026",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": "p1b3",
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "payment_due",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "action",
+      "text": "تقول الفاتورة إن المساعدة المالية متوفرة. يمكنك السؤال عنها قبل أن تدفع.",
+      "value_verbatim": "Financial assistance is available.",
+      "source_quote": "Financial assistance is available. Ask us about our financial assistance policy before you pay.",
+      "span_ids": [
+        "p1b11"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d4",
+      "kind": "contact",
+      "text": "هاتف للأسئلة عن هذه الفاتورة، من ورقتك: (703) 555-0142.",
+      "value_verbatim": "(703) 555-0142",
+      "source_quote": "Questions about this bill? Call Patient Accounts at (703) 555-0142.",
+      "span_ids": [
+        "p1b12"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "اطلب من المستشفى فاتورة مفصلة تذكر كل تكلفة.",
+      "kind": "ask",
+      "resource_tags": [
+        "medical_bill"
+      ],
+      "span_ids": [
+        "p1b8"
+      ],
+      "demand_id": "d1"
+    },
+    {
+      "id": "s2",
+      "text": "اسأل عن المساعدة المالية قبل أن تدفع. المستشفيات التي لديها سياسة تسمح للناس بالتقديم.",
+      "kind": "ask",
+      "resource_tags": [
+        "charity_care"
+      ],
+      "span_ids": [
+        "p1b11"
+      ],
+      "demand_id": "d3"
+    },
+    {
+      "id": "s3",
+      "text": "اتصل بالرقم المكتوب على الفاتورة وأسئلتك معك قبل ٢٨ أكتوبر ٢٠٢٦.",
+      "kind": "call",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b12",
+        "p1b9"
+      ],
+      "demand_id": "d2"
+    },
+    {
+      "id": "s4",
+      "text": "يمكن لمستشار مالي في المستشفى أن يراجع الفاتورة معك.",
+      "kind": "professional",
+      "resource_tags": [
+        "charity_care",
+        "medical_bill"
+      ],
+      "span_ids": [
+        "p1b10"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Statement",
+      "explanation": "ورقة تذكر ما عليك في حساب ما."
+    },
+    {
+      "term_as_written": "Financial assistance",
+      "explanation": "مساعدة من المستشفى يمكن أن تخفض الفاتورة أو تغطيها لمن يتقدم بطلب."
+    },
+    {
+      "term_as_written": "collection agency",
+      "explanation": "شركة تحاول تحصيل الفواتير غير المدفوعة."
+    }
+  ],
+  "red_flags": [
+    {
+      "kind": "urgency_pressure",
+      "text": "الفاتورة مكتوب عليها إشعار نهائي. هذا يضغط عليك، لكنها ليست ورقة من المحكمة.",
+      "source_quote": "FINAL NOTICE",
+      "span_ids": [
+        "p1b5"
+      ],
+      "page": 1
+    }
+  ],
+  "questions_to_ask": [
+    "هل يمكنني الحصول على فاتورة مفصلة؟",
+    "كيف أتقدم بطلب للمساعدة المالية؟",
+    "هل دفع التأمين جزءًا من هذه الفاتورة؟"
+  ],
+  "clerk_need_en": "a hospital bill - the amount, what it is for, and help paying it",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "medical_bill",
+    "charity_care"
+  ],
+  "institutions_as_written": [
+    "Inova Health System"
+  ],
+  "form_numbers": [],
+  "geo_state": "VA",
+  "geo_county": null,
+  "geo_city": "Fairfax",
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Inova Health System",
+      "bbox": [
+        0.075,
+        0.0145,
+        0.335,
+        0.0406
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Patient Financial Services - Fairfax, VA",
+      "bbox": [
+        0.075,
+        0.0406,
+        0.5519,
+        0.0667
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "Statement date: September 20, 2026",
+      "bbox": [
+        0.075,
+        0.0947,
+        0.3862,
+        0.1135
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "Account number: ******5678",
+      "bbox": [
+        0.075,
+        0.1193,
+        0.3275,
+        0.1382
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "FINAL NOTICE",
+      "bbox": [
+        0.3794,
+        0.1556,
+        0.6206,
+        0.2029
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Patient: SAMPLE PATIENT",
+      "bbox": [
+        0.075,
+        0.2232,
+        0.3094,
+        0.243
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Date of service: July 2, 2026 - Emergency department visit",
+      "bbox": [
+        0.075,
+        0.2546,
+        0.6038,
+        0.2744
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Amount due: $1,240.00",
+      "bbox": [
+        0.075,
+        0.2947,
+        0.3463,
+        0.3193
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Please pay by October 28, 2026.",
+      "bbox": [
+        0.075,
+        0.33,
+        0.3738,
+        0.3498
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "This is your final notice. Please pay the amount due to avoid being sent to a collection agency.",
+      "bbox": [
+        0.075,
+        0.3614,
+        0.8656,
+        0.401
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "Financial assistance is available. Ask us about our financial assistance policy before you pay.",
+      "bbox": [
+        0.075,
+        0.4135,
+        0.925,
+        0.4507
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b12",
+      "page": 1,
+      "text": "Questions about this bill? Call Patient Accounts at (703) 555-0142.",
+      "bbox": [
+        0.075,
+        0.4633,
+        0.6756,
+        0.4831
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b13",
+      "page": 1,
+      "text": "ATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.",
+      "bbox": [
+        0.075,
+        0.4928,
+        0.7581,
+        0.5087
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b14",
+      "page": 1,
+      "text": "ملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا.",
+      "bbox": [
+        0.075,
+        0.5164,
+        0.5481,
+        0.5324
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

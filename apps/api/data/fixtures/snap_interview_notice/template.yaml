@@ -1,0 +1,91 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# Fictional local department of social services.
+id: snap_interview_notice
+kind: document
+title_en: "SNAP letter with an interview appointment"
+document_type: snap_notice
+category: benefits
+language_of_document: en
+languages: [en]
+today: 2026-10-02
+render: {accent: [30, 110, 50], logo: seal, watermark_angle: 26}
+pages:
+  - - {text: "Sample County Department of Social Services", style: letterhead, ref: sender}
+    - {text: "Supplemental Nutrition Assistance Program (SNAP) - Sample County, Virginia", style: letterhead_sub, ref: program}
+    - {text: "Date: September 28, 2026", style: right, ref: notice_date}
+    - {text: "Case number: ******4321", style: right, ref: case}
+    - {text: "Notice of Interview", style: title, ref: heading}
+    - {text: "Your SNAP interview is by phone on October 9, 2026 at 10:00 AM.", style: bold, ref: interview}
+    - {text: "We will call you at the phone number we have on file.", style: body, ref: call}
+    - {text: "Before your interview, please have these papers ready:", style: subheading, ref: list}
+    - {text: "- Photo ID for the head of household", style: bullet, ref: doc1}
+    - {text: "- Pay stubs for the last 30 days", style: bullet, ref: doc2}
+    - {text: "- Your lease or a rent receipt", style: bullet, ref: doc3}
+    - {text: "If you cannot keep this appointment, call us at (703) 555-0126 before your interview.", style: body, ref: phone}
+    - {text: "If you miss the interview, your application may be denied.", style: body, ref: miss}
+expected:
+  urgency_level: [high]
+  nearest_date_iso: "2026-10-09"
+  date_kinds: {d1: stated}
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: benefits_information_only
+  state: VA
+  bring_list: {d2: 3}
+out:
+  base:
+    sender_as_written: "Sample County Department of Social Services"
+    sender_kind: local_agency
+    summary_title: "SNAP phone interview on October 9, 2026"
+    summary_body: "This letter is about your SNAP (food) benefits. It sets a phone interview on October 9, 2026 at 10:00 AM. It lists papers to have ready. Nothing is decided yet."
+    summary_span_ids: ["@program", "@heading", "@interview"]
+    demands:
+      - id: d1
+        kind: appointment
+        text: "Be ready for a phone interview on October 9, 2026 at 10:00 AM."
+        value_verbatim: "October 9, 2026"
+        source_quote: "Your SNAP interview is by phone on October 9, 2026 at 10:00 AM."
+        span_ids: ["@interview"]
+        date_text: "October 9, 2026"
+        time_text: "10:00 AM"
+        anchor_span_id: "@notice_date"
+        role: appointment
+        confidence: high
+      - id: d2
+        kind: document_requested
+        text: "Have these papers ready: a photo ID, pay stubs for the last 30 days, and your lease or a rent receipt."
+        value_verbatim: "Photo ID for the head of household"
+        source_quote: "- Photo ID for the head of household"
+        span_ids: ["@doc1", "@doc2", "@doc3"]
+        documents: ["Photo ID for the head of household", "Pay stubs for the last 30 days", "Your lease or a rent receipt"]
+        role: appointment
+        confidence: high
+      - id: d3
+        kind: contact
+        text: "Phone to change the appointment, from your paper: (703) 555-0126."
+        value_verbatim: "(703) 555-0126"
+        source_quote: "If you cannot keep this appointment, call us at (703) 555-0126 before your interview."
+        span_ids: ["@phone"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Gather the papers on the list and keep them near your phone.", kind: gather, resource_tags: [], span_ids: ["@doc1", "@doc2", "@doc3"], demand_id: d2}
+      - {id: s2, text: "Keep your phone on and near you on October 9, 2026 at 10:00 AM.", kind: wait, resource_tags: [], span_ids: ["@interview", "@call"], demand_id: d1}
+      - {id: s3, text: "If you cannot be there, call the number on the letter before the interview.", kind: call, resource_tags: [snap], span_ids: ["@phone"], demand_id: d3}
+      - {id: s4, text: "Ask a benefits helper if you have questions about the papers.", kind: ask, resource_tags: [benefits_navigation, snap], span_ids: ["@list"], demand_id: null}
+    glossary:
+      - {term_as_written: "SNAP", explanation: "A program that helps families buy food. Some people call it food stamps."}
+      - {term_as_written: "interview", explanation: "A talk with a caseworker about your application."}
+      - {term_as_written: "head of household", explanation: "The main adult on the application."}
+    red_flags: []
+    questions_to_ask:
+      - "Can you call me at a different phone number?"
+      - "Can I send the papers before the interview?"
+      - "How do I move my interview to another day?"
+    clerk_need_en: "a SNAP (food assistance) notice - my interview or the papers it asks for"
+    resource_tags: [snap, food, benefits_navigation]
+    institutions_as_written: ["Sample County Department of Social Services"]
+    form_numbers: []
+    geo_state: VA
+    legibility: good

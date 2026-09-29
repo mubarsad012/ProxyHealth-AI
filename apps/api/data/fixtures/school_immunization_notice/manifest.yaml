@@ -1,0 +1,29 @@
+id: school_immunization_notice
+title_key: fixture.school_immunization_notice
+title_en: School notice about your child's vaccines
+document_type: immunization_notice
+category: school
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/school_immunization_notice/pages/1
+dhash: 007088401480f001c00a800cc080c6401c80e0014018006801900f000c019005
+page_dhashes:
+- 007088401480f001c00a800cc080c6401c80e0014018006801900f000c019005
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - medium
+  nearest_date_iso: '2026-10-23'
+  date_kinds:
+    d1: stated
+  demands_count: 3
+  scam_risk: none
+  readable: true
+  disclaimer_kind: general_information
+  resource_tags_include:
+  - vaccine_records
+  state: VA

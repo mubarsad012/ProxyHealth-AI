@@ -1,0 +1,427 @@
+{
+  "analysis_id": "sample-traffic_court_notice-en",
+  "category": "court",
+  "clerk_message": {
+    "appended_line_keys": [],
+    "english": "a traffic or court notice - the court date or payment date on it",
+    "need_line_source": "ai",
+    "translated": "a traffic or court notice - the court date or payment date on it"
+  },
+  "created_at": "2026-10-02T14:00:00Z",
+  "demands": [
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 13, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": "9:00 AM",
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d1",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "hearing_date",
+      "source_quote": "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B.",
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "The court date is October 13, 2026 at 9:00 AM, in Courtroom 2B.",
+      "value_verbatim": "October 13, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": {
+        "amount_minor": 15600,
+        "currency": "USD"
+      },
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d2",
+      "kind": "amount",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court.",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "The paper says you may prepay $156.00.",
+      "value_verbatim": "$156.00",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": {
+        "anchor_demand_id": null,
+        "anchor_quote": null,
+        "formula": null,
+        "kind": "unresolved",
+        "localized_line": "October 9, 2026",
+        "rule_id": null,
+        "rule_source_url": null,
+        "rule_verification": null,
+        "time_text": null,
+        "value_iso": null
+      },
+      "documents": [],
+      "id": "d3",
+      "kind": "deadline",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "payment_due",
+      "source_quote": "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court.",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "The paper gives October 9, 2026 as the last day to prepay.",
+      "value_verbatim": "October 9, 2026",
+      "verification_note": null,
+      "verified": true
+    },
+    {
+      "ambiguity_note": null,
+      "amount": null,
+      "confidence": "high",
+      "date": null,
+      "documents": [],
+      "id": "d4",
+      "kind": "contact",
+      "page": 1,
+      "reminder_eligible": false,
+      "role": "other",
+      "source_quote": "Clerk's Office: (703) 555-0137",
+      "span_ids": [
+        "p1b11"
+      ],
+      "text": "Clerk's Office phone, from your paper: (703) 555-0137.",
+      "value_verbatim": "(703) 555-0137",
+      "verification_note": null,
+      "verified": true
+    }
+  ],
+  "detected_language": "en",
+  "disclaimer_kind": "legal_information_only",
+  "disclaimers": [
+    "legal_information_only",
+    "ai_generated",
+    "demo_sample"
+  ],
+  "document_type": "traffic_court",
+  "document_type_confidence": "high",
+  "entities": {
+    "form_numbers": [],
+    "geo": {
+      "city": null,
+      "county": null,
+      "state": "VA",
+      "zip3": null
+    },
+    "has_case_number": false,
+    "has_receipt_number": false,
+    "institutions_as_written": [
+      "General District Court of Sample County"
+    ]
+  },
+  "glossary": [
+    {
+      "explanation": "Pay the fine before the court date instead of going to court.",
+      "term_as_written": "prepay"
+    },
+    {
+      "explanation": "Not going to court on the date.",
+      "term_as_written": "Failure to appear"
+    },
+    {
+      "explanation": "The person the case is about.",
+      "term_as_written": "Defendant"
+    }
+  ],
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "high",
+    "tier": "pro"
+  },
+  "original_text": [
+    {
+      "blocks": [
+        {
+          "bbox": [
+            0.1562,
+            0.058,
+            0.6538,
+            0.0841
+          ],
+          "id": "p1b1",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "General District Court of Sample County"
+        },
+        {
+          "bbox": [
+            0.1562,
+            0.086,
+            0.4794,
+            0.1034
+          ],
+          "id": "p1b2",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Traffic Division - Sample County, Virginia"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1082,
+            0.2956,
+            0.1271
+          ],
+          "id": "p1b3",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Date: September 25, 2026"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1329,
+            0.3025,
+            0.1517
+          ],
+          "id": "p1b4",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Case No.: GT26-000123-00"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.1739,
+            0.4475,
+            0.2063
+          ],
+          "id": "p1b5",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "NOTICE OF COURT DATE"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2237,
+            0.3294,
+            0.2435
+          ],
+          "id": "p1b6",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Defendant: SAMPLE DRIVER"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2551,
+            0.5194,
+            0.2749
+          ],
+          "id": "p1b7",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Offense: Speeding 15 mph over the posted limit"
+        },
+        {
+          "bbox": [
+            0.075,
+            0.2865,
+            0.7662,
+            0.3063
+          ],
+          "id": "p1b8",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3179,
+            0.9206,
+            0.3575
+          ],
+          "id": "p1b9",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.3691,
+            0.685,
+            0.3889
+          ],
+          "id": "p1b10",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Failure to appear may result in suspension of your driver's license."
+        },
+        {
+          "bbox": [
+            0.075,
+            0.4005,
+            0.3419,
+            0.4203
+          ],
+          "id": "p1b11",
+          "is_handwriting": false,
+          "is_unclear": false,
+          "page": 1,
+          "text": "Clerk's Office: (703) 555-0137"
+        }
+      ],
+      "height": null,
+      "page": 1,
+      "width": null
+    }
+  ],
+  "page_thumbnails": null,
+  "plan_steps": [
+    {
+      "demand_id": "d1",
+      "id": "s1",
+      "kind": "verify",
+      "resource_tags": [
+        "traffic_court"
+      ],
+      "span_ids": [
+        "p1b11",
+        "p1b8"
+      ],
+      "text": "Call the Clerk's Office to check the court date."
+    },
+    {
+      "demand_id": "d2",
+      "id": "s2",
+      "kind": "professional",
+      "resource_tags": [
+        "immigration_legal_help"
+      ],
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "If you are not a U.S. citizen, talk to an immigration lawyer before you pay or go to court."
+    },
+    {
+      "demand_id": "d1",
+      "id": "s3",
+      "kind": "bring",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b8"
+      ],
+      "text": "Bring this paper and a photo ID if you go to court."
+    }
+  ],
+  "quality": {
+    "legibility": "good",
+    "pages_received": 1,
+    "pages_unreadable": [],
+    "readable": true,
+    "reason": null
+  },
+  "questions_to_ask": [
+    "Can I move my court date?",
+    "Is an interpreter available in Courtroom 2B?",
+    "How can I prepay the $156.00?"
+  ],
+  "red_flags": [],
+  "request_id": "offline-traffic_court_notice-en",
+  "resource_preview": [],
+  "resource_tags": [
+    "traffic_court",
+    "immigration_legal_help"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "schema_version": 1,
+  "sender_as_written": "General District Court of Sample County",
+  "sender_kind": "court",
+  "summary": {
+    "body": "This is a court paper about a traffic matter. It gives a court date of October 13, 2026 at 9:00 AM. It also says you may prepay $156.00 by October 9, 2026 instead.",
+    "body_en": "This is a court paper about a traffic matter. It gives a court date of October 13, 2026 at 9:00 AM. It also says you may prepay $156.00 by October 9, 2026 instead.",
+    "span_ids": [
+      "p1b5",
+      "p1b8",
+      "p1b9"
+    ],
+    "title": "Traffic court date on October 13, 2026"
+  },
+  "target_language": "en",
+  "translated_text": [
+    {
+      "page": 1,
+      "text": "General District Court of Sample County\nTraffic Division - Sample County, Virginia\nDate: September 25, 2026\nCase No.: GT26-000123-00\nNOTICE OF COURT DATE\nDefendant: SAMPLE DRIVER\nOffense: Speeding 15 mph over the posted limit\nYou must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B.\nThis is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court.\nFailure to appear may result in suspension of your driver's license.\nClerk's Office: (703) 555-0137"
+    }
+  ],
+  "translation_confidence": "high",
+  "unverified": [],
+  "urgency": {
+    "days_until": null,
+    "driving_demand_id": null,
+    "floor_applied": false,
+    "headline_key": "urgency.info.no_date",
+    "headline_params": {},
+    "level": "info",
+    "nearest_date_iso": null,
+    "past_date": false,
+    "verify_resource_id": null
+  },
+  "verification": {
+    "contacts_stripped": 0,
+    "facts_checked": 4,
+    "facts_rejected": 0,
+    "injection_masked": false,
+    "phrasing_rewrites": 0,
+    "verifier_version": "0"
+  },
+  "warnings": [
+    "demo_sample"
+  ]
+}

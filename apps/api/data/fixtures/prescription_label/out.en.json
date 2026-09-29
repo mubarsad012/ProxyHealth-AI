@@ -1,0 +1,316 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "document_type": "prescription_label",
+  "category": "medical",
+  "document_type_confidence": "high",
+  "sender_as_written": "Sample Street Pharmacy",
+  "sender_kind": "pharmacy",
+  "detected_language": "en",
+  "translated_pages": [
+    {
+      "page": 1,
+      "text": "Sample Street Pharmacy\nRx# 0012345\nSAMPLE PATIENT\nAMOXICILLIN 500 MG CAPSULE\nTake 1 capsule by mouth three times daily until all taken.\nQty: 30 | Refills: 0\nPrescriber: Dr. A. Sample\nDate filled: 09/28/2026\nDiscard after: 03/15/2027\nTake with food if it upsets your stomach.\nPharmacist questions? Call (571) 555-0163."
+    }
+  ],
+  "summary_title": "Medicine label for amoxicillin from Sample Street Pharmacy",
+  "summary_body": "This is the label for AMOXICILLIN 500 MG CAPSULE. It says: 'Take 1 capsule by mouth three times daily until all taken.' It shows 0 refills.",
+  "summary_body_en": "This is the label for AMOXICILLIN 500 MG CAPSULE. It says: 'Take 1 capsule by mouth three times daily until all taken.' It shows 0 refills.",
+  "summary_span_ids": [
+    "p1b4",
+    "p1b5",
+    "p1b6"
+  ],
+  "demands": [
+    {
+      "id": "d1",
+      "kind": "deadline",
+      "text": "The label says to discard the medicine after 03/15/2027.",
+      "value_verbatim": "03/15/2027",
+      "source_quote": "Discard after: 03/15/2027",
+      "span_ids": [
+        "p1b9"
+      ],
+      "page": 1,
+      "date_text": "03/15/2027",
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "expiry",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d2",
+      "kind": "action",
+      "text": "The label shows 0 refills. Ask the pharmacist or the prescriber if you have questions about more medicine.",
+      "value_verbatim": "Refills: 0",
+      "source_quote": "Qty: 30 | Refills: 0",
+      "span_ids": [
+        "p1b6"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    },
+    {
+      "id": "d3",
+      "kind": "contact",
+      "text": "Pharmacy phone, from your paper: (571) 555-0163.",
+      "value_verbatim": "(571) 555-0163",
+      "source_quote": "Pharmacist questions? Call (571) 555-0163.",
+      "span_ids": [
+        "p1b11"
+      ],
+      "page": 1,
+      "date_text": null,
+      "time_text": null,
+      "relative_rule_text": null,
+      "anchor_span_id": null,
+      "amount_text": null,
+      "currency": null,
+      "documents": [],
+      "role": "other",
+      "confidence": "high",
+      "ambiguity_note": null
+    }
+  ],
+  "plan_steps": [
+    {
+      "id": "s1",
+      "text": "Ask the pharmacist to explain the directions in your language. You can ask for an interpreter.",
+      "kind": "ask",
+      "resource_tags": [
+        "language_access"
+      ],
+      "span_ids": [
+        "p1b5"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s2",
+      "text": "Keep all your medicine bottles together and bring them to your next visit.",
+      "kind": "gather",
+      "resource_tags": [],
+      "span_ids": [
+        "p1b4"
+      ],
+      "demand_id": null
+    },
+    {
+      "id": "s3",
+      "text": "Your doctor, nurse or pharmacist can answer questions about this medicine.",
+      "kind": "professional",
+      "resource_tags": [
+        "prescription_help"
+      ],
+      "span_ids": [
+        "p1b7"
+      ],
+      "demand_id": null
+    }
+  ],
+  "glossary": [
+    {
+      "term_as_written": "Refills",
+      "explanation": "How many more times the pharmacy can fill this without a new prescription."
+    },
+    {
+      "term_as_written": "Qty",
+      "explanation": "Quantity: how many capsules are in the bottle."
+    },
+    {
+      "term_as_written": "by mouth",
+      "explanation": "Swallow it."
+    },
+    {
+      "term_as_written": "Discard",
+      "explanation": "Throw away."
+    }
+  ],
+  "red_flags": [],
+  "questions_to_ask": [
+    "Can you explain these directions in my language?",
+    "What should I do if I forget a capsule?",
+    "Can I get this label printed in my language?"
+  ],
+  "clerk_need_en": "my medicine label - how to take it, and a label in my language",
+  "emergency_terms_found": [],
+  "is_likely_scam": false,
+  "scam_signals": [],
+  "resource_tags": [
+    "prescription_help",
+    "language_access"
+  ],
+  "institutions_as_written": [
+    "Sample Street Pharmacy"
+  ],
+  "form_numbers": [],
+  "geo_state": null,
+  "geo_county": null,
+  "geo_city": null,
+  "geo_zip": null,
+  "legibility": "good",
+  "readable_reason": null,
+  "blocks": [
+    {
+      "id": "p1b1",
+      "page": 1,
+      "text": "Sample Street Pharmacy",
+      "bbox": [
+        0.075,
+        0.0145,
+        0.4225,
+        0.0444
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b2",
+      "page": 1,
+      "text": "Rx# 0012345",
+      "bbox": [
+        0.075,
+        0.0802,
+        0.2,
+        0.1014
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b3",
+      "page": 1,
+      "text": "SAMPLE PATIENT",
+      "bbox": [
+        0.075,
+        0.1101,
+        0.2644,
+        0.1333
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b4",
+      "page": 1,
+      "text": "AMOXICILLIN 500 MG CAPSULE",
+      "bbox": [
+        0.075,
+        0.1536,
+        0.4969,
+        0.1821
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b5",
+      "page": 1,
+      "text": "Take 1 capsule by mouth three times daily until all taken.",
+      "bbox": [
+        0.075,
+        0.1928,
+        0.7244,
+        0.2159
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b6",
+      "page": 1,
+      "text": "Qty: 30 | Refills: 0",
+      "bbox": [
+        0.075,
+        0.2246,
+        0.925,
+        0.2643
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b7",
+      "page": 1,
+      "text": "Prescriber: Dr. A. Sample",
+      "bbox": [
+        0.075,
+        0.2729,
+        0.3362,
+        0.2961
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b8",
+      "page": 1,
+      "text": "Date filled: 09/28/2026",
+      "bbox": [
+        0.075,
+        0.3077,
+        0.315,
+        0.3309
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b9",
+      "page": 1,
+      "text": "Discard after: 03/15/2027",
+      "bbox": [
+        0.075,
+        0.3425,
+        0.3456,
+        0.3657
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b10",
+      "page": 1,
+      "text": "Take with food if it upsets your stomach.",
+      "bbox": [
+        0.075,
+        0.3783,
+        0.925,
+        0.4179
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    },
+    {
+      "id": "p1b11",
+      "page": 1,
+      "text": "Pharmacist questions? Call (571) 555-0163.",
+      "bbox": [
+        0.075,
+        0.4304,
+        0.5275,
+        0.4536
+      ],
+      "is_handwriting": false,
+      "is_unclear": false
+    }
+  ]
+}

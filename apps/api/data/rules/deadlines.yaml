@@ -1,0 +1,194 @@
+# data/rules/deadlines.yaml — WP2 (D-11; DOCUMENT_TAXONOMY §5.3; API_CONTRACT §3.10).
+#
+# The only source of relative-deadline arithmetic in the product. `analysis/deadline_rules.py`
+# emits `kind: estimated` only when (a) the paper prints a phrase matching `pattern`, (b) the anchor
+# is a *verified, stated* Demand whose `role == anchor_role`, (c) the detected `document_type` is in
+# `applies_to_doc_types`, and (d) `valid_until` is null or not yet past. A printed date always wins.
+# Never seeded, by decision (D-11): eviction notice/answer periods, USCIS response windows
+# (RFE/NOID/I-290B), SSA 60+5 days, Original Medicare 120 days, TPS windows, rent-increase periods.
+#
+# Shape = `RulesResponse` (API_CONTRACT §3.10): `rules_version` + `rules: list[DeadlineRule]`.
+# The first two entries are the API_CONTRACT §3.10 example entries copied verbatim.
+rules_version: "2026-09-27"
+rules:
+  - id: ar11_10d
+    label_en: "Report a move to USCIS within 10 days"
+    applies_to_doc_types: [uscis_receipt, uscis_rfe, uscis_biometrics, uscis_interview, uscis_approval, ead_related, green_card_related, tps_related]
+    pattern: "within (10|ten) days of (moving|your move|the move)"
+    days: 10
+    count_basis: calendar
+    anchor_role: move_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.uscis.gov/addresschange"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "USPS forwarding does not update USCIS."
+
+  - id: bia_appeal_30d
+    label_en: "Appeal to the BIA within 30 calendar days (must be received)"
+    applies_to_doc_types: [ij_decision]
+    pattern: "(within|no later than) (30|thirty) (calendar )?days"
+    days: 30
+    count_basis: calendar
+    anchor_role: decision_date
+    receipt_based: true
+    mail_days: 0
+    source_url: "https://www.justice.gov/eoir/policy-manual-eoir/part-III/bia/chapter-3-5"
+    source_verified_on: 2026-09-23
+    verification: likely
+    valid_until: 2027-03-31
+    notes_en: "Treat as likely until the page is re-fetched; the Board cannot extend this deadline."
+
+  - id: eoir33_5bd
+    label_en: "Tell the immigration court about a move within 5 working days (Form EOIR-33)"
+    applies_to_doc_types: [nta, hearing_notice, ij_decision, bia_notice]
+    pattern: "within (5|five) (working|business) days"
+    days: 5
+    count_basis: business
+    anchor_role: move_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.justice.gov/eoir/eoir-forms"
+    source_verified_on: 2026-09-23
+    verification: likely
+    valid_until: 2027-03-31
+    notes_en: "The court, the BIA and ICE each need their own address form. USPS forwarding does not update them."
+
+  - id: aca_internal_appeal_180d
+    label_en: "Ask your health plan for an internal appeal within 180 days"
+    applies_to_doc_types: [insurance_denial, eob, prior_auth]
+    pattern: "within (180|one hundred eighty) days"
+    days: 180
+    count_basis: calendar
+    anchor_role: notice_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.healthcare.gov/appeal-insurance-company-decision/internal-appeals/"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Counted from the date printed on the denial or statement. The printed date wins."
+
+  - id: aca_external_review_4mo
+    label_en: "Ask for an external review within 4 months of the final denial"
+    applies_to_doc_types: [insurance_denial]
+    pattern: "within (4|four) months"
+    days: 120
+    count_basis: calendar
+    anchor_role: decision_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.healthcare.gov/appeal-insurance-company-decision/external-review/"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "The rule says 4 months; this estimate uses 120 days. Confirm with the sender."
+
+  - id: medicare_advantage_65d
+    label_en: "Appeal a Medicare plan decision within 65 days"
+    applies_to_doc_types: [insurance_denial, eob]
+    pattern: "within (65|sixty-five) days"
+    days: 65
+    count_basis: calendar
+    anchor_role: notice_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.medicare.gov/providers-services/claims-appeals-complaints/appeals"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Medicare plan appeal windows changed in 2026. Use the date printed on your notice."
+
+  - id: medicaid_fair_hearing_90d_max
+    label_en: "Ask for a Medicaid fair hearing within 90 days at most"
+    applies_to_doc_types: [insurance_denial, medicaid_renewal]
+    pattern: "within (90|ninety) days"
+    days: 90
+    count_basis: calendar
+    anchor_role: notice_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.ecfr.gov/current/title-42/section-431.221"
+    source_verified_on: 2026-09-23
+    verification: likely
+    valid_until: 2027-03-31
+    notes_en: "This is the federal maximum. Your state may give less time. The printed date wins."
+
+  - id: asylum_annual_fee_30d
+    label_en: "Pay the annual asylum fee within 30 days of the notice"
+    applies_to_doc_types: [asylum_fee_notice]
+    pattern: "within (30|thirty) days"
+    days: 30
+    count_basis: calendar
+    anchor_role: notice_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.uscis.gov/newsroom/alerts/uscis-updates-fees-based-on-hr-1"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "There is no fee waiver for this fee."
+
+  - id: in_absentia_rescission_180d
+    label_en: "Ask to reopen an in-absentia order within 180 days (exceptional circumstances)"
+    applies_to_doc_types: [ij_decision]
+    pattern: "within (180|one hundred eighty) days"
+    days: 180
+    count_basis: calendar
+    anchor_role: decision_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.justice.gov/eoir/policy-manual-eoir/part-II/icpm/chapter-4-9"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Applies only when the order says the decision was made in your absence. A lawyer can confirm."
+
+  - id: eeoc_180_300d
+    label_en: "File a discrimination charge with the EEOC within 180 days (300 in some states)"
+    applies_to_doc_types: [pay_stub, other_notice]
+    # Only the 180-day phrase: a printed "within 300 days" must not get a 180-day estimate
+    # (it stays unresolved, "Ask the sender which date this means").
+    pattern: "within (180|one hundred eighty) days"
+    days: 180
+    count_basis: calendar
+    anchor_role: other
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.eeoc.gov/how-file-charge-employment-discrimination"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Some states allow 300 days. This estimate uses 180 days. A workers' rights office can confirm."
+
+  - id: osha_retaliation_30d
+    label_en: "File an OSHA retaliation complaint within 30 days"
+    applies_to_doc_types: [pay_stub, other_notice]
+    pattern: "within (30|thirty) days"
+    days: 30
+    count_basis: calendar
+    anchor_role: other
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.osha.gov/workers"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Counted from the day the employer acted against you, if the paper prints it."
+
+  - id: gfe_dispute_120d
+    label_en: "Dispute a bill that is $400 or more over your good-faith estimate within 120 days"
+    applies_to_doc_types: [medical_bill]
+    pattern: "within (120|one hundred twenty) (calendar )?days"
+    days: 120
+    count_basis: calendar
+    anchor_role: notice_date
+    receipt_based: false
+    mail_days: 0
+    source_url: "https://www.cms.gov/initiatives/your-patient-rights/medical-bill-rights"
+    source_verified_on: 2026-09-23
+    verification: verified
+    valid_until: null
+    notes_en: "Only when the bill is $400 or more above a written good-faith estimate you were given."

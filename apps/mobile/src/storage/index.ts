@@ -1,7 +1,7 @@
-// Vault interface and storage types (BUILD_PLAN §4.2 verbatim; owner WP4 after M0).
-// Day-0 content: the interface, every exported type, and a `vault` whose methods reject with
-// `new Error('vault not implemented')`. WP4 replaces the object with the platform re-export
-// (`vault.native.ts` / `vault.web.ts`, resolved by Metro).
+// Vault interface and storage types (BUILD_PLAN §4.2 verbatim; owner WP4).
+// `vault` is the platform re-export (`vault.native.ts` / `vault.web.ts`, resolved by Metro).
+// `StoredDocument.analysis` is null for "Save to read later" rows (PRODUCT_SPEC §9.3) even though
+// the §4.2 type says `AnalysisResult`; readers must check it.
 
 import type { AnalysisResult, DocumentCategory, DocumentType } from '@/api/types';
 
@@ -86,45 +86,6 @@ export type ConsentRecord = {
   platform: 'ios' | 'android' | 'web';
 };
 
-function notImplemented<T>(): Promise<T> {
-  return Promise.reject(new Error('vault not implemented'));
-}
-
-/** Day-0 placeholder; WP4 replaces this with the platform re-export. */
-export const vault: Vault = {
-  init: () => notImplemented(),
-  members: {
-    list: () => notImplemented(),
-    add: () => notImplemented(),
-    rename: () => notImplemented(),
-    remove: () => notImplemented(),
-  },
-  documents: {
-    list: () => notImplemented(),
-    get: () => notImplemented(),
-    save: () => notImplemented(),
-    move: () => notImplemented(),
-    remove: () => notImplemented(),
-    search: () => notImplemented(),
-  },
-  pages: {
-    list: () => notImplemented(),
-    uri: () => notImplemented(),
-  },
-  checklist: {
-    get: () => notImplemented(),
-    set: () => notImplemented(),
-  },
-  reminders: {
-    list: () => notImplemented(),
-    add: () => notImplemented(),
-    remove: () => notImplemented(),
-    setEnabled: () => notImplemented(),
-  },
-  consent: {
-    get: () => notImplemented(),
-    set: () => notImplemented(),
-    clear: () => notImplemented(),
-  },
-  wipeAll: () => notImplemented(),
-};
+/** Platform re-export: Metro resolves `./vault` to `vault.native.ts` (expo-sqlite + files) or
+ *  `vault.web.ts` (memory, IndexedDB opt-in); `vault.d.ts` types it for tsc. */
+export { vault, configureVault, cancelAllNotifications, type VaultConfig } from './vault';

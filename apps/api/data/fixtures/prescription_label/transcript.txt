@@ -1,0 +1,11 @@
+Sample Street Pharmacy
+Rx# 0012345
+SAMPLE PATIENT
+AMOXICILLIN 500 MG CAPSULE
+Take 1 capsule by mouth three times daily until all taken.
+Qty: 30 | Refills: 0
+Prescriber: Dr. A. Sample
+Date filled: 09/28/2026
+Discard after: 03/15/2027
+Take with food if it upsets your stomach.
+Pharmacist questions? Call (571) 555-0163.

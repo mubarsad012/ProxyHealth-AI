@@ -1,0 +1,26 @@
+id: blurry_unreadable_page
+title_key: fixture.blurry_unreadable_page
+title_en: Blurry page that cannot be read
+document_type: unknown
+category: other
+language_of_document: en
+pages: 1
+kind: document
+available_target_languages:
+- en
+thumbnail_url: /v1/demo/fixtures/blurry_unreadable_page/pages/1
+dhash: 03038302100c30186030c000818002010600080c301c30300060008003811103
+page_dhashes:
+- 03038302100c30186030c000818002010600080c301c30300060008003811103
+today: '2026-10-02'
+recorded_on: '2026-09-27'
+expected:
+  urgency_level:
+  - info
+  demands_count: 0
+  scam_risk: none
+  readable: false
+  model_calls: 1
+  warnings_include:
+  - low_quality_image
+  disclaimer_kind: general_information

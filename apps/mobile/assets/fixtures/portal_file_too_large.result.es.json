@@ -1,0 +1,73 @@
+{
+  "asks_for_credentials_or_payment": false,
+  "cautions": [
+    "El botón Submit Application envía toda su solicitud. Tóquelo solo cuando haya terminado todos los pasos."
+  ],
+  "confidence": "high",
+  "disclaimer_kind": "general_information",
+  "error_meaning": "La foto que eligió pesa 8.4 MB. Este sitio solo acepta archivos de hasta 5 MB, por eso no se subió.",
+  "error_text_quoted": "File exceeds the maximum size of 5 MB",
+  "is_likely_scam": false,
+  "model_meta": {
+    "analysis_mode": "mock",
+    "data_use_tier": "demo",
+    "demo": true,
+    "latency_ms": 0,
+    "model_id": "mock",
+    "provider": "mock",
+    "quality": "full",
+    "thinking_level": "medium",
+    "tier": "pro"
+  },
+  "needs_human_help": false,
+  "red_flags": [],
+  "request_id": "offline-portal_file_too_large-es",
+  "resource_tags": [
+    "benefits_navigation"
+  ],
+  "safety": {
+    "credential_or_payment_request": false,
+    "emergency": false,
+    "emergency_kinds": []
+  },
+  "scam_reasons": [],
+  "scam_risk": "none",
+  "screen_summary": "Este es el paso 3 de 5 en un sitio web de beneficios. Le pide subir un comprobante de ingresos. El archivo que eligió no fue aceptado porque es muy grande.",
+  "screen_text": [
+    "Sample State Benefits Portal",
+    "Step 3 of 5: Upload your documents",
+    "Document type: Proof of income",
+    "File exceeds the maximum size of 5 MB",
+    "Your file: paystub_photo.jpg (8.4 MB)",
+    "Allowed file types: PDF, JPG, PNG. Maximum size: 5 MB.",
+    "Choose File",
+    "Upload",
+    "Back",
+    "Submit Application"
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "text": "Haga la foto más pequeña o tome una foto nueva sin acercar la cámara. Un escaneo en PDF también sirve.",
+      "ui_target_as_written": null
+    },
+    {
+      "order": 2,
+      "text": "Toque Choose File y elija el archivo más pequeño.",
+      "ui_target_as_written": "Choose File"
+    },
+    {
+      "order": 3,
+      "text": "Toque Upload y espere a que aparezca el nombre del archivo.",
+      "ui_target_as_written": "Upload"
+    },
+    {
+      "order": 4,
+      "text": "Si todavía no funciona, toque Back y empiece este paso otra vez.",
+      "ui_target_as_written": "Back"
+    }
+  ],
+  "warnings": [
+    "demo_sample"
+  ]
+}

@@ -1,0 +1,103 @@
+# Synthetic sample paper (D-29). Rendered by scripts/make_fixtures.py. No real person's data.
+# A Spanish-language lease from a fictional landlord; the English output translates it.
+id: spanish_lease
+kind: document
+title_en: "Apartment lease written in Spanish"
+document_type: lease
+category: housing
+language_of_document: es
+languages: [en]
+today: 2026-10-02
+render: {accent: [100, 70, 40], logo: right, watermark_angle: 42}
+pages:
+  - - {text: "Propiedades Los Robles LLC", style: letterhead, ref: sender}
+    - {text: "Arlington, Virginia", style: letterhead_sub, ref: city}
+    - {text: "CONTRATO DE ARRENDAMIENTO RESIDENCIAL", style: title, ref: heading}
+    - {text: "Inquilino: SAMPLE INQUILINO", style: body, ref: tenant}
+    - {text: "Vivienda: Apartamento 5, Edificio Los Robles, Arlington, Virginia", style: body, ref: unit}
+    - {text: "Plazo: del 1 de diciembre de 2026 al 30 de noviembre de 2027.", style: bold, ref: term}
+    - {text: "Renta mensual: $1,650.00, que se paga el día 1 de cada mes.", style: bold, ref: rent}
+    - {text: "Cargo por pago tardío: $75.00 si la renta se paga después del día 5 del mes.", style: body, ref: late}
+    - {text: "Depósito de seguridad: $1,650.00, que se devuelve según la ley al terminar el contrato.", style: body, ref: deposit}
+    - {text: "Aviso para desocupar: el inquilino debe avisar por escrito 60 días antes de terminar el contrato.", style: body, ref: notice}
+    - {text: "Renovación automática: si nadie avisa, el contrato continúa de mes a mes.", style: body, ref: renewal}
+    - {text: "Teléfono de la oficina: (703) 555-0190", style: body, ref: phone}
+    - {text: "Firma del inquilino: ____________    Firma del arrendador: ____________", style: small, ref: sign}
+expected:
+  urgency_level: [info]
+  demands_count: 4
+  scam_risk: none
+  readable: true
+  detected_language: es
+  warnings_include: [document_language_differs]
+  disclaimer_kind: housing_information_only
+  state: VA
+out:
+  base:
+    sender_as_written: "Propiedades Los Robles LLC"
+    sender_kind: landlord
+    detected_language: es
+    summary_title: "Lease in Spanish from Propiedades Los Robles LLC"
+    summary_body: "This is a lease for Apartment 5 in Arlington, Virginia. It runs from December 1, 2026 to November 30, 2027. Rent is $1,650.00 each month. The paper is written in Spanish."
+    summary_span_ids: ["@heading", "@term", "@rent"]
+    demands:
+      - id: d1
+        kind: deadline
+        text: "The lease starts on December 1, 2026 (printed as \"1 de diciembre de 2026\")."
+        value_verbatim: "1 de diciembre de 2026"
+        source_quote: "Plazo: del 1 de diciembre de 2026 al 30 de noviembre de 2027."
+        span_ids: ["@term"]
+        date_text: "1 de diciembre de 2026"
+        role: move_date
+        confidence: high
+      - id: d2
+        kind: deadline
+        text: "The lease ends on November 30, 2027 (printed as \"30 de noviembre de 2027\")."
+        value_verbatim: "30 de noviembre de 2027"
+        source_quote: "Plazo: del 1 de diciembre de 2026 al 30 de noviembre de 2027."
+        span_ids: ["@term"]
+        date_text: "30 de noviembre de 2027"
+        role: expiry
+        confidence: high
+      - id: d3
+        kind: amount
+        text: "Rent is $1,650.00 each month, paid on the 1st."
+        value_verbatim: "$1,650.00"
+        source_quote: "Renta mensual: $1,650.00, que se paga el día 1 de cada mes."
+        span_ids: ["@rent"]
+        amount_text: "$1,650.00"
+        currency: USD
+        role: payment_due
+        confidence: high
+        ambiguity_note: "This is monthly rent. There is no single due date."
+      - id: d4
+        kind: action
+        text: "To end the lease, the tenant must give written notice 60 days before the end, the lease says."
+        value_verbatim: "60 días antes de terminar el contrato"
+        source_quote: "Aviso para desocupar: el inquilino debe avisar por escrito 60 días antes de terminar el contrato."
+        span_ids: ["@notice"]
+        role: other
+        confidence: high
+    plan_steps:
+      - {id: s1, text: "Keep a copy of the lease with both signatures.", kind: gather, resource_tags: [], span_ids: ["@sign"], demand_id: null}
+      - {id: s2, text: "Ask the landlord about any rule you do not understand, like the late fee or the renewal rule.", kind: ask, resource_tags: [], span_ids: ["@late", "@renewal"], demand_id: d4}
+      - {id: s3, text: "A housing counselor can read the lease with you.", kind: professional, resource_tags: [housing_counseling], span_ids: ["@heading"], demand_id: null}
+    glossary:
+      - {term_as_written: "Depósito de seguridad", explanation: "Security deposit: money you pay at the start. It can come back when you move out."}
+      - {term_as_written: "Cargo por pago tardío", explanation: "Late fee: extra money if rent is paid late."}
+      - {term_as_written: "Renovación automática", explanation: "Automatic renewal: the lease keeps going unless someone gives notice."}
+      - {term_as_written: "Aviso para desocupar", explanation: "Notice to move out: telling the landlord in writing that you will leave."}
+    red_flags: []
+    questions_to_ask:
+      - "Can I get a copy of this lease in English?"
+      - "When does the security deposit come back?"
+      - "How do I give written notice?"
+    clerk_need_en: "a lease - the rent, the dates and the rules in it"
+    resource_tags: [housing_counseling]
+    institutions_as_written: ["Propiedades Los Robles LLC"]
+    form_numbers: []
+    geo_state: VA
+    geo_city: Arlington
+    legibility: good
+    translated_pages:
+      - "Propiedades Los Robles LLC\nArlington, Virginia\nRESIDENTIAL LEASE AGREEMENT\nTenant: SAMPLE INQUILINO\nHome: Apartment 5, Los Robles Building, Arlington, Virginia\nTerm: from December 1, 2026 to November 30, 2027.\nMonthly rent: $1,650.00, paid on the 1st of each month.\nLate fee: $75.00 if rent is paid after the 5th of the month.\nSecurity deposit: $1,650.00, returned according to the law when the lease ends.\nNotice to vacate: the tenant must give written notice 60 days before the lease ends.\nAutomatic renewal: if no one gives notice, the lease continues month to month.\nOffice phone: (703) 555-0190\nTenant signature: ____________ Landlord signature: ____________"

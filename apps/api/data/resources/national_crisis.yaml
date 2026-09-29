@@ -1,0 +1,28 @@
+- {id: "988", name: "988 Suicide & Crisis Lifeline", org_type: hotline, cost: free, priority: 100,
+   url: "https://988lifeline.org/", phone: "988", text_line: "Text 988", hours: "24/7", languages: [en, es, interpreters_200+],
+   serves: {scope: national}, tags: [crisis],
+   what_it_does: {en: "Call or text 988, or chat online, any time you or someone you love is in crisis or thinking about suicide. Free and confidential. Spanish line and interpreters available."},
+   eligibility_plain: {en: "Anyone."},
+   verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
+   x_meta: {source: "resources.md §1G; fetched 2026-09-27 (call/text 988, chat, English/Español)", notes: "240+ languages via interpretation per research 2026-09-23.", expect_text: ["988"]}}
+- {id: dv_hotline, name: "National Domestic Violence Hotline", org_type: hotline, cost: free, priority: 100,
+   url: "https://www.thehotline.org/", phone: "+18007997233", text_line: "Text START to 88788", hours: "24/7", languages: [en, es, interpreters_200+],
+   serves: {scope: national}, tags: [domestic_violence, crisis],
+   what_it_does: {en: "Call 1-800-799-7233, text START to 88788, or chat online for confidential help with abuse at home, any time. Spanish site: espanol.thehotline.org."},
+   eligibility_plain: {en: "Anyone. You do not have to give your name."},
+   verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
+   x_meta: {source: "resources.md §1G; fetched 2026-09-27 (phone, text, 24/7, Spanish confirmed; 200+ languages per research)", expect_text: ["799", "88788"]}}
+- {id: poison, name: "Poison Control (Poison Help)", org_type: hotline, cost: free, priority: 100,
+   url: "https://www.poison.org/", phone: "+18002221222", languages: [en],
+   serves: {scope: national}, tags: [poison, crisis],
+   what_it_does: {en: "Call 1-800-222-1222 right away if someone swallowed, breathed or touched something that may be poison, or use the webPOISONCONTROL online tool. Free, expert and confidential."},
+   eligibility_plain: {en: "Anyone."},
+   verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
+   x_meta: {source: "resources.md §1G; fetched 2026-09-27 (number + online tool confirmed)", notes: "24/7 and interpreter access are general knowledge, not printed on the home page — hours left null; the fixed emergency card may say 'any time' from its own reviewed copy.", expect_text: ["1-800-222-1222"]}}
+- {id: trafficking, name: "National Human Trafficking Hotline", org_type: hotline, cost: free, priority: 95,
+   url: "https://humantraffickinghotline.org/", phone: "+18883737888", tty: "711", text_line: "Text 233733", hours: "24/7", languages: [en, es],
+   serves: {scope: national}, tags: [trafficking, crisis, domestic_violence],
+   what_it_does: {en: "Call 1-888-373-7888 or text 233733 if you or someone you know is being forced to work or have sex, or is being controlled through debt or threats. Confidential, any time."},
+   eligibility_plain: {en: "Anyone."},
+   verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
+   x_meta: {source: "resources.md §1G; fetched 2026-09-27 (phone, TTY 711, text, 24/7 confirmed)", expect_text: ["1-888-373-7888", "233733"]}}
