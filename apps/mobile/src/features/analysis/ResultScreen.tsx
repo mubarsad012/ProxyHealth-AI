@@ -21,7 +21,7 @@ import { useVoiceNotice } from '@/features/speech';
 import { useSequentialSpeech } from '@/features/speech/sequential';
 import { memberName, SaveToVaultSheet, useDocument, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
-import { usePackMeta, useT } from '@/i18n/useT';
+import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
 import { type CapturedPage, useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -80,6 +80,7 @@ export function useAnalysisFor(id: string): {
 
 export function ResultScreen({ id }: { id: string }) {
   const t = useT();
+  const bt = useBidiText();
   const meta = usePackMeta();
   const dir = useDirection();
   const { analysis, pages, loading, documentId } = useAnalysisFor(id);
@@ -194,7 +195,7 @@ export function ResultScreen({ id }: { id: string }) {
   );
 
   return (
-    <Screen back title={a.summary.title} footer={footer} testID="result-screen">
+    <Screen back title={bt(a.summary.title)} footer={footer} testID="result-screen">
       {notice ? (
         <AppText role="status" color="success">
           {notice}

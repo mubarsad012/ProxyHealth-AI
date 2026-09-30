@@ -612,13 +612,13 @@ WCAG 2.2 AA is the floor on every platform; Apple HIG and Material sizes are exc
 
 ## 16. Privacy policy (outline and required sentences)
 
-File: `apps/mobile/public/privacy/index.html` (WP8), copied by `expo export` into `dist/privacy/index.html`, served at `PRIVACY_POLICY_URL` (default `https://proxyhealth.expo.app/privacy`; ARCHITECTURE §5.3). Requirements: HTML (never PDF), public, non-geofenced, no JavaScript needed to read, `<html lang="en" dir="ltr">`, headings `h1`/`h2`, readable at 320 px and 200 % zoom (§15), no analytics on the page, an "Effective" date and the matching `CONSENT_VERSION`. Translated copies at `/privacy/<tag>/` are SHOULD (generated from the same source, labelled machine-translated until reviewed). The page must contain no `forbidden_phrases` (§17); extending `test_privacy_claims.py` to scan `index.html` is LATER (the STORE_LISTING check shares the list). Every change bumps `CONSENT_VERSION` (§4.7).
+File: `apps/mobile/public/privacy/index.html` (WP8; draft written 2026-09-29, operator identity and effective date still `TODO` per Q15), copied by `expo export` into `dist/privacy/index.html`, served at `PRIVACY_POLICY_URL` (default `https://proxyhealth.expo.app/privacy`; ARCHITECTURE §5.3). Requirements: HTML (never PDF), public, non-geofenced, no JavaScript needed to read, `<html lang="en" dir="ltr">`, headings `h1`/`h2`, readable at 320 px and 200 % zoom (§15), no analytics on the page, an "Effective" date and the matching `CONSENT_VERSION`. Translated copies at `/privacy/<tag>/` are SHOULD (generated from the same source, labelled machine-translated until reviewed). The page must contain no `forbidden_phrases` (§17); `test_privacy_claims.py` scans the page's visible text and the STORE_LISTING ```` ```text ```` blocks with the same list, checks `lang`/`dir`, no `<script>`, the verbatim reuse of the notice sentences and the printed consent version (done 2026-09-29, WP8). Every change bumps `CONSENT_VERSION` (§4.7).
 
 Sections in order, with the sentences that MUST appear (plain language; the `privacy.notice.*` strings are reused verbatim so the in-app notice and the policy never disagree):
 
 1. **Who we are** — operator legal name, address, contact e-mail for privacy questions (open: §19), effective date, consent version ("This policy matches consent version {CONSENT_VERSION} shown in the app.").
 2. **What the app does** — one paragraph; "ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms."
-3. **What is sent when you read a paper** — `privacy.notice.sent`; the list of fields from §9.1 in plain words; "Nothing is sent until you tap 'I understand, continue'."; tier sentence: `consent.line2.paid` (the paid deployment) — plus, for any demo instance, `consent.line2.demo`.
+3. **What is sent when you read a paper** — `privacy.notice.sent`; the list of fields from §9.1 in plain words; "None of your photos, papers or questions are sent until you tap "I understand, continue"." followed by what *is* sent before consent (the server config request and, if the user types one, the language name — §2.2), because the shorter "Nothing is sent until you tap…" would be false for S1b (WP8, 2026-09-29); tier sentence: `consent.line2.paid` (the paid deployment) — plus, for any demo instance, `consent.line2.demo`, and one line saying free-key test builds refuse real papers (the 403 gate, §3).
 4. **Google Gemini** — named as the AI provider on paid terms: "Google does not use your paper to improve its products. Google keeps a short safety log for a limited time, then deletes it." with a link to Google's Gemini API terms; "We do not turn on Google's optional logging."
 5. **What our server keeps** — `privacy.notice.what_we_keep`; the §9.2 table in prose; retention: 30 days for technical logs, 7 days for connection logs; "We cannot see, retrieve or delete your paper because we do not have it."
 6. **Your settings that travel with a paper** — `privacy.notice.settings_sent`; `privacy.notice.no_status`.
@@ -706,6 +706,13 @@ privacy_claims:
     - perm.camera
     - perm.photos
     - perm.notifications
+    # added 2026-09-29 by WP8 (CL-012), each reviewed against the implementation (§17.1)
+    - about.not.6
+    - btn.delete_everything_web
+    - settings.reviewed_by
+    - source.no_image
+    - vault.empty.web
+    - vault.saved.web
   claim_markers:               # a string containing any of these must be an approved key
     - "our server"
     - "Google"
@@ -742,6 +749,17 @@ privacy_claims:
 ```
 
 Rules the seed encodes: every sentence must be true on **every** tier it can appear on (tier-specific sentences are keyed per tier); web variants exist wherever the native sentence would be false in a browser; nothing claims app-layer encryption, human review, or iOS backup exclusion until verified (D-22, D-25).
+
+Test mechanics (WP8, 2026-09-29, resolves CL-012): the forbidden-phrase check (b) is **negation-aware** — an occurrence directly preceded by "not", "never" or "no" is the honest disclaimer itself ("Keep on this device (not encrypted by the app)"), not a claim; every other occurrence fails. The same check runs over the visible text of `apps/mobile/public/privacy/index.html` and over the ```` ```text ```` store-copy blocks of `docs/STORE_LISTING.md`, and the policy page must contain every §16 sentence verbatim plus "consent version {CONSENT_VERSION}".
+
+### 17.1 Reviewed copy for approved keys that Appendix A does not fix
+
+Rule (a) compares each approved key with the copy fixed in `PRODUCT_SPEC.md` Appendix A, §4 or §12 of this file, or this list. Each line was checked against the implementation on 2026-09-29:
+
+- `about.not.6`: "Does not store your papers on any server, does not log their content, and never asks your immigration status." — true on every tier: requests are processed in memory (§2.1), logs are the content-free allow-list (§2.3), no contract field asks status (D-24). Web opt-in storage is the user's own browser, not a server.
+- `vault.empty.web`: "Papers you keep stay only in this browser. Nothing is saved until you tap Save." — `vault.web.ts` keeps papers in tab memory or, after opt-in, IndexedDB; saving is opt-in (D-23).
+- `vault.saved.web`: "Saved. It stays in this browser." — same adapter; nothing is uploaded on save.
+- `btn.delete_everything_web`, `settings.reviewed_by`, `source.no_image` are fixed in Appendix A; `settings.reviewed_by` ("Reviewed by {name}") renders only when a pack's `reviewed_by` is non-null (D-25), and `source.no_image` only when the user turned off "Keep page images" (§9.4).
 
 
 ---

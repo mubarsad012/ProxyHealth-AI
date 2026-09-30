@@ -23,6 +23,9 @@ Monorepo. Two apps share one API contract:
 ## Machine facts (don't re-derive)
 - The system `python3` (python.org 3.13) has NO CA bundle for `urllib`/`ssl` (CERTIFICATE_VERIFY_FAILED). Use `curl` for downloads in scripts, or `httpx` inside the venv (bundles certifi). Noto static TTFs (9 families × Regular/Bold, OFL) are already in `apps/api/data/fonts/` and `apps/mobile/assets/fonts/` — do not re-download.
 
+- Expo web export + a custom API URL: always pass `--clear` (`EXPO_PUBLIC_API_URL=… npx expo export --platform web --clear`), because the shared Metro transform cache otherwise inlines a previously used URL. Serving a static export locally: `python3 -m http.server <port> --bind 127.0.0.1` from the export dir, and start the API with `CORS_ORIGINS=http://127.0.0.1:<port>` (default allows only `http://localhost:8081`, the Expo dev server).
+- API request-shape facts (don't rediscover): `POST /v1/analyze` requires `client_platform`; `/v1/troubleshoot` requires `screenshot` bytes even with `demo_sample_id`; `/v1/resources/match` takes `language` (not `language_tag`) and `institutions_as_written`; `/v1/quicksheet/pdf` requires `generated_on` and `resources` as `{name, phone?, url?}`; the "what to prepare" checklist is per result (`ResourceMatch.checklist`).
+
 ## Mobile test/tooling facts already verified on this machine (don't re-derive)
 - `npx tsc --noEmit`, `npx jest`, `npx expo lint`, and `npx expo export --platform web` all pass on the scaffold. Keep them passing.
 - TypeScript 6: `@types/*` are NOT auto-included; `tsconfig.json` lists `"types": ["jest"]`. Add to that list rather than relying on auto-inclusion.

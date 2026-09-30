@@ -13,7 +13,7 @@ Revision 2026-09-27 (consistency pass; WP0 implements these in the models before
 - **Base URL**: `EXPO_PUBLIC_API_URL` (dev `http://127.0.0.1:8000`). All versioned routes live under `/v1`; `/health` is unversioned.
 - **Content type**: every request and response body is `application/json; charset=utf-8`, except `POST /v1/quicksheet/pdf` (returns `application/pdf`) and `GET /v1/demo/fixtures/{id}/pages/{n}` (returns `image/png`). Binary inputs are base64 strings inside JSON (`data_base64`). There is **no** multipart endpoint in v1 (D-21).
 - **Contract version**: header `X-Contract-Version: 1` on every response; `ServerConfig.contract_version` carries the same integer. Breaking changes bump it and the `/v2` prefix.
-- **Authentication**: none in v1. Header `X-App-Token` is **reserved**: the server accepts and ignores it today; when `APP_TOKEN` is set in the environment, requests without a matching token receive `401 unauthorized`. Clients send it whenever `EXPO_PUBLIC_APP_TOKEN` is configured.
+- **Authentication**: none in v1. Header `X-App-Token` is **reserved**: the server accepts and ignores it today; when `APP_TOKEN` is set in the environment, requests without a matching token receive `401 unauthorized` (only CORS preflight `OPTIONS` is exempt; the 401 envelope carries CORS headers — CL-023). Clients send it whenever `EXPO_PUBLIC_APP_TOKEN` is configured.
 - **Request headers**
 
 | Header | Required on | Meaning |
@@ -39,14 +39,14 @@ Model `ErrorResponse { error: ErrorBody }`
 | `code` | `ErrorCode` (enum) | Machine-readable code (table below). |
 | `message` | `str` | English, for developers; never contains user content. |
 | `user_message_key` | `str` | i18n key the client renders from the language pack, e.g. `err.quota_exhausted`. |
-| `retry_after_seconds` | `int \| null` | Present on 429/503; mirrors the `Retry-After` header. |
+| `retry_after_seconds` | `int \| null` | Present on 429/503; mirrors the `Retry-After` header (30 when the raiser gave no value — CL-031(c)). |
 | `key_exhausted` | `bool` | `true` only when every upstream key slot for the needed tier is cooling/exhausted (so the client offers offline options and "Try a sample"). |
 | `request_id` | `str` | Correlation id (also in `X-Request-Id`). |
 | `details` | `dict[str, str \| int \| bool] \| null` | Small, content-free extras (e.g. `{"block_reason": "spii"}`, `{"max_pages": 12}`). |
 
 | `ErrorCode` | HTTP | When |
 |---|---|---|
-| `invalid_request` | 400 | Pydantic validation failure, bad base64, unknown tag. |
+| `invalid_request` | 400 | Pydantic validation failure, bad base64, unknown tag. The `message` names the failing field path; path segments that are not contract field names or indexes are redacted as `<extra>` (CL-031(b)). |
 | `too_many_pages` | 400 | > `limits.max_pages` images, or images mixed with a PDF. |
 | `pdf_too_long` | 400 | PDF > `limits.max_pdf_pages` pages. |
 | `unauthorized` | 401 | Missing/invalid `X-App-Token` (when enforced) or `X-Admin-Token`. |
@@ -54,7 +54,7 @@ Model `ErrorResponse { error: ErrorBody }`
 | `not_found` | 404 | Unknown resource/fixture/pack tag. |
 | `pack_version_mismatch` | 409 | Client base pack hash ≠ server base pack hash. |
 | `payload_too_large` | 413 | Body > `limits.max_request_bytes`, a page > `limits.max_page_bytes`, or PDF > `limits.max_pdf_bytes`. |
-| `unsupported_media_type` | 415 | MIME not in the allow-list. |
+| `unsupported_media_type` | 415 | MIME not in the allow-list: a body `mime_type` outside `PageMimeType` (answered by `errors.py`, not as a 400), or bytes whose magic number does not match the declared type (`analysis/uploads.py`) — CL-031(a). |
 | `content_blocked` | 422 | Upstream blocked the generation (`details.block_reason ∈ safety, spii, prohibited_content, recitation, blocklist, other`). Never retried on another key. |
 | `language_unresolved` | 422 | Typed language could not be resolved and no `x-` fallback was possible (empty/garbage query). |
 | `consent_required` | 428 | `X-Consent-Version` missing or older than `ServerConfig.consent_version`. |
@@ -153,7 +153,7 @@ Example:
 
 **`FeedbackKind`**: `clear` · `unclear` · `wrong_word` · `wrong_fact` · `offensive` · `scam_missed` · `resource_problem`
 
-**`FeedbackSurface`**: `summary` · `demands` · `plan` · `details` · `glossary` · `red_flags` · `clerk` · `chat` · `troubleshoot` · `resource` · `language_pack` · `quicksheet`
+**`FeedbackSurface`**: `summary` · `demands` · `plan` · `details` · `glossary` · `red_flags` · `clerk` · `chat` · `troubleshoot` · `resource` · `language_pack` · `quicksheet` · `app` (screens with no AI output — S18 "Report a problem", Settings → About — so they do not inflate `summary`; added 2026-09-29, CL-028(b))
 
 **`Platform`**: `ios` · `android` · `web`
 
@@ -300,7 +300,7 @@ Response `ServerConfig`
 
 ### 3.3 `GET /v1/language-packs/{tag}` — tier: none
 
-Path `tag: LanguageTag`. Query `pack_version: str | None` (when given and ≠ server base hash → `409 pack_version_mismatch`). Headers: `If-None-Match` → `304 Not Modified` with `ETag`. `404 not_found` if the tag is neither bundled nor cached (client then POSTs).
+Path `tag: LanguageTag`. Query `pack_version: str | None` (when given and ≠ server base hash → `409 pack_version_mismatch`). Headers: `If-None-Match` → `304 Not Modified` with `ETag`. The `ETag` header is the bare 64-hex `LanguagePack.etag` value (not an RFC 9110 quoted entity-tag); `If-None-Match` accepts bare, quoted and weak (`W/"…"`) forms (CL-029(c)). `404 not_found` if the tag is neither bundled nor cached (client then POSTs).
 
 Response `LanguagePack`
 
@@ -359,7 +359,7 @@ Request `LanguagePackRequest`
 | `pack_version` | `str` | Client's base pack hash; mismatch → `409`. |
 | `hint_tag` | `LanguageTag \| null` | Optional client guess. |
 
-Behaviour: resolve query → tag (ISO table; fast model only for unknown names; unresolvable → `x-<slug>`); serve cache if present; else generate with single-flight, QA, cache, return `LanguagePack` with `source="generated"`. Errors: `409 pack_version_mismatch`, `422 language_unresolved`, `429 quota_exhausted`, `503 upstream_unavailable`. Not gated by tier or consent (UI strings only, no user content). Mock provider returns a pseudo-localized pack.
+Behaviour: resolve query → tag (ISO table; fast model only for unknown names; unresolvable → `x-<slug>`); serve cache if present; else generate with single-flight, QA, cache, return `LanguagePack` with `source="generated"`. Errors: `409 pack_version_mismatch`, `422 language_unresolved`, `429 quota_exhausted`, `429 rate_limited` (the route takes the per-install analyze buckets), `503 upstream_unavailable`. A `language_query` with no letter ("123", "!!!", "x-42") is `422 language_unresolved` before any model call; a typed private tag `x-foo` resolves to itself without a model call; when every chunk is invalid or blocked the route answers `503 upstream_unavailable` + `Retry-After` (never `502`) — CL-029(b)(c). Not gated by tier or consent (UI strings only, no user content). Mock provider returns a pseudo-localized pack.
 
 ```json
 // POST /v1/language-packs
@@ -384,13 +384,13 @@ Behaviour: resolve query → tag (ISO table; fast model only for unknown names; 
 
 ### 3.5 `POST /v1/analyze` — tier: **pro** (`thinking_level=high` ≤ 8 pages, `medium` 9–12 pages; `MEDIA_RESOLUTION_HIGH` images / `MEDIUM` PDF); degraded → fast
 
-Headers: `X-Consent-Version` required (exempt when `demo_sample_id` set). Gate: `403 unpaid_tier_real_documents_disabled` on `unpaid`/`mixed` tiers without `demo_sample_id` (D-01).
+Headers: `X-Consent-Version` required (exempt when `demo_sample_id` names a known fixture). Gate: `403 unpaid_tier_real_documents_disabled` on `unpaid`/`mixed` tiers without a known `demo_sample_id` (D-01; an unknown id gets no exemption — CL-031).
 
 Request `AnalyzeRequest`
 
 | Field | Type | Description |
 |---|---|---|
-| `pages` | `list[PageInput]` (0–12) | 1–12 images **or** exactly one PDF. **May be `[]` only when `demo_sample_id` is set** (model validator: `len(pages) >= 1 or demo_sample_id`); otherwise `400 invalid_request`. When `demo_sample_id` is set the server ignores any client pages on gemini (fixture bytes are loaded from disk) and the mock provider resolves by id; the mock uses `pages` for perceptual-hash matching only when `demo_sample_id` is null. |
+| `pages` | `list[PageInput]` (0–12) | 1–12 images **or** exactly one PDF. **May be `[]` only when `demo_sample_id` is set** (model validator: `len(pages) >= 1 or demo_sample_id`); otherwise `400 invalid_request`. When `demo_sample_id` names a known fixture the server ignores any client pages on every provider (fixture bytes are loaded from disk — such requests skip the consent gate); an unknown id is gated like no id (`428 consent_required` without `X-Consent-Version`, `403` on `unpaid`/`mixed`) and, past the gate, is `400 invalid_request` (CL-031, AI_PROMPTS §14 item 15(b)); the mock uses `pages` for perceptual-hash matching only when `demo_sample_id` is null. |
 | `target_language` | `LanguageTag` | Language for all user-facing text. |
 | `ui_direction` | `Direction` (default `ltr`) | Lets the server order bilingual strings. |
 | `state` | `str \| null` (2 letters) | User's US state from Settings; never inferred. |
@@ -469,7 +469,7 @@ Response `AnalysisResult`
 | `reminder_eligible` | `bool` | `verified && date.kind=="stated" && value_iso set`. |
 | `ambiguity_note` | `str \| null` | |
 
-**`DateInfo { value_iso: str | None (YYYY-MM-DD), time_text: str | None, kind: DateKind, formula: str | None, anchor_quote: str | None, anchor_demand_id: str | None, rule_id: str | None, rule_source_url: str | None, rule_verification: RuleVerification | None, localized_line: str | None }`**
+**`DateInfo { value_iso: str | None (YYYY-MM-DD), time_text: str | None, kind: DateKind, formula: str | None, anchor_quote: str | None, anchor_demand_id: str | None, rule_id: str | None, rule_source_url: str | None, rule_verification: RuleVerification | None, localized_line: str | None }`** — `localized_line` is the ISO date written in the target language's digits (e.g. `۲۰۲۶-۱۰-۱۴` for a Dari pack's Persian digits), `null` for `western` digits and for digit systems the server leaves as ASCII (`ethiopic`, `other`), since the line would equal `value_iso`; it carries no localized month names (code-authoritative, CL-055(e); AI_PROMPTS §11.4)
 
 Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real_documents_disabled`, `413 payload_too_large`, `415 unsupported_media_type`, `422 content_blocked`, `428 consent_required`, `429 rate_limited|quota_exhausted`, `502 model_output_invalid`, `503 upstream_unavailable`. An unreadable page is a `200` with `quality.readable=false`, not an error.
 
@@ -520,7 +520,7 @@ Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real
     "span_ids": ["p1b2", "p1b5"]
   },
   "demands": [
-    {"id": "d1", "kind": "deadline", "text": "تا ۱۴ اکتبر ۲۰۲۶ جواب بدهید.", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": "۱۴ اکتبر ۲۰۲۶"}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null},
+    {"id": "d1", "kind": "deadline", "text": "تا ۱۴ اکتبر ۲۰۲۶ جواب بدهید.", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": "۲۰۲۶-۱۰-۱۴"}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null},
     {"id": "d2", "kind": "document_requested", "text": "یک کاپی از بل برق، آب یا گاز بفرستید.", "value_verbatim": "a copy of a recent utility bill (electric, water, or gas)", "source_quote": "Acceptable proof of address includes a copy of a recent utility bill (electric, water, or gas).", "span_ids": ["p1b6"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": null, "amount": null, "documents": ["utility bill (electric, water, or gas)"], "role": "other", "reminder_eligible": false, "ambiguity_note": null}
   ],
   "unverified": [],
@@ -571,7 +571,7 @@ Headers/gate as `/v1/analyze`. Request `TroubleshootRequest`
 
 | Field | Type | Description |
 |---|---|---|
-| `screenshot` | `PageInput` | Exactly one image (no PDF). |
+| `screenshot` | `PageInput` | Exactly one image (no PDF). Required even when `demo_sample_id` is set; the server then reads the fixture's screenshot from disk and ignores these bytes. |
 | `user_goal` | `str \| null` (≤ 300) | "What were you trying to do?" |
 | `mode` | `TroubleshootMode` (default `portal`) | `scam_check` for "Is this a scam?" |
 | `portal_hint` | `PortalHint \| null` | |
@@ -813,8 +813,8 @@ Request `QuickSheetRequest`
 | `language_tag` | `LanguageTag` | |
 | `direction` | `Direction` | |
 | `font_hint` | `str \| null` | From the pack. |
-| `sections` | `list[QuickSheetSection { heading: str, heading_en: str, lines: list[str] (≤ 40) }]` (≤ 8) | Three cards, dates, checklist. |
-| `resources` | `list[QuickSheetResource { name: str, phone: str \| null, url: str \| null }]` (≤ 8) | Must be resource-DB entries; the server re-validates ids/phones against the DB and drops anything else. |
+| `sections` | `list[QuickSheetSection { heading: str, heading_en: str, lines: list[str] (≤ 40) }]` (≤ 8) | Three cards, dates, checklist. Heading carrier: a section whose `heading_en` is the English `quicksheet.help` ("Who can help") and whose `lines` are empty is not drawn; its `heading` becomes the localized heading of the resources block (without a carrier the server uses the bundled pack for `language_tag`, else English). It counts toward the 8. The carrier reuses the existing, already translated key `quicksheet.help` (client `features/quicksheet/build.ts`, server `quicksheet/render.py` `HELP_KEY`); there is no separate `quicksheet.who_can_help` key (CL-067(c)). |
+| `resources` | `list[QuickSheetResource { name: str, phone: str \| null, url: str \| null }]` (≤ 8) | Must be resource-DB entries; the server re-validates each one against the DB (its `url`, else its `name`, must identify an entry; a given `url` must be one of that entry's URLs and a given `phone` that entry's `phone` or `tty`; the DB's own name and URL are printed, duplicates collapse) and silently drops anything else (only the count is logged). |
 | `footer` | `str` | Fixed disclaimer text (client passes the localized string). |
 | `generated_on` | `date` | |
 
@@ -838,10 +838,12 @@ Request `FeedbackRequest`
 | `document_category` | `DocumentCategory \| null` | |
 | `document_type` | `DocumentType \| null` | |
 | `card_id` | `str \| null` (≤ 32, `^[a-z0-9_.-]+$`) | Stable card/step id (e.g. `d1`, `s2`, `summary`), never text. |
-| `resource_id` | `str \| null` | |
-| `app_version` | `str` | |
+| `resource_id` | `str \| null` (`^[a-z0-9_]{1,64}$`) | A vetted-DB resource id (`data/resources/*.yaml`), never text. |
+| `app_version` | `str` (≤ 40, `^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.]{1,20})?$`) | Semver of the app build (`expo.version`). |
 | `platform` | `Platform` | |
-| `model_id` | `str \| null` | |
+| `model_id` | `str \| null` (`^[a-z0-9.-]{1,64}$`) | `model_meta.model_id` of the result the feedback is about (`mock` or a `MODEL_PRO`/`MODEL_FAST` id). |
+
+A value that fails a pattern (or any unknown field) is `400 invalid_request`. The three identifier patterns (added 2026-09-29, CL-026) are CL-026's patterns with `[0-9]` in place of `\d`, because pydantic-core's regex `\d` also matches non-ASCII digits; they are a coarse filter only. `feedback/store.py` stays the privacy boundary (CL-052): it stores `other` in place of a `resource_id` that is not a loaded `ResourceRepo` id, an `app_version` with a version number longer than 6 digits, or a `model_id` that is not `mock`, a configured model or a strict Gemini model-id shape (so a slug such as `maria-lopez-12-oak-st` passes the pattern but is counted as `other`).
 
 Response `FeedbackResponse { received: bool, id: str }`. The server increments a counter keyed by `(kind, surface, language_tag, document_type, resource_id, app_version, model_id)` in `var/feedback_counts.sqlite`; no other field is stored.
 
@@ -863,7 +865,9 @@ Response `list[DemoFixture]` where **`DemoFixture { id: str, title_key: str, tit
  {"id": "portal_file_too_large", "title_key": "fixture.portal_file_too_large", "title_en": "Benefits portal: file too large", "document_type": "unknown", "category": "benefits", "language_of_document": "en", "pages": 1, "available_target_languages": ["en", "es", "prs", "ar"], "thumbnail_url": "/v1/demo/fixtures/portal_file_too_large/pages/1", "kind": "screenshot"}]
 ```
 
-### 3.14 `GET /v1/admin/keys` — tier: none; auth `X-Admin-Token` (401 otherwise; endpoint absent when `ADMIN_TOKEN` is unset)
+### 3.14 `GET /v1/admin/keys` — tier: none; auth `X-Admin-Token` (401 otherwise; `404 not_found` when `ADMIN_TOKEN` is unset)
+
+The route is always mounted so the committed `openapi.json` holds every §3 path and never depends on the environment; with `ADMIN_TOKEN` unset it answers `404 not_found` (code-authoritative, CL-013). FastAPI's automatic `422 HTTPValidationError` is stripped from the schema because validation failures are answered `400 invalid_request` (§0.1).
 
 Response `AdminKeysResponse { data_use_tier: DataUseTier, slots: list[KeySlotState { index: int, project: str, billing: bool, key_last4: str, tiers: dict[str, TierState] }] }` where **`TierState { state: Literal["healthy","cooling","rpd_exhausted","disabled"], cooldown_until: datetime | None, consecutive_429: int, rpm_last_minute: int, rpd_count: int, rpd_reset_at: datetime, last_error_code: int | None, last_used_at: datetime | None }`**.
 

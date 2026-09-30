@@ -845,9 +845,12 @@ export interface components {
         /**
          * FeedbackSurface
          * @description API_CONTRACT §1 — UI surface the feedback was given on.
+         *
+         *     ``app`` is for screens that show no AI output (S18 "Report a problem", Settings → About), so
+         *     those reports do not inflate the ``summary`` counts (DECISIONS §14 CL-028(b)).
          * @enum {string}
          */
-        FeedbackSurface: "summary" | "demands" | "plan" | "details" | "glossary" | "red_flags" | "clerk" | "chat" | "troubleshoot" | "resource" | "language_pack" | "quicksheet";
+        FeedbackSurface: "summary" | "demands" | "plan" | "details" | "glossary" | "red_flags" | "clerk" | "chat" | "troubleshoot" | "resource" | "language_pack" | "quicksheet" | "app";
         /**
          * GeoHints
          * @description API_CONTRACT §2 — location printed on the paper only; zip truncated to 3 digits by code.

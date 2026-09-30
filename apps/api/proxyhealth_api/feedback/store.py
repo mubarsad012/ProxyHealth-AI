@@ -8,8 +8,9 @@ The response id is a fresh ULID (26-char Crockford base32, ``time.time_ns()`` + 
 prefixed ``fb_``; it is not stored either.
 
 ``kind``/``surface``/``document_type`` are enum values and ``language_tag`` is pattern-checked by
-``FeedbackRequest``. The contract leaves ``resource_id``, ``app_version`` and ``model_id`` as free
-``str`` (CL line to WP0 filed), so ``counter_key`` re-validates them here and replaces anything
+``FeedbackRequest``. The contract gives ``resource_id``, ``app_version`` and ``model_id`` only
+coarse identifier patterns (CL-026), so this module stays the privacy boundary (CL-052):
+``counter_key`` re-validates them here and replaces anything
 that is not a short identifier with ``OTHER``: a resource id must look like a vetted-DB id (and be
 a known one when the caller passes ``known_resource``), an app version must be semver-like, a model
 id must be ``mock``, a configured ``MODEL_PRO``/``MODEL_FAST`` id or a strict Gemini model-id

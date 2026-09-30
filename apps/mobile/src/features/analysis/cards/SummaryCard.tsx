@@ -11,7 +11,7 @@ import { AppText, Heading } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
-import { usePackMeta, useT } from '@/i18n/useT';
+import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 
 import { blockById } from '../pageImages';
 import type { ResultCardProps } from './shared';
@@ -24,6 +24,7 @@ export function showEnglishBody(tier: number, translationConfidence: string, bod
 
 export function SummaryCard({ analysis, handlers }: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const meta = usePackMeta();
   const { colors } = useTheme();
   const dir = useDirection();
@@ -33,8 +34,8 @@ export function SummaryCard({ analysis, handlers }: ResultCardProps) {
   const speak = [s.title, s.body, sender].filter(Boolean).join('. ');
   return (
     <Card id="card-what-is-this" headingKey="card.what_is_this" lang={analysis.target_language} speakText={speak}>
-      <Heading level={3}>{s.title}</Heading>
-      <AppText lang={analysis.target_language}>{s.body}</AppText>
+      <Heading level={3}>{bt(s.title)}</Heading>
+      <AppText lang={analysis.target_language}>{bt(s.body)}</AppText>
       {english ? (
         <View style={[styles.enRow, { flexDirection: dir.row }]}>
           <View style={[styles.enChip, { borderColor: colors.border }]}>
@@ -44,7 +45,7 @@ export function SummaryCard({ analysis, handlers }: ResultCardProps) {
           </View>
           <View style={styles.flex}>
             <AppText variant="caption" color="textMuted" lang="en">
-              {s.body_en}
+              {bt(s.body_en)}
             </AppText>
           </View>
         </View>

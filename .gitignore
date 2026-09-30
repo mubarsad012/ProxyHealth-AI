@@ -27,12 +27,13 @@ __pycache__/
 *.egg-info/
 build/
 
-# --- Secrets & env ---
+# --- Secrets & env (CLAUDE.md rule 5; DEPLOYMENT.md "Secrets") ---
 .env
 .env.*
 !.env.example
 secrets.toml
 *.pem
+*service-account*.json
 
 # --- OS / editor ---
 .DS_Store
@@ -45,3 +46,8 @@ htmlcov/
 
 # --- API runtime state (keypool.json, langpacks cache, feedback counters) ---
 apps/api/var/
+/var/
+
+# --- CI / tooling outputs ---
+links-report.json
+expo-env.d.ts

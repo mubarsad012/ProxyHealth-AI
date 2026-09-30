@@ -1,5 +1,6 @@
 // S18 — Not found / root error boundary (PRODUCT_SPEC S18): friendly copy, "Go home", "Report a
-// problem" (counts only). Never a stack trace for users; development builds show a collapsible.
+// problem" (counts only, surface `app` — this screen shows no AI output, so it must not count as
+// `summary`; CL-028(b)). Never a stack trace for users; development builds show a collapsible.
 
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
@@ -28,7 +29,7 @@ export function NotFoundScreen({ error, retry }: NotFoundScreenProps) {
   const [reported, setReported] = useState(false);
   const report = () => {
     setReported(true);
-    api.feedback(buildFeedbackRequest({ surface: 'summary' }, 'unclear', meta.tag)).catch(() => undefined);
+    api.feedback(buildFeedbackRequest({ surface: 'app' }, 'unclear', meta.tag)).catch(() => undefined);
   };
   return (
     <Screen testID="not-found-screen">

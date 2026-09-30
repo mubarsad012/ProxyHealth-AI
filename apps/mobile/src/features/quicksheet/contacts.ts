@@ -112,14 +112,21 @@ export function isN11(phone: string): boolean {
   return N11.has(phone.trim());
 }
 
-/** Display form of a DB phone: E.164 NANP → "+1 571-472-5880"; N11 unchanged. */
+/** US toll-free area codes (printed "1-800-…", as the papers and hotlines print them). */
+export const TOLL_FREE_AREA_CODES: ReadonlySet<string> = new Set(['800', '833', '844', '855', '866', '877', '888']);
+const NANP = /^(?:\+?1)?([2-9]\d{2})([2-9]\d{2})(\d{4})$/;
+
+/**
+ * Display form of a DB phone, the same rule as the PDF (`quicksheet/render.py` `format_phone`):
+ * toll free "+18003182596" → "1-800-318-2596", other US "+15714725880" → "(571) 472-5880"; N11
+ * codes, extensions and non-US numbers unchanged. Every national digit is kept; `tel:` links keep
+ * using the stored E.164 value (`features/help/format.ts` `telHref`).
+ */
 export function formatPhone(phone: string): string {
   const p = phone.trim();
   if (isN11(p)) return p;
-  const d = digitsOnly(p);
-  if (d.length === 11 && d.startsWith('1')) {
-    return `+1 ${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7)}`;
-  }
-  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
-  return p;
+  const m = NANP.exec(p.replace(/[\s().-]/g, ''));
+  if (!m) return p;
+  const [, area, exchange, line] = m;
+  return TOLL_FREE_AREA_CODES.has(area) ? `1-${area}-${exchange}-${line}` : `(${area}) ${exchange}-${line}`;
 }

@@ -6,6 +6,8 @@ import { create } from 'zustand';
 
 import type { ApiError } from '@/api/errors';
 import type { DigitSystem, Direction, LanguageInfo, LanguagePack, PackTier } from '@/api/types';
+import { isolateTemplateForLayout, type LayoutDir } from '@/i18n/bidi';
+import { extraLanguageInfo } from '@/i18n/languageNames';
 import { LANGUAGES } from '@/i18n/languages';
 import { bundledPacks } from '@/i18n/packs';
 
@@ -61,8 +63,10 @@ export function unknownLanguageInfo(tag: string, name?: string): LanguageInfo {
   };
 }
 
+/** Seed info for `tag`; resource-only tags without a pack (zh, hmn, km…) get their names from
+ *  `languageNames.ts` (never added to the language grid); anything else is "unknown". */
 export function languageInfoFor(tag: string): LanguageInfo {
-  return LANGUAGES[tag] ?? unknownLanguageInfo(tag);
+  return LANGUAGES[tag] ?? extraLanguageInfo(tag) ?? unknownLanguageInfo(tag);
 }
 
 /** Convert an API `LanguagePack` into the runtime shape. */
@@ -192,23 +196,49 @@ function reportMissing(key: string): void {
   missingListener?.(key);
 }
 
+/** The template `translate` uses for `key`: the pack's own string, else English, else null. */
+function templateFor(strings: Record<string, string>, key: string): string | null {
+  const own = strings[key];
+  if (typeof own === 'string' && own.length > 0) return own;
+  const base = BASE_STRINGS[key];
+  return typeof base === 'string' ? base : null;
+}
+
 /** Look up `key` in `strings`, then English, then return the key itself. */
 export function translate(
   strings: Record<string, string>,
   key: string,
   vars?: Record<string, string | number>,
 ): string {
-  const own = strings[key];
-  if (typeof own === 'string' && own.length > 0) return interpolate(own, vars);
-  const base = BASE_STRINGS[key];
-  if (typeof base === 'string') return interpolate(base, vars);
+  const template = templateFor(strings, key);
+  if (template !== null) return interpolate(template, vars);
   reportMissing(key);
   return key;
 }
 
-/** Non-hook translation for code outside React (stores, TTS chunks, notifications). */
+/**
+ * `translate` plus the RTL isolation rule (D-26): in an RTL layout, copy whose template (the pack
+ * string or its English fallback, placeholders removed) runs all left-to-right comes back
+ * FSI/LRI…PDI-wrapped, whatever script the inserted variables use (`isolateTemplateForLayout`).
+ * Missing keys (the key itself) are never wrapped. Pure; `useT`, `t` and tests share it.
+ */
+export function translateForLayout(
+  strings: Record<string, string>,
+  layout: LayoutDir,
+  key: string,
+  vars?: Record<string, string | number>,
+): string {
+  const text = translate(strings, key, vars);
+  if (layout !== 'rtl') return text;
+  const template = templateFor(strings, key);
+  return template === null ? text : isolateTemplateForLayout(template, text, 'rtl');
+}
+
+/** Non-hook translation for code outside React (stores, TTS chunks, notifications). Same RTL
+ *  isolation rule as `useT` (`translateForLayout`). */
 export function t(key: string, vars?: Record<string, string | number>): string {
-  return translate(useI18n.getState().pack.strings, key, vars);
+  const pack = useI18n.getState().pack;
+  return translateForLayout(pack.strings, pack.direction, key, vars);
 }
 
 /** True when the active pack itself (not the English fallback) has this key. */

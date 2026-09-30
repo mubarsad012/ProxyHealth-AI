@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import type { ApiClient } from '@/api/client';
 import type { AnalysisResult, ChatAnswer, ChatMessage, ChatRequest, PageText } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
-import { EN_PACK, t, useI18n } from '@/i18n/store';
+import { bundledPackFor, EN_PACK, t, translate, useI18n } from '@/i18n/store';
 import { useSession } from '@/store/session';
 
 import medicaidEn from '../../../assets/fixtures/medicaid_address_confirmation.result.en.json';
@@ -131,15 +131,41 @@ describe('assistant bubble text', () => {
       answer({ refusal_kind: 'eligibility', not_in_document: true, refer_to_professional: 'lawyer_or_accredited_rep' }),
       t,
     );
+    // "The paper does not say." is the server's (chat_pipeline.with_not_in_document); a refusal
+    // speaks through its own template instead.
     expect(lines).toEqual([
       'The paper asks you to send proof of address.',
       t('chat.refusal.eligibility'),
-      t('chat.not_in_document'),
       t('chat.refer.lawyer_or_accredited_rep'),
     ]);
     expect(assistantLines(answer({ answer: '  ', refusal_kind: 'drafting' }), t)).toEqual([t('chat.refusal.drafting')]);
     expect(referShowsHelp('housing_counselor')).toBe(true);
     expect(referShowsHelp('sender')).toBe(false);
+  });
+
+  it('shows "The paper does not say." once: the server sentence is never repeated', () => {
+    const fixed = t('chat.not_in_document');
+    const lines = assistantLines(answer({ answer: `${fixed} It is about: a Medicaid letter.`, not_in_document: true, grounded_quotes: [] }), t);
+    expect(lines).toEqual([`${fixed} It is about: a Medicaid letter.`]);
+    expect(lines.join(' ').split(fixed)).toHaveLength(2);
+    // Only an empty non-refusal answer (an older server) falls back to the fixed key.
+    expect(assistantLines(answer({ answer: '', not_in_document: true }), t)).toEqual([fixed]);
+    // A template the answer already carries (the server's fixed out_of_scope reply) is not repeated.
+    const oos = t('chat.refusal.out_of_scope');
+    expect(assistantLines(answer({ answer: oos, refusal_kind: 'out_of_scope', not_in_document: true }), t)).toEqual([oos]);
+  });
+
+  it('renders the Dari sentence once in the bubble (prs pack)', async () => {
+    const prs = bundledPackFor('prs')!;
+    useI18n.getState().setPack(prs);
+    try {
+      const fixed = prs.strings['chat.not_in_document'];
+      const lines = assistantLines(answer({ answer: `${fixed} درباره این است: X`, not_in_document: true }), (k) => translate(prs.strings, k));
+      expect(lines).toHaveLength(1);
+      expect(lines[0].split(fixed)).toHaveLength(2);
+    } finally {
+      useI18n.getState().setPack(EN_PACK);
+    }
   });
 
   it('starter chips: questions_to_ask first, then fixed starters by demand kind, at most 5', () => {

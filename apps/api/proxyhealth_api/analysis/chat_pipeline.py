@@ -5,15 +5,20 @@ are never re-sent. Order: context compaction (≤ 60 000 chars, §5.4.3) → one
 ``low``) → grounding check (every ``grounded_span_ids`` id must exist in ``original_text``; none
 left → ``not_in_document``) → contact scrubber (only contacts printed on the paper survive) →
 phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a referral) →
-injection guard (typed instructions + a failing answer → ``out_of_scope``) → emergency lexicon
-over the question and the turns → tags → disclaimers and warnings. The model is never asked to
+injection guard (typed instructions + a failing answer → ``out_of_scope``) → a
+``not_in_document`` answer that is not a refusal carries the pack's fixed ``chat.not_in_document``
+sentence exactly once (``with_not_in_document``; the client never adds it) → emergency lexicon over
+the question and the turns → tags → disclaimers and warnings. The model is never asked to
 compute a date: the context shows the app's own labelled dates only. Nothing here writes to disk
 or logs content (ARCHITECTURE §7).
 """
 
 from __future__ import annotations
 
+import difflib
+import re
 import time
+import unicodedata
 from collections.abc import Sequence
 
 from proxyhealth_api.ai import prompt_loader as prompt
@@ -26,12 +31,13 @@ from proxyhealth_api.analysis import (
     phrasing,
     tagging,
 )
-from proxyhealth_api.analysis.deadline_rules import local_today
 from proxyhealth_api.analysis.pipeline import (
     PipelineDeps,
     RewriteBudget,
+    analysis_today,
     demo_of,
     elapsed_ms,
+    english,
     generate,
     hints_for,
     make_rewriter,
@@ -56,6 +62,9 @@ from proxyhealth_api.contracts.model_out import ChatModelOut
 
 MAX_CONTEXT_CHARS = 60_000
 MAX_SUGGESTED = 3
+NOT_IN_DOCUMENT_KEY = "chat.not_in_document"
+# A model sentence this close to the fixed one (after normalisation) is the same sentence.
+SAME_SENTENCE_RATIO = 0.8
 REFER_REQUIRED = frozenset(
     {RefusalKind.eligibility, RefusalKind.filing_advice, RefusalKind.outcome,
      RefusalKind.medical_interpretation, RefusalKind.drafting}
@@ -181,13 +190,74 @@ def grounded_quotes(ctx: AnalysisContext, span_ids: Sequence[str]) -> list[Quote
     return out
 
 
+# Sentence ends kept with the sentence (Latin, Arabic/Urdu, Devanagari and CJK full stops).
+_ENDS = ".!?؟۔।。！？"
+_SENTENCE_RE = re.compile(rf"[^{_ENDS}]*(?:[{_ENDS}]+[\"'”’»)\]]*|$)")
+# Case, spacing, joiners, bidi marks and punctuation do not make a sentence different.
+_NOISE_RE = re.compile(rf"[\s\u200c\u200d\u200e\u200f\u2066-\u2069{_ENDS},،;:\"'“”‘’«»()\[\]…\-]+")
+
+
+def _sentence_key(text: str) -> str:
+    return _NOISE_RE.sub("", unicodedata.normalize("NFKC", text).casefold())
+
+
+def _same_sentence(key: str, fixed_keys: Sequence[str]) -> bool:
+    if key in fixed_keys:
+        return True
+    # A longer sentence that starts with it ("… does not say when.") says more and is kept as
+    # written; a prefix of it is a different, shorter sentence. Only other spellings ("doesn't")
+    # are matched by ratio, so short specific sentences never lose their information.
+    if any(key.startswith(fixed) or fixed.startswith(key) for fixed in fixed_keys):
+        return False
+    return any(
+        len(key) <= 2 * len(fixed)
+        and difflib.SequenceMatcher(None, key, fixed).ratio() >= SAME_SENTENCE_RATIO
+        for fixed in fixed_keys
+    )
+
+
+def with_not_in_document(answer: str, fixed: str, *variants: str) -> str:
+    """``answer`` carrying the fixed "The paper does not say." sentence exactly once.
+
+    The fixed sentence is the target pack's ``chat.not_in_document``; ``variants`` (the English
+    sentence) are other spellings the model or the mock may have used. A sentence of the answer
+    that is the same sentence (exact after normalising case, spacing, joiners and punctuation, or
+    a near spelling such as "doesn't") is replaced in place by ``fixed``; further copies are
+    dropped; a sentence that merely starts with it ("The paper does not say who …") counts as
+    saying it and is kept as written. When no sentence says it, ``fixed`` is put first. The client
+    renders ``answer`` as is and no longer appends the key itself (one source of truth)."""
+    fixed = " ".join(fixed.split())
+    keys = [k for k in dict.fromkeys(_sentence_key(s) for s in (fixed, *variants)) if k]
+    out: list[str] = []
+    said = False
+    for match in _SENTENCE_RE.finditer(answer):
+        chunk = match.group(0)
+        if not chunk:
+            continue
+        key = _sentence_key(chunk)
+        if key and _same_sentence(key, keys):
+            if not said:
+                out.append(chunk[: len(chunk) - len(chunk.lstrip())] + fixed)
+                said = True
+            continue
+        if key and any(key.startswith(k) for k in keys):
+            said = True
+        out.append(chunk)
+    text = "".join(out).strip()
+    if not said:
+        text = f"{fixed} {text}".strip()
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     started = time.perf_counter()
     deadline_at = deps.ai.request_deadline()
     ctx = req.analysis
     target = req.target_language
     t = translator(deps, target)
-    today = local_today(deps.clock())
+    # A sample paper's context carries dates computed as of DEMO_AS_OF; the prompt's "today" must
+    # agree with them (demo/as_of.py).
+    today = analysis_today(deps.clock(), None, sample=bool(req.demo_sample_id))
     vars = {
         **prompt_base_vars(deps, target_language=target, today=today),
         "analysis_context": compact_context(ctx),
@@ -239,6 +309,12 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     not_in_document = (
         out.not_in_document or dropped_all or (not quotes and refusal is RefusalKind.none)
     )
+    # The fixed sentence exactly once, for the mock and for Gemini alike; a refusal speaks through
+    # its own fixed template instead (rendered by the client from ``refusal_kind``).
+    if not_in_document and refusal is RefusalKind.none:
+        answer = with_not_in_document(
+            answer, t(NOT_IN_DOCUMENT_KEY), english(deps)(NOT_IN_DOCUMENT_KEY)
+        )
     if refusal is RefusalKind.medical_interpretation:
         refer = ReferTo.clinician
     elif refusal in REFER_REQUIRED and refer is ReferTo.none:

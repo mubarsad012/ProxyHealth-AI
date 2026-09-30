@@ -9,8 +9,10 @@ import type { ApiClient } from '@/api/client';
 import { ApiError } from '@/api/errors';
 import type { AnalysisResult, Resource } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
+import { telHref } from '@/features/help/format';
 import { clearMatchCache } from '@/features/help/request';
-import { BASE_STRINGS, translate } from '@/i18n/store';
+import { BASE_STRINGS, bundledPackFor, translate } from '@/i18n/store';
+import { translateForLayout } from '@/i18n/useT';
 
 import { buildQuickSheetText, quickSheetPlainText, toQuickSheetRequest } from './build';
 import { buildAllowList, formatPhone, scrubLine } from './contacts';
@@ -97,9 +99,53 @@ describe('buildQuickSheetText', () => {
     expect(q.lines[39]).toBe(BASE_STRINGS['quicksheet.truncated']);
     const req = toQuickSheetRequest(sheet, { languageTag: 'en', direction: 'ltr', fontHint: 'NotoSans', generatedOn: '2026-09-27' });
     expect(req.sections.length).toBeLessThanOrEqual(8);
-    expect(req.sections.map((s) => s.heading_en)).not.toContain('Who can help');
+    // "Who can help" travels as a heading carrier (no lines); the server draws the resources.
+    const carrier = req.sections.find((s) => s.heading_en === 'Who can help');
+    expect(carrier).toEqual({ heading: 'Who can help', heading_en: 'Who can help', lines: [] });
     expect(req.resources).toEqual([{ name: '211', phone: '211', url: r211.url }]);
     expect(req.generated_on).toBe('2026-09-27');
+  });
+
+  it('sends the localized "Who can help" heading and no UI bidi isolates (Dari)', () => {
+    const prs = bundledPackFor('prs')!;
+    const tPrs = (key: string, vars?: Record<string, string | number>) => translateForLayout(prs.strings, 'rtl', key, vars);
+    const sheet = buildQuickSheetText(JSON.parse(JSON.stringify(medicaid)), [r211], tPrs, { today: '2026-09-27' });
+    const req = toQuickSheetRequest(sheet, { languageTag: 'prs', direction: 'rtl', fontHint: 'NotoNaskhArabic' });
+    const carrier = req.sections.find((s) => s.heading_en === 'Who can help');
+    expect(carrier).toEqual({ heading: prs.strings['quicksheet.help'], heading_en: 'Who can help', lines: [] });
+    const all = [req.title, req.footer, ...req.sections.flatMap((s) => [s.heading, s.heading_en, ...s.lines])];
+    expect(all.some((x) => /[\u2066-\u2069]/.test(x))).toBe(false);
+  });
+
+  it('with no resources there is no carrier', () => {
+    const sheet = buildQuickSheetText(JSON.parse(JSON.stringify(medicaid)), [], t, { today: '2026-09-27' });
+    const req = toQuickSheetRequest(sheet, { languageTag: 'en', direction: 'ltr', fontHint: 'NotoSans' });
+    expect(req.sections.map((s) => s.heading_en)).not.toContain('Who can help');
+    expect(req.resources).toEqual([]);
+  });
+});
+
+describe('formatPhone', () => {
+  it('prints US numbers readably and keeps every national digit', () => {
+    expect(formatPhone('+18003182596')).toBe('1-800-318-2596');
+    expect(formatPhone('+18558894325')).toBe('1-855-889-4325');
+    expect(formatPhone('+15714725880')).toBe('(571) 472-5880');
+    expect(formatPhone('211')).toBe('211');
+    expect(formatPhone('988')).toBe('988');
+    expect(formatPhone('+442071234567')).toBe('+442071234567');
+    for (const r of fallbacks) {
+      for (const phone of [r.phone, r.tty]) {
+        if (!phone) continue;
+        const printed = formatPhone(phone);
+        const digits = phone.replace(/\D/g, '');
+        expect(printed.replace(/\D/g, '').endsWith(digits.length >= 10 ? digits.slice(-10) : digits)).toBe(true);
+      }
+    }
+  });
+
+  it('tel: links keep the stored E.164 value', () => {
+    expect(telHref('+18003182596')).toBe('tel:+18003182596');
+    expect(telHref('211')).toBe('tel:211');
   });
 });
 
@@ -141,6 +187,21 @@ describe('buildQuickSheetHtml', () => {
     const html = buildQuickSheetHtml(sheet, { dir: 'ltr', lang: 'en' });
     expect(html).toContain('dir="ltr"');
     expect(html).toContain('@font-face');
+  });
+
+  it('isolates Persian-digit dates and phones inside Dari lines', () => {
+    expect(isolateLtrRuns('تا ۲۰۲۶-۱۰-۱۴ جواب بدهید', 'rtl')).toBe('تا <bdi dir="ltr">۲۰۲۶-۱۰-۱۴</bdi> جواب بدهید');
+    expect(isolateLtrRuns('به 1-800-318-2596 زنگ بزنید', 'rtl')).toBe('به <bdi dir="ltr">1-800-318-2596</bdi> زنگ بزنید');
+  });
+
+  it('keeps a leading currency sign inside the amount isolate (Inova Dari demand line)', () => {
+    // assets/fixtures/inova_final_notice.result.prs.json: without the "$" inside the <bdi> it shows as "1,240.00$".
+    const inova = 'می‌گوید مبلغ قابل پرداخت $1,240.00 تا ۲۸ اکتبر ۲۰۲۶ است.';
+    const html = isolateLtrRuns(inova, 'rtl');
+    expect(html).toContain('<bdi dir="ltr">$1,240.00</bdi>');
+    expect(html).not.toContain('$<bdi');
+    expect(isolateLtrRuns('مبلغ: $125.00', 'rtl')).toBe('مبلغ: <bdi dir="ltr">$125.00</bdi>');
+    expect(isolateLtrRuns('از (571) 472-5880 بپرسید', 'rtl')).toBe('از <bdi dir="ltr">(571) 472-5880</bdi> بپرسید');
   });
 
   it('escapes markup in lines', () => {

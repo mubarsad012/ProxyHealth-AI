@@ -10,12 +10,13 @@ import { Card } from '@/design/components/Card';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { space } from '@/design/tokens';
-import { useT } from '@/i18n/useT';
+import { useBidiText, useT } from '@/i18n/useT';
 
 import type { ResultCardProps } from './cards/shared';
 
 export function UnverifiedSection({ analysis, handlers }: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const items = analysis.unverified;
   if (!items.length) return null;
@@ -28,7 +29,7 @@ export function UnverifiedSection({ analysis, handlers }: ResultCardProps) {
       {items.map((d) => (
         <View key={d.id} testID={`unverified-${d.id}`} style={[styles.row, { borderTopColor: colors.divider }]}>
           <AppText color="textMuted" style={styles.struck} lang={analysis.target_language}>
-            {d.text}
+            {bt(d.text)}
           </AppText>
           <Bidi dir="ltr" variant="body" style={{ ...styles.struck, color: colors.textMuted }}>
             {d.value_verbatim}

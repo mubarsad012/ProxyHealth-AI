@@ -1,0 +1,80 @@
+# Readability allow-list for tests/unit/test_readability.py (owner: WP8).
+# Grade-5 approximation: average sentence <= 12 words, no word over 3 syllables (BUILD_PLAN §5.9).
+#
+# Three kinds of lines (see the test's docstring):
+#   word              allowed everywhere — ONLY proper nouns, agency/form names and unavoidable
+#                     legal or medical terms. Case-insensitive. One word per line.
+#   key:<pattern>     whole string exempt because its wording is legally or contractually fixed.
+#   pending:<key>     fails today; queued for a plain-language rewrite by the en.json owner
+#                     (DECISIONS §14 CL-059). Delete the line when the rewrite lands.
+# Keep this list honest: a word that has a plain synonym is a rewrite, not an allow-list entry.
+
+# --- Words: legal, agency and form terms the population sees printed on its own papers -------
+immigration
+citizenship
+deportation
+registration        # "Alien Registration Number" (the A-number's printed name)
+representative      # "DOJ-accredited representative" — a legal title (8 CFR 1292)
+accredited          # same title
+interpreter         # a legal right the app tells people to ask for (HHS / Title VI)
+interpreters
+discrimination      # EEOC "charge of discrimination"
+retaliation         # OSHA "retaliation complaint"
+navigator           # the ACA marketplace "navigator" role
+security            # "Social Security" (agency and number names)
+cryptocurrency      # a payment type named in scam letters (COMPLIANCE §8)
+emergency           # the fixed emergency card and urgency word (D-14, COMPLIANCE §7)
+emergencies
+
+# --- key: legally or contractually fixed copy --------------------------------------------------
+key:disclaimer.*                 # COMPLIANCE §5.1 — exact legal boundary sentences
+key:chat.scope                   # COMPLIANCE §5.2
+key:chat.refusal.*               # COMPLIANCE §6.2 — refusal templates (legal review)
+key:chat.refer.*                 # COMPLIANCE §6.2 — referral templates
+key:fixed.*                      # D-20 fixed high-severity notices; any change is a legal review (§18)
+key:status_note.lsc_restricted   # COMPLIANCE §6.1
+key:warn.schools_may_not_ask_status              # COMPLIANCE §6.1 (Plyler v. Doe wording)
+key:warn.ead_receipt_not_work_authorization      # dated legal fact; mirrors fixed.uscis_receipt_i765
+key:warn.asylum_rules_aug_2026                   # dated legal fact (RESOURCE_DB §4.3)
+key:warn.address_change_multi_agency             # mirrors fixed.address_change_multi_agency
+key:warn.eeoc_deadline_180_300                   # statutory deadline statement (RESOURCE_DB §4.3)
+key:warn.court_date_is_the_deadline              # same copy as fixed.eviction_summons
+key:warn.jury_never_register_to_vote             # mirrors fixed.jury_summons
+key:about.not.*                  # PRODUCT_SPEC §1.3 "what it does not do" — fixed verbatim (CL-010)
+key:langpack.adapting            # the user's own required wording (D-25)
+key:emergency.dv                 # COMPLIANCE §7 fixed emergency copy (reviewed with the number)
+key:consent.line3.web            # D-02 consent copy; rewording needs a CONSENT_VERSION bump (§4.7)
+key:consent.line4.masks          # D-02 / D-19 consent copy (§4.7)
+key:consent.line4.masks_web      # D-02 / D-19 consent copy (§4.7)
+key:privacy.notice.delete        # COMPLIANCE §4.5, reused verbatim in the privacy policy (§16, §4.7)
+key:privacy.notice.device_web    # COMPLIANCE §4.5 / §16 (§4.7)
+key:privacy.notice.settings_sent # COMPLIANCE §4.5 / §16 (§4.7)
+key:privacy.notice.what_we_keep  # COMPLIANCE §4.5 / §16 (§4.7)
+key:privacy.notice.no_ads        # COMPLIANCE §4.5 / §16, reused verbatim in the privacy policy
+key:settings.developer           # developer-only section, never shown when EXPO_PUBLIC_APP_ENV=production
+
+# --- pending: plain-language rewrites requested from the en.json owner (suggestions in DECISIONS §14 CL-059)
+pending:banner.web_session_only      # 17-word sentence (privacy key: keep the meaning, split it)
+pending:clerk.generic_need           # "understanding"
+pending:help.always                  # "available"
+pending:notes.county_unknown         # 16-word sentence
+pending:prepare.bring_school_records # "evaluations"
+pending:reading.step2                # "Understanding"
+pending:review.hide_note_receipt     # 15-word sentence
+pending:settings.date_format_auto    # "Automatic"
+pending:settings.hear_mode_default   # "automatically"
+pending:source.mode_original         # "Original"
+pending:source.no_box                # "available"
+pending:state.offline_disabled       # "available"
+pending:state.share_unavailable      # "available"
+pending:troubleshoot.mock_unrecognised  # 13-word average
+pending:warning.checks_unavailable   # "available"
+pending:warning.org_removed_inline   # "organization"
+pending:warning.translation_partial  # "original"
+pending:why.for_lab_results          # "understanding"
+pending:why.for_naturalization       # "applications"
+pending:card.asking_nothing          # "information" (e.g. "It is only for you to know.")
+pending:urgency.word.info            # "information" (e.g. "Good to know")
+pending:need.utilities               # "Utility" (e.g. "Power, gas or water shutoff")
+pending:prepare.bring_proof_rent_utilities  # "utility" (e.g. "Your rent, power, gas and water bills")
+pending:why.for_utility_shutoff      # "utility" (e.g. "For power, gas or water shutoff notices")

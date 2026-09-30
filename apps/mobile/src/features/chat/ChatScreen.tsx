@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { AnalysisResult, ChatAnswer } from '@/api/types';
-import { Bidi } from '@/design/components/Bidi';
+import { Bidi, stripIsolates } from '@/design/components/Bidi';
 import { BigButton } from '@/design/components/BigButton';
 import { FeedbackRow } from '@/design/components/FeedbackRow';
 import { Interpolated } from '@/design/components/Interpolated';
@@ -20,33 +20,52 @@ import { radius, size, space } from '@/design/tokens';
 import { emergencyTrigger } from '@/features/emergency';
 import { useTtsFallbackNotice } from '@/features/speech';
 import { useDirection } from '@/i18n/direction';
-import { usePackMeta, useT } from '@/i18n/useT';
+import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
 
 import { referKey, referShowsHelp, refusalKey, starterQuestions } from './refusalTemplates';
 import { type ChatTurn, useChat } from './useChat';
 
-/** The text an assistant bubble shows: answer first, then the fixed template (S9 rule). */
+/** Compare sentences without case, spacing, bidi isolates or joiners. */
+function sentenceKey(text: string): string {
+  return stripIsolates(text)
+    .replace(/[\s\u200c\u200d\u200e\u200f]+/g, '')
+    .toLowerCase();
+}
+
+/**
+ * The text an assistant bubble shows: answer first, then the fixed templates (S9 rule). The server
+ * owns "The paper does not say." (`chat_pipeline.with_not_in_document` puts the pack sentence in
+ * `answer` exactly once), so the client never appends `chat.not_in_document` to an answer; only an
+ * empty non-refusal answer falls back to it. A template the answer already contains (the server's
+ * fixed `out_of_scope` reply) is not repeated.
+ */
 export function assistantLines(answer: ChatAnswer, t: (k: string) => string): string[] {
   const lines: string[] = [];
+  const body = answer.answer.trim() ? answer.answer : '';
   const refusal = refusalKey(answer.refusal_kind);
-  if (answer.answer.trim()) lines.push(answer.answer);
-  if (refusal) lines.push(t(refusal));
-  if (answer.not_in_document) lines.push(t('chat.not_in_document'));
+  if (body) lines.push(body);
+  const add = (text: string) => {
+    const key = sentenceKey(text);
+    if (key && !lines.some((l) => sentenceKey(l).includes(key))) lines.push(text);
+  };
+  if (refusal) add(t(refusal));
+  if (answer.not_in_document && !body && !refusal) add(t('chat.not_in_document'));
   const refer = referKey(answer.refer_to_professional);
-  if (refer) lines.push(t(refer));
+  if (refer) add(t(refer));
   return lines;
 }
 
 function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: AnalysisResult; onQuote(span: string, page: number): void }) {
   const t = useT();
+  const bt = useBidiText();
   const meta = usePackMeta();
   const { colors } = useTheme();
   const dir = useDirection();
   const mine = turn.role === 'user';
   const a = turn.answer;
   const lines = a ? assistantLines(a, t) : [turn.text];
-  const text = lines.join(' ');
+  const text = stripIsolates(lines.join(' '));
   // Honest TTS line (D-26) under this bubble's speaker when the pack's own voice is missing.
   const voice = useTtsFallbackNotice(meta.tag);
   return (
@@ -58,7 +77,7 @@ function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: Analysi
       ]}>
       {lines.map((l, i) => (
         <AppText key={i} lang={analysis.target_language}>
-          {l}
+          {bt(l)}
         </AppText>
       ))}
       {a?.grounded_quotes.map((q) => (

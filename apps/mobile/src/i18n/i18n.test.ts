@@ -79,7 +79,8 @@ describe('t() and translate()', () => {
   it('falls back to English for keys the pack lacks', () => {
     useI18n.getState().setPack(fromLanguagePack(prsPack(), 'bundled'));
     expect(t('lang.title')).toBe('کدام زبان؟');
-    expect(t('btn.continue')).toBe(BASE_STRINGS['btn.continue']);
+    // An English fallback inside an RTL pack comes back FSI-isolated (D-26, `isolateForLayout`).
+    expect(t('btn.continue')).toBe(`\u2068${BASE_STRINGS['btn.continue']}\u2069`);
   });
 
   it('returns the key and reports a missing key only once', () => {

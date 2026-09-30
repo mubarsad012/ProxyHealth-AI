@@ -10,6 +10,7 @@ import type {
   QuickSheetSection,
   Resource,
 } from '@/api/types';
+import { stripIsolates } from '@/i18n/bidi';
 import { BASE_STRINGS, translate } from '@/i18n/store';
 
 import { buildAllowList, formatPhone, scrubLine, transcriptOf } from './contacts';
@@ -146,9 +147,12 @@ function helpLines(resources: Resource[]): string[] {
 export function buildQuickSheetText(
   analysis: AnalysisResult,
   resources: Resource[],
-  t: TranslateFn,
+  tUi: TranslateFn,
   opts: BuildQuickSheetOptions = {},
 ): QuickSheetText {
+  // The sheet is plain text for print, PDF, copy and read-aloud: no UI bidi isolates (`useT` adds
+  // FSI…PDI around all-LTR strings in RTL packs); the HTML and the PDF isolate runs themselves.
+  const t: TranslateFn = (key, vars) => stripIsolates(tUi(key, vars));
   const tEn = opts.tEn ?? englishT;
   const dbResources = dedupeResources(resources ?? []);
   const allow = buildAllowList(transcriptOf(analysis), dbResources);
@@ -213,10 +217,15 @@ export interface QuickSheetMeta {
 
 /**
  * The `POST /v1/quicksheet/pdf` body. The "Who can help" lines travel as `resources` (the server
- * re-validates each against the DB and renders them itself), so that section is not duplicated.
+ * re-validates each against the DB and renders them itself), so that section is sent as a heading
+ * carrier only — its localized `heading` and English `heading_en` with no lines — which the server
+ * uses as the resources heading and never draws as a section of its own (`render.help_heading`).
  */
 export function toQuickSheetRequest(sheet: QuickSheetText, meta: QuickSheetMeta): QuickSheetRequest {
-  const sections = sheet.sections.filter((_, i) => sheet.sectionKinds?.[i] !== 'help' || !sheet.resources?.length);
+  const hasResources = Boolean(sheet.resources?.length);
+  const sections = sheet.sections.map((s, i) =>
+    sheet.sectionKinds?.[i] === 'help' && hasResources ? { ...s, lines: [] } : s,
+  );
   return {
     title: sheet.title.slice(0, MAX_TITLE),
     language_tag: meta.languageTag,

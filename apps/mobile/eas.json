@@ -6,20 +6,37 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://<demo-or-staging-api>"
+        "EXPO_PUBLIC_API_URL": "https://<demo-or-staging-api>",
+        "EXPO_PUBLIC_APP_ENV": "development"
       }
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://<staging-api>"
+        "EXPO_PUBLIC_API_URL": "https://<staging-api>",
+        "EXPO_PUBLIC_APP_ENV": "staging"
+      }
+    },
+    "demo": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://<demo-api-mock>",
+        "EXPO_PUBLIC_APP_ENV": "demo",
+        "EXPO_PUBLIC_DEFAULT_SAMPLE_MODE": "true"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://<prod-api>"
+        "EXPO_PUBLIC_API_URL": "https://<prod-api>",
+        "EXPO_PUBLIC_APP_ENV": "production"
       }
     }
   },
@@ -27,7 +44,7 @@
     "production": {
       "ios": {
         "ascAppId": "<from App Store Connect>",
-        "appleTeamId": "<team>"
+        "appleTeamId": "<organization team id>"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

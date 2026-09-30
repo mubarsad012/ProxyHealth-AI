@@ -16,7 +16,7 @@ import { useTheme } from '@/design/theme';
 import { space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { keyExists } from '@/i18n/store';
-import { usePackMeta, useT, type TFunction } from '@/i18n/useT';
+import { useBidiText, usePackMeta, useT, type TFunction } from '@/i18n/useT';
 import { extraDateLine } from '@/lib/dates';
 import { useSettings } from '@/store/settings';
 
@@ -90,6 +90,7 @@ export interface DemandRowProps extends ResultCardProps {
 
 export function DemandRow({ analysis, pages, handlers, demand: d }: DemandRowProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const dir = useDirection();
   const role = roleWord(d.role, t);
@@ -104,7 +105,7 @@ export function DemandRow({ analysis, pages, handlers, demand: d }: DemandRowPro
               {role}
             </AppText>
           ) : null}
-          <AppText lang={analysis.target_language}>{d.text}</AppText>
+          <AppText lang={analysis.target_language}>{bt(d.text)}</AppText>
         </View>
       </View>
       <Bidi dir="ltr" variant="bodyLarge" weight="bold">

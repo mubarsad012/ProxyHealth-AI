@@ -10,7 +10,9 @@ clerk card, fixed notices → disclaimers and warnings → ``AnalysisResult``.
 
 No step trusts a model field it can recompute: facts must quote the transcript (D-09), contacts
 come only from the paper or the resource DB (D-10), dates only from ``deadline_rules`` (D-11),
-urgency only from ``urgency`` (D-12). Nothing here writes to disk or logs content; page bytes,
+urgency only from ``urgency`` (D-12). A sample paper (``demo_sample_id``, or a mock dHash match)
+computes its dates and urgency as of ``demo.as_of.DEMO_AS_OF`` because its printed dates are
+fixed; real papers use the real clock. Nothing here writes to disk or logs content; page bytes,
 transcripts and model prose live only in this request's memory (ARCHITECTURE §7).
 
 This module also holds the helpers ``troubleshoot_pipeline`` and ``chat_pipeline`` share
@@ -24,7 +26,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -101,6 +103,7 @@ from proxyhealth_api.contracts.model_out import (
     TroubleshootModelOut,
 )
 from proxyhealth_api.contracts.resources import ResourceMatch, ResourceMatchRequest
+from proxyhealth_api.demo.as_of import DEMO_AS_OF
 from proxyhealth_api.demo.fixtures import Fixture, FixtureStore
 from proxyhealth_api.errors import ApiError
 from proxyhealth_api.logging_ import log_event
@@ -388,6 +391,31 @@ def fixture_for(deps: PipelineDeps, demo_sample_id: str, kind: str) -> Fixture:
             details={"demo_sample_id": demo_sample_id[:64]},
         )  # fmt: skip
     return fixture
+
+
+def is_sample_paper(deps: PipelineDeps, demo_sample_id: str | None, media: Sequence[Part]) -> bool:
+    """A sample paper: ``demo_sample_id``, or (mock only) a first page the mock resolves to a
+    document fixture by dHash — the same test ``MockProvider.resolve_fixture`` applies, so a
+    photographed SAMPLE sheet counts. Real uploads with keys are never samples."""
+    if demo_sample_id:
+        return True
+    if deps.ai.provider.name is not Provider.mock:
+        return False
+    first = next(
+        (p.data for p in media
+         if p.kind == "bytes" and p.data and (p.mime_type or "").startswith("image/")),
+        None,
+    )  # fmt: skip
+    if first is None:
+        return False
+    limit = deps.settings.mock_phash_max_hamming
+    return deps.fixtures.match_dhash(first, limit, kind="document") is not None
+
+
+def analysis_today(now: datetime, state: str | None, *, sample: bool) -> date:
+    """The day dates and urgency are computed from: ``DEMO_AS_OF`` for sample papers (their
+    printed dates are fixed), the user's local day on the real clock (``now``) otherwise."""
+    return DEMO_AS_OF if sample else deadline_rules.local_today(now, state)
 
 
 # ----------------------------------------------------------------------------- upload
@@ -988,7 +1016,9 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     upload = prepare_upload(req, deps)
     uploads.check_inline_budget(upload.media, deps.settings)
     now = deps.clock()
-    today = deadline_rules.local_today(now, req.state)
+    # Sample papers print fixed dates: their dates and urgency run as of DEMO_AS_OF (demo/as_of).
+    sample = is_sample_paper(deps, req.demo_sample_id, upload.media)
+    today = analysis_today(now, req.state, sample=sample)
     lang = language_facts(deps, req.target_language)
     t = translator(deps, req.target_language)
     rc = RequestContext(req, deps, upload, lang, t, started, demo_of(deps, req.demo_sample_id))
@@ -1053,6 +1083,8 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         state=req.state, date_format=req.preferences.date_format, language=detected,
         transcript_text=paper.full_text, digit_system=lang.digit_system, t=t,
     )  # fmt: skip
+    if ctx.today != today:  # a sample paper: pinned day (the state's zone never moves it)
+        ctx = replace(ctx, today=today)
     demands = deadline_rules.apply_deadline_rules(checked.verified, checked.sources, ctx, paper)
 
     # §11.10 (part) tags; the one ``tag`` call runs now so its emergency hint reaches §11.7.
@@ -1091,7 +1123,8 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         scrubber=scrubber, scrub_en=scrub_en, scam_out=scam_out, document_type=document_type,
         demands=demands, geo=geo, forms=forms, tag_call_tags=tag_call_tags, safety=emerg.safety,
         urgency_value=urg.urgency, code_flags=code_flags, injection_masked=scan.found,
-        today=ctx.today, deadline_at=deadline_at,
+        today=ctx.today, resources_today=deadline_rules.local_today(now, req.state),
+        deadline_at=deadline_at,
     )  # fmt: skip
 
 
@@ -1122,8 +1155,12 @@ async def finish_analysis(
     injection_masked: bool,
     today: date,
     deadline_at: datetime,
+    resources_today: date | None = None,
 ) -> AnalysisResult:
-    """§11.9 phrasing, §11.10 clerk / fixed notices / tags / resources, §11.11 → result."""
+    """§11.9 phrasing, §11.10 clerk / fixed notices / tags / resources, §11.11 → result.
+
+    ``today`` is the analysis day (``DEMO_AS_OF`` for a sample paper); ``resources_today`` is
+    the real local day, used for resource-entry freshness (defaults to ``today``)."""
     req, deps, t = rc.req, rc.deps, rc.t
     target, category = req.target_language, out.category
     en = english(deps)
@@ -1181,7 +1218,7 @@ async def finish_analysis(
                 institutions_as_written=institutions, scam_risk=scam_out.scam_risk,
                 emergency=safety.emergency, limit=3,
             ),
-            deps.resources, en_strings=base_strings(deps), today=today,
+            deps.resources, en_strings=base_strings(deps), today=resources_today or today,
         ).results[:3]  # fmt: skip
     clerk_out = await clerk.build_clerk_message(
         language_name_en=rc.lang.name_en, document_type=document_type,

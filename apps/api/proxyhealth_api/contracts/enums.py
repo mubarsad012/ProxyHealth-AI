@@ -517,7 +517,11 @@ class FeedbackKind(StrEnum):
 
 
 class FeedbackSurface(StrEnum):
-    """API_CONTRACT §1 — UI surface the feedback was given on."""
+    """API_CONTRACT §1 — UI surface the feedback was given on.
+
+    ``app`` is for screens that show no AI output (S18 "Report a problem", Settings → About), so
+    those reports do not inflate the ``summary`` counts (DECISIONS §14 CL-028(b)).
+    """
 
     summary = "summary"
     demands = "demands"
@@ -531,6 +535,7 @@ class FeedbackSurface(StrEnum):
     resource = "resource"
     language_pack = "language_pack"
     quicksheet = "quicksheet"
+    app = "app"
 
 
 class Platform(StrEnum):

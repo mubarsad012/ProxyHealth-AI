@@ -12,11 +12,12 @@ import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
-import { useT } from '@/i18n/useT';
+import { useBidiText, useT } from '@/i18n/useT';
 
 import type { ResultCardProps } from './shared';
 
 export function GlossaryCard({ analysis }: ResultCardProps) {
+  const bt = useBidiText();
   const { colors } = useTheme();
   const terms = analysis.glossary;
   if (!terms.length) return null;
@@ -31,7 +32,7 @@ export function GlossaryCard({ analysis }: ResultCardProps) {
           <Bidi dir="auto" variant="body" weight="bold">
             {g.term_as_written}
           </Bidi>
-          <AppText lang={analysis.target_language}>{g.explanation}</AppText>
+          <AppText lang={analysis.target_language}>{bt(g.explanation)}</AppText>
         </View>
       ))}
     </Card>
@@ -40,6 +41,7 @@ export function GlossaryCard({ analysis }: ResultCardProps) {
 
 export function QuestionsCard({ analysis, handlers }: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const dir = useDirection();
   const [copied, setCopied] = useState<number | null>(null);
@@ -55,7 +57,7 @@ export function QuestionsCard({ analysis, handlers }: ResultCardProps) {
       {qs.map((q, i) => (
         <View key={`q-${i}`} style={[styles.qRow, { flexDirection: dir.row, borderTopColor: colors.divider }]}>
           <View style={styles.flex}>
-            <AppText lang={analysis.target_language}>{q}</AppText>
+            <AppText lang={analysis.target_language}>{bt(q)}</AppText>
           </View>
           <Pressable
             role="button"

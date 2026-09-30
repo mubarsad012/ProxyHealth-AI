@@ -35,8 +35,15 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Escape, then (RTL only) wrap Latin/digit runs so numbers and phones read left-to-right. */
-const LTR_RUN = /[+(]?[0-9A-Za-z][0-9A-Za-z .,:/()+\-–&#@']*[0-9A-Za-z)]|[0-9A-Za-z]/g;
+/**
+ * Escape, then (RTL only) wrap Latin/digit runs so numbers and phones read left-to-right. Persian
+ * and Arabic-Indic digits count too: after Arabic letters UAX #9 makes digits Arabic numbers and the
+ * hyphens between them run right-to-left ("۲۰۲۶-۱۰-۱۴" would show as "۱۴-۱۰-۲۰۲۶"). A leading "+",
+ * "(" or currency sign belongs to the run ("$1,240.00" keeps its "$" on the left). Same rule as the
+ * PDF (`quicksheet/render.py` `LTR_RUN_RE`).
+ */
+const LTR_RUN =
+  /[+(]?[$€£¥]?[0-9A-Za-z\u0660-\u0669\u06f0-\u06f9](?:[0-9A-Za-z\u0660-\u0669\u06f0-\u06f9$€£¥ .,:/()+\-–&#@']*[0-9A-Za-z\u0660-\u0669\u06f0-\u06f9)])?/g;
 
 export function isolateLtrRuns(text: string, dir: 'ltr' | 'rtl'): string {
   if (dir === 'ltr') return escapeHtml(text);

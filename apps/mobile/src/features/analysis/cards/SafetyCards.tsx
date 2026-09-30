@@ -13,7 +13,7 @@ import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { keyExists } from '@/i18n/store';
-import { useT, type TFunction } from '@/i18n/useT';
+import { useBidiText, useT, type TFunction } from '@/i18n/useT';
 
 import { warningChipKeys } from '../disclaimers';
 import type { ResultCardProps } from './shared';
@@ -33,6 +33,7 @@ export function redFlagText(f: RedFlag, t: TFunction): string {
 
 export function RedFlagsCard({ analysis }: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const dir = useDirection();
   const flags = sortRedFlags(analysis.red_flags);
@@ -46,7 +47,7 @@ export function RedFlagsCard({ analysis }: ResultCardProps) {
         <View key={`rf-${i}`} testID={`red-flag-${f.kind}`} style={[styles.flag, { flexDirection: dir.row, borderTopColor: colors.divider }]}>
           <Icon name="flag" color={f.severity === 'high' ? colors.danger : colors.warning} />
           <View style={styles.flex}>
-            <AppText weight={f.severity === 'high' ? 'bold' : 'regular'}>{redFlagText(f, t)}</AppText>
+            <AppText weight={f.severity === 'high' ? 'bold' : 'regular'}>{bt(redFlagText(f, t))}</AppText>
             {f.source_quote && !f.fixed_copy_key && f.kind !== 'injection_suspected' ? (
               <Bidi dir="auto" variant="caption">
                 {`“${f.source_quote}”`}

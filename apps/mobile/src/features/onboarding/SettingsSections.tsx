@@ -110,7 +110,7 @@ function VersionRow({ labelKey, version }: { labelKey: string; version: string }
 
 /**
  * S17 item 9 "Report a problem": the fixed feedback kinds only (no free text, D-31). The surface is
- * `summary` until `FeedbackSurface` gains an app-level value (CL-028(b)), as on S18.
+ * `app` (CL-057): this report is about the app, not an AI summary, as on S18 (NotFoundScreen).
  */
 function ReportProblem() {
   const t = useT();
@@ -126,7 +126,7 @@ function ReportProblem() {
   }
   const send = (kind: FeedbackKind) => {
     setSent(true);
-    api.feedback(buildFeedbackRequest({ surface: 'summary' }, kind, meta.tag)).catch(() => undefined);
+    api.feedback(buildFeedbackRequest({ surface: 'app' }, kind, meta.tag)).catch(() => undefined);
   };
   return (
     <Collapsible title={t('btn.report_problem')}>

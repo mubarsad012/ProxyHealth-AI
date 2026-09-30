@@ -568,13 +568,13 @@ rounded to 2 decimals in the response. **`score` is for ordering only**; the cli
 
 ### 6.6 Forced ordering
 
-1. `req.emergency == true` → entries with any tag in `{crisis, poison, domestic_violence, trafficking}` come first (sorted by score), each with `why.crisis_line` prepended.
-2. `req.scam_risk == likely` → entries tagged `scam_report` come first (after crisis entries if both), each with `why.report_scam` prepended; the D-13 fixed card separately reads `dhs_oig.phone` and `ftc_reportfraud.url` by id.
+1. `req.emergency == true` → the **dedicated** crisis lines — entries whose tags **all** lie in `{crisis, poison, domestic_violence, trafficking}` — come first, each with `why.crisis_line` prepended; inside the block the order is the `well_known_ids.emergency_card` slot, then `priority`, then score. Multi-purpose entries that carry only one of those tags (`211`, DV legal nonprofits) rank normally, so example E's bill resources still follow the hotlines (code-authoritative, CL-025(c)).
+2. `req.scam_risk == likely` → entries tagged `scam_report` come first (after crisis entries if both), ordered by `priority`, then score (so `dhs_oig` leads), each with `why.report_scam` prepended; the D-13 fixed card separately reads `dhs_oig.phone` and `ftc_reportfraud.url` by id.
 3. Everything else by `score` desc, then `priority` desc, then `id` asc (stable).
 
 ### 6.7 Diversity cap and limit
 
-Walk the ordered list; keep an entry only while fewer than **2** results share its `org_type` (forced entries are exempt from the cap). Stop at `req.limit` (default 8, max 12).
+Walk the ordered list; keep an entry only while fewer than **2** results share its `org_type` (crisis-forced entries are exempt from the cap; scam-forced entries stay capped, as example D and §12.2 require — CL-025(c)). Stop at `req.limit` (default 8, max 12).
 
 ### 6.8 Per-result fields
 
@@ -591,11 +591,15 @@ Ordered, de-duplicated against `results`:
 4. `ftc_reportfraud` and `dhs_oig` if `scam_risk ≠ none`;
 5. `988` if `emergency`.
 
+**Offline client list (code-authoritative, CL-045(b)).** With no server there is no §6.6 forced ordering, so the app's `features/help/request.ts` `offlineFallbacksFor` deliberately orders the bundled subset differently: `988` (when `emergency` or tag `crisis`), `dv_hotline`, `trafficking`, `poison` for the request's matching tags first, then `ftc_reportfraud` + `dhs_oig` (when `scam_risk ≠ none` or tag `scam_report`), then `211`, `immlawhelp` (immigration group), `hrsa_fqhc` (health group), de-duplicated against ids already shown.
+
 ### 6.10 `notes_keys`
 
 `notes.set_region_for_local_help` (state unknown) · `notes.county_unknown` (state known, no county/zip3, and ≥ 1 county-scoped candidate was eligible at 0.9) · `notes.no_local_results` (state known, zero non-national results) · `notes.lsc_restricted_explained` (any result has `lsc_restricted`) · `notes.resource_text_english_only` (`req.language ≠ en` and any result lacks `what_it_does[req.language]`) · `notes.verify_before_going` always. `disclaimer_kind = general_information`.
 
 ### 6.11 Worked examples (seed of §11, today = 2026-09-27)
+
+**Code-authoritative (CL-025(c)).** These tables were computed by hand before the seed was loaded; on the loaded seed the §6.2–§6.10 formula differs in places and `tests/unit/test_matcher.py` asserts the formula: A and B also carry `notes.resource_text_english_only` (non-English request, §6.10); B scores `healthcare_gov` 4.38; C returns **7** results (`va_eviction_helpline`, `hud_counselor`, `va_courts_landlord_tenant`, `fairfax_sheriff_eviction`, `usa_housing_help`, `lawhelp`, `lajc` — the table scored three `es`-listing entries at language 0.8 and gave `nvfs` a tag it does not carry); D's `national_fallbacks` is `[211, immlawhelp]` because `immlawhelp` is not in the capped results. The API_CONTRACT §3.8 example follows the tables, not the formula.
 
 **A. `API_CONTRACT` §3.8 request** — tags `[medical_bill, charity_care]`, `document_type=medical_bill`, VA / Fairfax / 220, language `fr`, institutions `["Inova Health System"]`, limit 4.
 
@@ -708,7 +712,8 @@ Failure = process exit with the path and line printed (ARCHITECTURE §2: "refuse
 2. Every id in `meta.doc_type_pins`, `meta.well_known_ids`, `meta.urgent_doc_boost` exists and is active; every pin key is a `DocumentType`; every boost tag is a `ResourceTag`.
 3. `meta.checklist` keys are `^[a-z0-9_]+$`; `meta.why` contains `why.for_<tag>` for all 49 tags.
 4. `repo.org_names()` is non-empty and contains no phone-like digit runs.
-5. Stale entries (`today − verified_on > 120 d`) → warning list; `> 365 d` → excluded from matching (still browsable) with a warning.
+5. Stale entries (`today − verified_on > 120 d`) → warning list; `> 365 d` → excluded from matching and from `national_fallbacks` (still browsable) with a warning.
+6. Checks 1–2 run against **non-broken** entries: a tag or `_meta.yaml` reference carried only by entries `> 365 d` old is a boot **warning**, not a refusal (freshness never takes the API down, §8.1); a `broken` sole carrier still refuses boot (CL-025(b)).
 
 ### 8.4 `ResourceRepo` API (used by the consumers in §7)
 
@@ -1300,7 +1305,7 @@ well_known_ids:           # §4.7 verbatim
    what_it_does: {en: "Apply for health coverage, find local help (navigators), and apply for Medicaid or CHIP any time of year. Call center 1-800-318-2596."},
    eligibility_plain: {en: "Anyone. Coverage rules for many immigrants changed in 2026 and 2027; a navigator can say what applies."},
    verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
-   x_meta: {source: "resources.md §1C; both URLs fetched 2026-09-27 (phone confirmed)", notes: "Hours 24/7 and interpreter line are HealthCare.gov's long-standing call-center facts; confirm on re-verification. Do NOT link the lawfully-present-immigrants page (stale for H.R.1).", expect_text: ["1-800-318-2596"]}}
+   x_meta: {source: "resources.md §1C; both URLs fetched 2026-09-27; phone+TTY re-confirmed on healthcare.gov/contact-us 2026-09-29 (phone field had a 5596 typo)", notes: "Hours 24/7 and interpreter line are HealthCare.gov's long-standing call-center facts; confirm on re-verification. Do NOT link the lawfully-present-immigrants page (stale for H.R.1).", expect_text: ["1-800-318-2596"]}}
 - {id: medicaid_state, name: "Medicaid.gov: Where Can People Get Help With Medicaid & CHIP", org_type: directory, cost: free, priority: 85,
    url: "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip", languages: [en, es],
    serves: {scope: national}, tags: [medicaid_renewal, benefits_navigation], status_note_key: hhs_funded_health,
@@ -1847,6 +1852,8 @@ Seeded: `dhs_oig` (phone for the D-13 card), `ftc_reportfraud` (URL for the D-13
 | HTTP 200 but JavaScript shell / redirect page with no readable list (kept as `js_rendered` / `browser`) | 4 | findahealthcenter.hrsa.gov, reportfraud.ftc.gov, hud.gov/findacounselor, hud.gov/program_offices/public_indian_housing/pha/contacts |
 
 Content notes captured during the pass (all reflected in `x_meta`): medicaid.gov, insurekidsnow.gov and cdc.gov served full content today although the research pass saw 403s (their `link_health` is `ok`); Medicare Part D page text read today shows the 60-day Level 2 window (Level 1 window to be re-read by a human; warning `medicare_windows_changed` attached); CMS Medical Bill Rights page confirms the $400 threshold but not the 120-day window in visible text (the deadline rule keeps its own source); Inova's ≤ 400 % FPL tier was not in today's main text (eligibility copy softened); DOL WHD page text did not show the "status is not a barrier" sentence today (eligibility kept neutral); fightmyeviction.org loads (VPLC Eviction Defense Center, Richmond) but does not print 1-833-NOEVICT (phone withheld, `manual_verify`); LSC Eviction Laws Database states its data reflect laws effective January 1, 2021 (staff reference only, warning attached); USA.gov Benefit Finder is a category-selection landing page rather than a questionnaire (copy adjusted).
+
+**Correction 2026-09-29 (DECISIONS §14 CL-055, orchestrator → WP3).** `healthcare_gov.phone` read `+18003185596` while its own `what_it_does` text and healthcare.gov/contact-us say 1-800-318-2596; the seed (§11.3) and `national_health.yaml` now carry `phone: "+18003182596"` and the TTY `+18558894325` (re-verified on healthcare.gov/contact-us 2026-09-29). A scan of all 101 entries found no other phone/text mismatch.
 
 Re-verification cadence: every 90 days per region, and before any store submission; `scripts/check_links.py --freshness` enforces 120 days (90 for `manual_verify`).
 

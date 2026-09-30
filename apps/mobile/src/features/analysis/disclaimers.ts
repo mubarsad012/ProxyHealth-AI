@@ -65,8 +65,29 @@ export function resultBanners(a: AnalysisResult, ui: BannerInputs): BannerSpec[]
     });
   }
   if (has('degraded_model') || a.model_meta.quality === 'degraded') out.push({ key: 'banner.degraded_model', tone: 'warning' });
-  if (has('demo_sample') || a.model_meta.demo) out.push({ key: 'banner.demo_sample', tone: 'info' });
+  if (isSampleResult(a)) out.push({ key: 'banner.demo_sample', tone: 'info' });
   return out;
+}
+
+export const DEMO_AS_OF_NOTE_KEY = 'demo.as_of_note';
+
+/**
+ * The one fixed line under the urgency banner of a sample result that has dates (POLISH item 1):
+ * the server computes a sample's dates, urgency and `days_until` as of one fixed day
+ * (`apps/api/proxyhealth_api/demo/as_of.py` `DEMO_AS_OF`), and the app shows the server's
+ * `days_until` as is — never recomputed from the device clock. Null for every other result.
+ */
+export function sampleAsOfNoteKey(a: AnalysisResult): string | null {
+  return isSampleResult(a) && hasDates(a) ? DEMO_AS_OF_NOTE_KEY : null;
+}
+
+/** A sample paper (or any mock-mode result): `model_meta.demo` / the `demo_sample` warning. */
+export function isSampleResult(a: AnalysisResult): boolean {
+  return a.warnings.includes('demo_sample') || a.model_meta.demo;
+}
+
+function hasDates(a: AnalysisResult): boolean {
+  return Boolean(a.urgency.nearest_date_iso) || a.demands.some((d) => Boolean(d.date?.value_iso));
 }
 
 export const FOOTER_KEYS = ['footer.ai_generated', 'footer.verify_with_sender'] as const;

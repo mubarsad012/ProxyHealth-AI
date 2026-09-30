@@ -1,0 +1,213 @@
+# ProxyHealth AI CI (ARCHITECTURE §5.2, BUILD_PLAN §5.9). Mirrors scripts/ci.sh step by step:
+# each job step runs `CI_ONLY=<step> scripts/ci.sh`, so local and CI runs cannot drift.
+# Jobs: api · mobile · links (weekly) · live-golden (manual, or nightly when keys exist).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live_golden:
+        description: "Run the live Gemini golden gate (needs the GEMINI_KEYS secret, billed keys only)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC — resource link health
+    - cron: "41 7 * * *"   # nightly 07:41 UTC — live golden gate (skipped without keys)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "24"
+  EXPO_PUBLIC_API_URL: "http://127.0.0.1:8000"
+  AI_PROVIDER: mock
+
+jobs:
+  api:
+    name: api (pytest · ruff · mypy · contract · fixtures · sync · privacy · readability)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - name: Create apps/api/.venv (the scripts call apps/api/.venv/bin/*)
+        run: |
+          python -m venv apps/api/.venv
+          apps/api/.venv/bin/pip install --upgrade pip
+          apps/api/.venv/bin/pip install -r apps/api/requirements.txt
+      - name: pytest (all but live)
+        run: CI_ONLY=pytest scripts/ci.sh
+      - name: ruff
+        run: CI_ONLY=ruff scripts/ci.sh
+      - name: mypy (strict, BUILD_PLAN §1.4 form)
+        run: CI_ONLY=mypy scripts/ci.sh
+      - name: OpenAPI snapshot idempotent
+        run: scripts/gen-types.sh --check-openapi
+      - name: make_fixtures --check
+        run: CI_ONLY=fixtures scripts/ci.sh
+      - name: sync_to_mobile --check
+        run: CI_ONLY=sync scripts/ci.sh
+      - name: YAML parses
+        run: CI_ONLY=yaml scripts/ci.sh
+      - name: no xfail outside tests/live
+        run: CI_ONLY=xfail scripts/ci.sh
+      - name: privacy claims + readability
+        run: CI_ONLY=privacy scripts/ci.sh
+      - name: eas.json preview/production use https
+        run: CI_ONLY=eas-https scripts/ci.sh
+      - name: smoke (mock API on a free port, every endpoint)
+        run: scripts/smoke.sh --quiet
+
+  mobile:
+    name: mobile (tsc · jest · lint · prebuild config · web export)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: "npm ci --legacy-peer-deps (openapi-typescript pins TypeScript 5)"
+        run: npm ci --legacy-peer-deps
+      - name: expo customize tsconfig.json (creates the git-ignored expo-env.d.ts for typed routes)
+        run: npx expo customize tsconfig.json
+      - name: schema.d.ts matches openapi.json
+        working-directory: .
+        run: scripts/gen-types.sh --check-types
+      - name: tsc --noEmit
+        working-directory: .
+        run: CI_ONLY=mobile-tsc scripts/ci.sh
+      - name: jest
+        working-directory: .
+        run: CI_ONLY=jest scripts/ci.sh
+      - name: expo lint
+        working-directory: .
+        run: CI_ONLY=lint scripts/ci.sh
+      - name: expo config --type prebuild
+        working-directory: .
+        run: CI_ONLY=prebuild scripts/ci.sh
+      - name: web export (--clear) incl. dist/privacy/index.html
+        working-directory: .
+        env:
+          CI_EXPORT_DIR: ${{ github.workspace }}/apps/mobile/dist
+        run: CI_ONLY=web-export scripts/ci.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/mobile/dist
+          retention-days: 7
+
+  docker:
+    name: docker (build apps/api image, smoke it in mock mode)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker build
+        run: docker build -t proxyhealth-api:ci apps/api
+      - name: run the image with zero keys and smoke every endpoint
+        run: |
+          docker run -d --name ph -p 8080:8080 -e AI_PROVIDER=mock -e MOCK_LATENCY_MIN_MS=0 -e MOCK_LATENCY_MAX_MS=20 \
+            -e RATE_LIMIT_ANALYZE_PER_HOUR=100000 -e RATE_LIMIT_ANALYZE_PER_DAY=1000000 \
+            -e RATE_LIMIT_IP_PER_MINUTE=100000 proxyhealth-api:ci
+          python3 apps/api/scripts/smoke.py --base-url http://127.0.0.1:8080 --wait 90 --quiet \
+            || { docker logs ph | tail -50; exit 1; }
+      - if: always()
+        run: docker rm -f ph || true
+
+  links:
+    name: links (weekly resource link health; opens an issue on broken)
+    if: github.event_name == 'schedule' && github.event.schedule == '17 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: |
+          python -m venv apps/api/.venv
+          apps/api/.venv/bin/pip install -r apps/api/requirements.txt
+      - name: check_links.py
+        run: apps/api/.venv/bin/python apps/api/scripts/check_links.py --json links-report.json
+      - name: freshness (verified_on ≤ 120 days)
+        id: fresh
+        continue-on-error: true
+        run: apps/api/.venv/bin/python apps/api/scripts/check_links.py --freshness
+      - name: Open an issue when a link is broken or entries are stale
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STALE: ${{ steps.fresh.outcome }}
+        run: |
+          broken=$(python -c "import json; print(json.load(open('links-report.json'))['broken'])")
+          if [ "$broken" != "0" ] || [ "$STALE" = "failure" ]; then
+            {
+              echo "Weekly link check found $broken broken link(s); freshness step: $STALE."
+              echo
+              echo '```'
+              grep -E '^(broken|redirected_offsite|stale)' links-report.json || true
+              python -c "import json; r=json.load(open('links-report.json')); [print(f['status'], f['resource_id'], f['url']) for f in r['findings'] if f['status'] in ('broken','redirected_offsite')]"
+              echo '```'
+              echo "Re-verify per docs/RESOURCE_DB.md §9 and docs/RUNBOOK.md (quarterly re-verification)."
+            } > issue.md
+            gh issue create --title "Resource link check: $broken broken ($(date -u +%F))" --body-file issue.md
+          fi
+
+  live-golden:
+    name: live-golden (RUN_LIVE=1, billed keys only)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.live_golden) ||
+      (github.event_name == 'schedule' && github.event.schedule == '41 7 * * *')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HAS_KEYS: ${{ secrets.GEMINI_KEYS != '' }}
+    steps:
+      - name: Skip without keys
+        if: env.HAS_KEYS != 'true'
+        run: echo "GEMINI_KEYS secret not set — live gate not run (record 'not run — no keys')."
+      - uses: actions/checkout@v4
+        if: env.HAS_KEYS == 'true'
+      - uses: actions/setup-python@v5
+        if: env.HAS_KEYS == 'true'
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - if: env.HAS_KEYS == 'true'
+        run: |
+          python -m venv apps/api/.venv
+          apps/api/.venv/bin/pip install -r apps/api/requirements.txt
+      - name: RUN_LIVE=1 pytest tests/live
+        if: env.HAS_KEYS == 'true'
+        env:
+          RUN_LIVE: "1"
+          AI_PROVIDER: gemini
+          ENV: staging
+          GEMINI_KEYS: ${{ secrets.GEMINI_KEYS }}
+        run: apps/api/.venv/bin/pytest apps/api/tests/live -q

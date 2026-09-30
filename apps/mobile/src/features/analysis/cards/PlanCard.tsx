@@ -12,7 +12,7 @@ import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
-import { useT } from '@/i18n/useT';
+import { useBidiText, useT } from '@/i18n/useT';
 
 import { PLAN_ICONS, type ResultCardProps } from './shared';
 
@@ -34,6 +34,7 @@ const EMPTY: Record<string, boolean> = {};
 
 export function PlanCard({ analysis, handlers }: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const dir = useDirection();
   const state = usePlanChecks((s) => s.byAnalysis[analysis.analysis_id] ?? EMPTY);
@@ -52,7 +53,7 @@ export function PlanCard({ analysis, handlers }: ResultCardProps) {
             <Icon name={PLAN_ICONS[step.kind]} color={colors.primary} />
             <View style={styles.flex}>
               <Checklist
-                items={[{ id: step.id, text: step.text }]}
+                items={[{ id: step.id, text: bt(step.text) }]}
                 state={state}
                 onToggle={(id, checked) => setCheck(analysis.analysis_id, id, checked)}
               />

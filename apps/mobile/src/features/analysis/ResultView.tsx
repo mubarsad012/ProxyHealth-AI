@@ -16,7 +16,7 @@ import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { SpeakRow } from '@/features/speech/SpeakRow';
 import { useDirection } from '@/i18n/direction';
-import { usePackMeta, useT } from '@/i18n/useT';
+import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 import type { CapturedPage } from '@/store/session';
 
 import { canRemind, DemandsCard } from './cards/DemandsCard';
@@ -27,7 +27,7 @@ import { PlanCard } from './cards/PlanCard';
 import { RedFlagsCard, ScamCard, WarningChips } from './cards/SafetyCards';
 import type { ResultHandlers } from './cards/shared';
 import { SummaryCard } from './cards/SummaryCard';
-import { disclaimerKey, FOOTER_KEYS, resultBanners, type BannerSpec } from './disclaimers';
+import { disclaimerKey, FOOTER_KEYS, resultBanners, sampleAsOfNoteKey, type BannerSpec } from './disclaimers';
 import { UnverifiedSection } from './unverifiedSection';
 import { drivingDemand, firstPrintedPhone } from './urgencyCopy';
 
@@ -61,6 +61,7 @@ export function askPrompts(a: Pick<AnalysisResult, 'questions_to_ask'>): string[
 
 export function ResultView({ analysis, pages, handlers, offline }: ResultViewProps) {
   const t = useT();
+  const bt = useBidiText();
   const meta = usePackMeta();
   const dir = useDirection();
   const { colors } = useTheme();
@@ -79,6 +80,7 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
       : undefined;
   const disc = disclaimerKey(analysis.disclaimer_kind);
   const banners = resultBanners(analysis, { machineTranslated: meta.machineTranslated, uiTag: meta.tag });
+  const asOfNote = sampleAsOfNoteKey(analysis);
   return (
     <View testID="result-view" style={styles.stack}>
       {emergency.triggered ? (
@@ -93,6 +95,11 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
       <ScamCard {...cardProps} />
       <WarningChips {...cardProps} />
       <UrgencyBanner urgency={analysis.urgency} onRemind={onRemind} onVerify={onVerify} />
+      {asOfNote ? (
+        <AppText variant="caption" color="textMuted" testID="demo-as-of-note">
+          {t(asOfNote)}
+        </AppText>
+      ) : null}
       {disc ? <SpeakRow text={t(disc)} testID="disclaimer-header" /> : null}
       {banners.map((b) => (
         <Banner key={b.key} kind={TONE_KIND[b.tone]} text={t(b.key, b.vars)} />
@@ -129,7 +136,7 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
                   onPress={() => handlers.onAsk?.(q)}
                   style={[styles.prompt, { borderColor: colors.primary, opacity: offline ? 0.5 : 1 }]}>
                   <AppText variant="caption" color="primary" weight="bold" lang={analysis.target_language}>
-                    {q}
+                    {bt(q)}
                   </AppText>
                 </Pressable>
               ))}

@@ -8,12 +8,13 @@ import { Collapsible } from '@/design/components/Collapsible';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { space } from '@/design/tokens';
-import { useT } from '@/i18n/useT';
+import { useBidiText, useT } from '@/i18n/useT';
 
 import { FactRow, type ResultCardProps } from './shared';
 
 export function DetailsSection(props: ResultCardProps) {
   const t = useT();
+  const bt = useBidiText();
   const { colors } = useTheme();
   const all = [...props.analysis.demands, ...props.analysis.unverified];
   if (!all.length) return null;
@@ -23,7 +24,7 @@ export function DetailsSection(props: ResultCardProps) {
         {all.map((d) => (
           <View key={`detail-${d.id}`} style={[styles.row, { borderTopColor: colors.divider }]}>
             <AppText lang={props.analysis.target_language} style={d.verified ? undefined : styles.struck}>
-              {d.text}
+              {bt(d.text)}
             </AppText>
             <Bidi dir="ltr" variant="body" weight="bold">
               {d.value_verbatim}
