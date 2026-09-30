@@ -3,9 +3,9 @@
   "category": "housing",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a lease - the rent, the dates and the rules in it",
+    "english": "Hello. I speak English. I am here about: a lease from Propiedades Los Robles LLC. I need help with: a lease - the rent, the dates and the rules in it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦en⟧ a lease - the rent, the dates and the rules in it"
+    "translated": "Hello. I speak English. I am here about: a lease from Propiedades Los Robles LLC. I need help with: a lease - the rent, the dates and the rules in it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "1 de diciembre de 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-12-01"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "move_date",
       "source_quote": "Plazo: del 1 de diciembre de 2026 al 30 de noviembre de 2027.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "The lease starts on December 1, 2026 (printed as \"1 de diciembre de 2026\").",
       "value_verbatim": "1 de diciembre de 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -48,19 +48,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "30 de noviembre de 2027",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2027-11-30"
       },
       "documents": [],
       "id": "d2",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "expiry",
       "source_quote": "Plazo: del 1 de diciembre de 2026 al 30 de noviembre de 2027.",
       "span_ids": [
@@ -68,7 +68,7 @@
       ],
       "text": "The lease ends on November 30, 2027 (printed as \"30 de noviembre de 2027\").",
       "value_verbatim": "30 de noviembre de 2027",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -91,7 +91,7 @@
       ],
       "text": "Rent is $1,650.00 each month, paid on the 1st.",
       "value_verbatim": "$1,650.00",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -111,15 +111,15 @@
       ],
       "text": "To end the lease, the tenant must give written notice 60 days before the end, the lease says.",
       "value_verbatim": "60 días antes de terminar el contrato",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "es",
   "disclaimer_kind": "housing_information_only",
   "disclaimers": [
-    "housing_information_only",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -342,9 +342,9 @@
           "text": "Firma del inquilino: ____________ Firma del arrendador: ____________"
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -397,7 +397,211 @@
   ],
   "red_flags": [],
   "request_id": "offline-spanish_lease-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_lease",
+          "text_en": "Your lease"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [
+          "https://www.consumerfinance.gov/coronavirus/mortgage-and-housing-assistance/renter-protections/"
+        ],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone."
+        },
+        "hours": null,
+        "id": "hud_counselor",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "js_rendered",
+        "name": "HUD: Find a Housing Counselor",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": "+18005694287",
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_lease"
+        ],
+        "priority": 75,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "housing_counseling",
+          "eviction",
+          "rent_assistance"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.hud.gov/findacounselor",
+        "verification_method": "browser",
+        "verified_on": "2026-09-23",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Free or low-cost HUD-approved counselors for rent problems, eviction prevention and housing questions. Call 800-569-4287 to find one."
+        }
+      },
+      "score": 4.32,
+      "why": [
+        "Made for this kind of paper",
+        "For housing counseling",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_housing_counseling",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_the_summons",
+          "text_en": "The summons or court paper"
+        },
+        {
+          "key": "bring_lease",
+          "text_en": "Your lease"
+        }
+      ],
+      "eligibility_note_key": "manual_verify",
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Tenants in Virginia."
+        },
+        "hours": null,
+        "id": "va_eviction_helpline",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "Virginia Eviction Defense Center (Virginia Poverty Law Center)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "nonprofit",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_the_summons",
+          "bring_lease"
+        ],
+        "priority": 65,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "state",
+          "states": [
+            "VA"
+          ],
+          "zip3": []
+        },
+        "status_note_key": "manual_verify",
+        "tags": [
+          "eviction",
+          "housing_counseling"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://fightmyeviction.org/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Free legal information and a helpline for Virginia tenants facing eviction, run by the Virginia Poverty Law Center. Find the helpline number on the site."
+        }
+      },
+      "score": 4.15,
+      "why": [
+        "For housing counseling",
+        "Serves Virginia",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_housing_counseling",
+        "why.serves_your_state",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone."
+        },
+        "hours": null,
+        "id": "usa_housing_help",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "USA.gov: Housing help",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [],
+        "priority": 45,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "rent_assistance",
+          "eviction",
+          "housing_counseling"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.usa.gov/housing-help",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Government overview of rental assistance, emergency housing and eviction help, with links to programs."
+        }
+      },
+      "score": 3.62,
+      "why": [
+        "For housing counseling",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_housing_counseling",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "housing_counseling"
   ],
@@ -431,13 +635,16 @@
   "translation_confidence": "medium",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 60,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
+    "headline_key": "urgency.info.date_later",
+    "headline_params": {
+      "date": "1 de diciembre de 2026",
+      "date_iso": "2026-12-01"
+    },
     "level": "info",
-    "nearest_date_iso": null,
+    "nearest_date_iso": "2026-12-01",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -447,9 +654,10 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "document_language_differs",
     "demo_sample"
   ]
 }

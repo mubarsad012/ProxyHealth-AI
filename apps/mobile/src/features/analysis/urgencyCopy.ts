@@ -20,7 +20,8 @@ export function urgencySpeech(u: Urgency, t: TFunction): string {
 export function drivingDemand(a: AnalysisResult): Demand | null {
   const id = a.urgency.driving_demand_id;
   if (!id) return null;
-  return a.demands.find((d) => d.id === id) ?? null;
+  const d = a.demands.find((x) => x.id === id);
+  return d && d.verified ? d : null;
 }
 
 /** A `contact` demand whose number is printed on the page (verified) → `tel:` href, else null. */

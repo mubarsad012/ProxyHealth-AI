@@ -128,7 +128,7 @@ def test_new_contacts_only_reports_additions() -> None:
         "Ask the Legal Aid Justice Center for help.",  # in the DB
         "Casa Inc can help.",  # DB name + corporate suffix
         "The Fairfax County Department of Family Services sent this.",  # on the paper
-        "Go to the Arlington Immigration Court.",  # every specific word printed
+        "Go to the Arlington Immigration Court.",  # one printed stretch, reordered
         "Talk to the Social Security Office.",  # generic institution words only
         "Your Doctor's Office can explain.",
         "The Department of Social Services can help.",
@@ -190,3 +190,141 @@ def test_a_marker_that_starts_a_sentence_is_capitalised(scrubber: cf.ContactScru
         f"Line one\n{capital} helps."
     )
     assert scrubber.scrub("Or ask Acme Legal Services LLC.") == f"Or ask {ORG}."
+
+
+def test_printed_specific_words_plus_generic_words_are_not_a_printed_name() -> None:
+    """D-10 / AI_PROMPTS §11.3: "Fairfax" and "County" are printed, but the name "Fairfax County
+    Legal Aid Society" is neither on the paper nor in ``ResourceRepo.names()``."""
+    from proxyhealth_api.resources.loader import ResourceRepo
+    from proxyhealth_api.settings import DATA_DIR
+
+    paper = "Arlington Immigration Court\n…\nFairfax County Department of Family Services"
+    names = ResourceRepo.load(DATA_DIR / "resources").names()
+    s = cf.make_scrubber(paper, names, en_t())
+    assert s.scrub("Ask Fairfax County Legal Aid Society about it.") == f"Ask {ORG} about it."
+    capital = ORG[0].upper() + ORG[1:]
+    assert s.scrub("Fairfax Family Services Center can help.") == f"{capital} can help."
+    assert s.orgs_replaced == 2
+    for kept in (
+        "Ask Fairfax County Department of Family Services.",  # printed as is
+        "Go to the Arlington Immigration Court.",  # printed as is
+        "Ask the Legal Aid Justice Center.",  # in the DB
+    ):
+        assert s.scrub(kept) == kept
+
+
+def test_a_printed_name_may_be_reordered_only_within_one_stretch() -> None:
+    allow = cf.AllowList.build("Immigration Court, Arlington, VA\nFairfax County Office")
+    assert allow.allows_org("Arlington Immigration Court")  # one printed stretch, reordered
+    assert not allow.allows_org("Fairfax Immigration Court")  # scattered words
+    assert not allow.allows_org("Arlington County Legal Aid Society")
+
+
+@pytest.fixture(scope="module")
+def db_names() -> set[str]:
+    from proxyhealth_api.resources.loader import ResourceRepo
+    from proxyhealth_api.settings import DATA_DIR
+
+    return ResourceRepo.load(DATA_DIR / "resources").names()
+
+
+LANDLORD = "Notice from your landlord. Rent is due."
+CAPITAL_ORG = ORG[0].upper() + ORG[1:]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # Cut at the last institution word and accepted as part of a DB name.
+        (
+            "Contact the U.S. Department of Immigration Payments for help.",
+            f"Contact {ORG} for help.",
+        ),
+        # Suffix-first "X of Y" names.
+        ("Contact the Department of Immigration Payments for help.", f"Contact {ORG} for help."),
+        ("Department of Immigration Payments can help.", f"{CAPITAL_ORG} can help."),
+        # The words after the last institution word are checked too.
+        ("Pay the Federal Immigration Agency Office of Fast Visas.", f"Pay {ORG}."),
+        ("Ask the Legal Aid Justice Center and Fake Visas.", f"Ask {ORG}."),
+        ("Go to the Housing Rights Association of Northern Virginia.", f"Go to {ORG}."),
+    ],
+)
+def test_invented_org_names_are_replaced_whole(
+    db_names: set[str], text: str, expected: str
+) -> None:
+    """D-10 / AI_PROMPTS §11.3: an org name passes only as a whole DB name or a printed name."""
+    s = cf.make_scrubber(LANDLORD, db_names, en_t())
+    assert s.scrub(text) == expected
+    assert s.orgs_replaced == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ask the Legal Aid Justice Center and Just Neighbors.",  # two whole DB names
+        "Ask the Tahirih Justice Center.",
+        "Ask the International Rescue Committee.",  # DB "International Rescue Committee (IRC)"
+        "Contact the HHS Office for Civil Rights.",  # DB "HHS Office for Civil Rights: …"
+        "Ask the Virginia Poverty Law Center.",  # parenthesised DB name
+        "The Department of Health and Human Services can help.",  # generic words only
+        "Ask the Clinic for Dari interpreters.",  # a language is not part of a name
+        "Call the Immigration Court for Monday's hearing.",
+        "Go to the Department of Labor. Then Call Them.",
+    ],
+)
+def test_whole_db_names_and_generic_names_are_kept(db_names: set[str], text: str) -> None:
+    s = cf.make_scrubber(LANDLORD, db_names, en_t())
+    assert s.scrub(text) == text
+    assert s.orgs_replaced == 0
+
+
+def test_a_db_name_never_passes_by_a_part_of_it(db_names: set[str]) -> None:
+    allow = cf.AllowList.build(LANDLORD, db_names)
+    assert allow.allows_org("U.S. Department of Labor Wage and Hour Division")
+    assert not allow.allows_org("U.S. Department of Immigration Payments")
+    assert not allow.allows_org("Tahirih Justice")  # part of "Tahirih Justice Center"
+
+
+def test_a_replacement_leaves_no_dangling_tail() -> None:
+    s = cf.make_scrubber(LANDLORD, [], en_t())
+    assert s.scrub("Contact the U.S. Department of Labor.") == (
+        "Contact the U.S. Department of Labor."  # generic words only: kept whole
+    )
+    assert s.scrub("Ask the Housing Rights Association of Northern Virginia today.") == (
+        f"Ask {ORG} today."
+    )
+    assert s.scrub("Acme Legal Services Inc. can help.") == f"{CAPITAL_ORG} can help."
+
+
+def test_us_initialism_is_one_generic_word(db_names: set[str]) -> None:
+    court = cf.make_scrubber("Immigration Court, 1901 S. Bell Street, Arlington.", db_names, en_t())
+    for kept in ("Ask the U.S. Immigration Court.", "Ask the US Immigration Court."):
+        assert court.scrub(kept) == kept
+    uscis = cf.make_scrubber(
+        "U.S. Citizenship and Immigration Services. Receipt Notice.", db_names, en_t()
+    )
+    printed = "The U.S. Citizenship and Immigration Services Office can help."
+    assert uscis.scrub(printed) == printed  # a trailing generic word the paper does not print
+    assert court.orgs_replaced == 0 and uscis.orgs_replaced == 0
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Go to scamsite.xyz to pay.", f"Go to {MARK} to pay."),
+        ("Go to bit.ly/abc123 to pay.", f"Go to {MARK} to pay."),
+        ("Go to irs.co to pay.", f"Go to {MARK} to pay."),  # the paper prints irs.com
+        ("See county.gov.", f"See {MARK}."),  # the paper prints fairfaxcounty.gov
+        ("See fairfaxcounty.gov/family.", f"See {MARK}."),  # not a whole path segment
+        ("Email elp@fairfaxcounty.gov.", f"Email {MARK}."),
+        ("See irs.com.", "See irs.com."),
+        ("See fairfaxcounty.gov/familyservices/forms today.", f"See {MARK} today."),
+        ("See www.fairfaxcounty.gov.", "See www.fairfaxcounty.gov."),
+        ("Upload form.pdf today.", "Upload form.pdf today."),  # a file name, not a domain
+        ("Pay it today.Please call.", "Pay it today.Please call."),  # a missing space
+    ],
+)
+def test_domains_are_compared_on_label_boundaries(text: str, expected: str) -> None:
+    paper = "Visit irs.com or www.fairfaxcounty.gov/familyservices. Email help@fairfaxcounty.gov."
+    s = cf.make_scrubber(paper, [], en_t())
+    assert s.scrub(text) == expected

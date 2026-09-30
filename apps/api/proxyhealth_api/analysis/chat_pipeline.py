@@ -1,68 +1,280 @@
-"""``run_chat`` (BUILD_PLAN §4.1). WP0: one fast call, neutral ``ChatModelOut`` mapping."""
+"""``run_chat`` — one grounded follow-up answer (BUILD_PLAN §4.1; AI_PROMPTS §5.4, §11).
 
-import json
+Stateless: the client re-sends the stored ``AnalysisContext`` and the last ≤ 8 turns; images
+are never re-sent. Order: context compaction (≤ 60 000 chars, §5.4.3) → one ``chat`` call (fast,
+``low``) → grounding check (every ``grounded_span_ids`` id must exist in ``original_text``; none
+left → ``not_in_document``) → contact scrubber (only contacts printed on the paper survive) →
+phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a referral) →
+injection guard (typed instructions + a failing answer → ``out_of_scope``) → emergency lexicon
+over the question and the turns → tags → disclaimers and warnings. The model is never asked to
+compute a date: the context shows the app's own labelled dates only. Nothing here writes to disk
+or logs content (ARCHITECTURE §7).
+"""
+
+from __future__ import annotations
+
 import time
+from collections.abc import Sequence
 
+from proxyhealth_api.ai import prompt_loader as prompt
 from proxyhealth_api.ai.provider import Part, Task
+from proxyhealth_api.analysis import (
+    contacts_filter,
+    disclaimers,
+    emergency,
+    injection,
+    phrasing,
+    tagging,
+)
+from proxyhealth_api.analysis.deadline_rules import local_today
 from proxyhealth_api.analysis.pipeline import (
     PipelineDeps,
-    disclaimer_for,
+    RewriteBudget,
+    demo_of,
+    elapsed_ms,
+    generate,
     hints_for,
+    make_rewriter,
     model_meta,
     parsed_as,
-    resource_tags,
+    prompt_base_vars,
+    translator,
 )
-from proxyhealth_api.contracts.analysis import Safety
-from proxyhealth_api.contracts.chat import ChatAnswer, ChatRequest, Quote
-from proxyhealth_api.contracts.enums import Provider, WarningCode
+from proxyhealth_api.contracts.analysis import Demand
+from proxyhealth_api.contracts.chat import AnalysisContext, ChatAnswer, ChatRequest, Quote
+from proxyhealth_api.contracts.common import PageText
+from proxyhealth_api.contracts.enums import (
+    DateKind,
+    DocumentType,
+    ModelQuality,
+    Provider,
+    ReferTo,
+    RefusalKind,
+    WarningCode,
+)
 from proxyhealth_api.contracts.model_out import ChatModelOut
 
+MAX_CONTEXT_CHARS = 60_000
+MAX_SUGGESTED = 3
+REFER_REQUIRED = frozenset(
+    {RefusalKind.eligibility, RefusalKind.filing_advice, RefusalKind.outcome,
+     RefusalKind.medical_interpretation, RefusalKind.drafting}
+)  # fmt: skip
 
-def _quotes(req: ChatRequest, span_ids: list[str]) -> list[Quote]:
-    blocks = {b.id: b for page in req.analysis.original_text for b in page.blocks}
+
+def _q(text: str | None) -> str:
+    """A context value on one line, quoted; never able to forge the END marker."""
+    flat = " ".join((text or "").split()).replace("===", "= = =")
+    return '"' + flat.replace('"', "'") + '"'
+
+
+def _date_label(d: Demand) -> str:
+    if d.date is None:
+        return ""
+    if d.date.kind is DateKind.stated:
+        return f" date=stated {d.date.value_iso or 'unparsed'}"
+    if d.date.kind is DateKind.estimated:
+        return (
+            f" date=estimated {d.date.value_iso} (rule {d.date.rule_id}; confirm with sender)"
+        )
+    return " date=unresolved"
+
+
+def _demand_lines(demands: Sequence[Demand]) -> list[str]:
+    if not demands:
+        return ["  (none)"]
     return [
-        Quote(span_id=sid, text=blocks[sid].text, page=blocks[sid].page)
-        for sid in span_ids
-        if sid in blocks
+        f"  {d.id} {d.kind.value}" + (f" role={d.role}" if d.role else "")
+        + f" value={_q(d.value_verbatim)}{_date_label(d)} spans={','.join(d.span_ids)}"
+        + f" quote={_q(d.source_quote)}"
+        for d in demands
+    ]  # fmt: skip
+
+
+def _transcript_lines(pages: Sequence[PageText]) -> list[str]:
+    lines: list[str] = []
+    for page in pages:
+        lines.append(f"--- page {page.page} ---")
+        for b in page.blocks:
+            text = " ".join(b.text.split())
+            if text.startswith(("===", "---")):
+                text = " " + text
+            lines.append(f"[{b.id}] {text}")
+    return lines
+
+
+def render_context(
+    ctx: AnalysisContext,
+    *,
+    glossary: bool = True,
+    plan: bool = True,
+    unverified: bool = True,
+    pages: int | None = None,
+) -> str:
+    """AI_PROMPTS §5.4.3 text (English labels; target-language text kept as stored)."""
+    u = ctx.urgency
+    kept_pages = ctx.original_text if pages is None else ctx.original_text[:pages]
+    plan_text = " | ".join(
+        f"{s.id} {s.kind.value}" + (f" ({s.demand_id})" if s.demand_id else "") + f" {_q(s.text)}"
+        for s in ctx.plan_steps
+    )  # fmt: skip
+    flags = " | ".join(f"{f.kind.value} {_q(f.text)}" for f in ctx.red_flags)
+    gloss = " | ".join(f"{_q(g.term_as_written)} — {_q(g.explanation)}" for g in ctx.glossary)
+    lines = [
+        "=== BEGIN PAPER CONTEXT ===",
+        f"PAPER: type={ctx.document_type.value} category={ctx.category.value} "
+        f"language={ctx.detected_language} sender={_q(ctx.sender_as_written or 'none')}",
+        f"URGENCY: level={u.level.value} nearest_date={u.nearest_date_iso or 'none'} "
+        f"days_until={u.days_until if u.days_until is not None else 'none'} "
+        f"driving={u.driving_demand_id or 'none'}",
+        f"SUMMARY (en): {_q(ctx.summary.body_en)}",
+        f"SUMMARY (target): {_q(ctx.summary.body)}",
+        "DEMANDS (verified):",
+        *_demand_lines(ctx.demands),
     ]
+    if unverified:
+        lines += ["DEMANDS (not confirmed on the page):", *_demand_lines(ctx.unverified)]
+    if plan:
+        lines.append(f"PLAN: {plan_text or '(none)'}")
+    lines.append(f"RED FLAGS: {flags or '(none)'}")
+    if glossary:
+        lines.append(f"GLOSSARY: {gloss or '(none)'}")
+    lines += ["TRANSCRIPT:", *_transcript_lines(kept_pages), "=== END PAPER CONTEXT ==="]
+    return "\n".join(lines)
+
+
+def compact_context(ctx: AnalysisContext, limit: int = MAX_CONTEXT_CHARS) -> str:
+    """Drop glossary, then plan, then unverified items, then transcript pages from the last page
+    backwards until the text fits ``limit`` (the client already cut oldest pages)."""
+    options: dict[str, bool] = {"glossary": True, "plan": True, "unverified": True}
+    text = render_context(ctx, **options)
+    for name in ("glossary", "plan", "unverified"):
+        if len(text) <= limit:
+            return text
+        options[name] = False
+        text = render_context(ctx, **options)
+    pages = len(ctx.original_text)
+    while len(text) > limit and pages > 0:
+        pages -= 1
+        text = render_context(ctx, pages=pages, **options)
+    return text[:limit]
+
+
+def render_history(req: ChatRequest, max_turns: int) -> str:
+    turns = req.messages[-max_turns:] if max_turns else []
+    if not turns:
+        return prompt.NONE_TEXT
+    return "\n".join(
+        f"{'USER' if m.role == 'user' else 'ASSISTANT'}: {prompt.untrusted(m.text, 1000)}"
+        for m in turns
+    )
+
+
+def grounded_quotes(ctx: AnalysisContext, span_ids: Sequence[str]) -> list[Quote]:
+    """Quotes for the ids that exist in ``original_text`` (unknown ids dropped, order kept)."""
+    blocks = {b.id: b for page in ctx.original_text for b in page.blocks}
+    out: list[Quote] = []
+    for sid in dict.fromkeys(span_ids):
+        block = blocks.get(sid)
+        if block is not None:
+            out.append(Quote(span_id=sid, text=block.text, page=block.page))
+    return out
 
 
 async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
-    history = [m.model_dump() for m in req.messages]
-    parts = [
-        Part.of_text(req.analysis.model_dump_json()),
-        Part.of_text(json.dumps(history, ensure_ascii=False)),
-        Part.of_text(req.question),
-    ]
     started = time.perf_counter()
-    outcome = await deps.ai.generate(
-        task=Task.chat, parts=parts, system="", schema=ChatModelOut,
-        pages=1, is_pdf=False, request_id=deps.request_id,
+    deadline_at = deps.ai.request_deadline()
+    ctx = req.analysis
+    target = req.target_language
+    t = translator(deps, target)
+    today = local_today(deps.clock())
+    vars = {
+        **prompt_base_vars(deps, target_language=target, today=today),
+        "analysis_context": compact_context(ctx),
+        "history": render_history(req, deps.settings.max_chat_history),
+        "question": prompt.untrusted(req.question, 1000),
+    }
+    # The mock answers from the structured context (AI_PROMPTS §10.1); Gemini gets the text only.
+    lead = [Part.of_text(ctx.model_dump_json())] if deps.ai.provider.name is Provider.mock else []
+    outcome = await generate(
+        deps, Task.chat, [], vars, deadline_at=deadline_at, lead=lead,
         hints=hints_for(
-            demo_sample_id=req.demo_sample_id, target_language=req.target_language,
-            question=req.question,
+            demo_sample_id=req.demo_sample_id, target_language=target, question=req.question
         ),
     )  # fmt: skip
-    latency_ms = int((time.perf_counter() - started) * 1000)
     out = parsed_as(outcome, ChatModelOut)
-    demo = bool(req.demo_sample_id) or deps.ai.provider.name is Provider.mock
     warnings: list[WarningCode] = list(outcome.warnings)
-    if demo:
-        warnings.append(WarningCode.demo_sample)
-    grounded = _quotes(req, out.grounded_span_ids)
+
+    # Grounding check (replaces span verification for chat).
+    quotes = grounded_quotes(ctx, out.grounded_span_ids)
+
+    # Contact scrubber: contacts printed on the paper may be quoted; nothing else.
+    paper_text = "\n".join(b.text for page in ctx.original_text for b in page.blocks)
+    scrubber = contacts_filter.make_scrubber(paper_text, deps.resources.names(), t)
+    answer = scrubber.scrub(out.answer)
+    suggested = [q for q in scrubber.scrub_all(out.suggested_questions[:MAX_SUGGESTED]) if q]
+
+    # Phrasing lint: the answer is information, never advice.
+    refusal, refer = out.refusal_kind, out.refer_to_professional
+    rewrite = make_rewriter(
+        deps, language=target, today=today, budget=RewriteBudget(), deadline_at=deadline_at
+    )
+    linted = await phrasing.enforce(
+        answer, t=t, category=ctx.category, language=target, rewrite=rewrite
+    )
+    answer = linted.text
+    warnings.extend(linted.warnings)
+    if linted.hedged and refusal is RefusalKind.none:
+        refusal = phrasing.refusal_kind_for(linted.families)
+
+    # Typed instructions to the model + an answer that failed lint → the fixed refusal.
+    typed = [req.question, *(m.text for m in req.messages if m.role == "user")]
+    if injection.text_has_injection(typed) and linted.replacements:
+        refusal = RefusalKind.out_of_scope
+        answer = t("chat.refusal.out_of_scope")
+        quotes = []
+    # An answer that rests on no block of the paper is "not in the document" (a refusal may
+    # legitimately cite nothing); ids that do not exist were dropped above.
+    dropped_all = bool(out.grounded_span_ids) and not quotes
+    not_in_document = (
+        out.not_in_document or dropped_all or (not quotes and refusal is RefusalKind.none)
+    )
+    if refusal is RefusalKind.medical_interpretation:
+        refer = ReferTo.clinician
+    elif refusal in REFER_REQUIRED and refer is ReferTo.none:
+        refer = phrasing.refer_to_for(ctx.category)
+
+    # Emergency lexicon: the reader's words and the earlier assistant turns.
+    emerg = emergency.detect_emergency(
+        [m.text for m in req.messages if m.role == "assistant"],
+        detected_language=ctx.detected_language, target_language=target,
+        user_texts=typed,
+    )  # fmt: skip
+    warnings += [*emerg.warnings, *scrubber.warnings()]
+    tags = tagging.finalize_tags(
+        out.resource_tags, document_type=DocumentType.unknown, readable=True,
+        emergency=emerg.safety.emergency,
+    ).tags  # fmt: skip
+
+    demo = demo_of(deps, req.demo_sample_id)
+    meta = model_meta(outcome, deps, demo=demo, latency_ms=elapsed_ms(started))
+    final = disclaimers.final_warnings(
+        warnings, degraded=meta.quality is ModelQuality.degraded,
+        data_use_tier=meta.data_use_tier, demo=meta.demo,
+    )  # fmt: skip
     return ChatAnswer(
         request_id=deps.request_id,
-        answer=out.answer,
-        grounded_span_ids=[q.span_id for q in grounded],
-        grounded_quotes=grounded,
-        not_in_document=out.not_in_document,
-        refusal_kind=out.refusal_kind,
-        refer_to_professional=out.refer_to_professional,
+        answer=answer,
+        grounded_span_ids=[q.span_id for q in quotes],
+        grounded_quotes=quotes,
+        not_in_document=not_in_document,
+        refusal_kind=refusal,
+        refer_to_professional=refer,
         distress_acknowledged=out.distress_acknowledged,
-        suggested_questions=list(out.suggested_questions),
-        resource_tags=resource_tags(out.resource_tags),
-        safety=Safety(emergency=False, emergency_kinds=[], credential_or_payment_request=False),
-        disclaimer_kind=disclaimer_for(req.analysis.category),
-        warnings=warnings,
-        model_meta=model_meta(outcome, deps, demo=demo, latency_ms=latency_ms),
+        suggested_questions=suggested,
+        resource_tags=tags,
+        safety=emerg.safety,
+        disclaimer_kind=disclaimers.disclaimer_kind(ctx.category),
+        warnings=final,
+        model_meta=meta,
     )

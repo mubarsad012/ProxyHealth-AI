@@ -48,10 +48,10 @@ async def test_analyze_with_consent(
     )
     assert r.status_code == 200, r.text
     result = AnalysisResult.model_validate(r.json())
-    assert result.document_type == "medicaid_renewal"
-    assert result.urgency.level == "info"
-    assert result.demands and all(d.verified for d in result.demands)
-    assert result.red_flags == []
+    # A blank page matches no sample (dHash, D-29): the mock must not invent a document.
+    assert result.document_type == "unknown"
+    assert result.quality.readable is False
+    assert result.demands == [] and result.red_flags == []
     assert result.model_meta.provider == "mock" and result.model_meta.demo is True
     assert result.request_id == r.headers["X-Request-Id"]
 
@@ -84,12 +84,14 @@ async def test_analyze_validation_error_is_400(
     assert ErrorResponse.model_validate(r.json()).error.code == "invalid_request"
 
 
-async def test_demo_fixtures_lists_inline_fixture(client: httpx.AsyncClient) -> None:
+async def test_demo_fixtures_list_all_samples(client: httpx.AsyncClient) -> None:
     r = await client.get("/v1/demo/fixtures")
     assert r.status_code == 200
     fixtures = [DemoFixture.model_validate(f) for f in r.json()]
-    assert [f.id for f in fixtures] == ["medicaid_address_confirmation"]
-    page = await client.get(fixtures[0].thumbnail_url)
+    ids = [f.id for f in fixtures]
+    assert len(ids) == 18 and "medicaid_address_confirmation" in ids  # BUILD_PLAN §4.5
+    medicaid = next(f for f in fixtures if f.id == "medicaid_address_confirmation")
+    page = await client.get(medicaid.thumbnail_url)
     assert page.status_code == 200 and page.headers["content-type"] == "image/png"
     assert page.content.startswith(b"\x89PNG")
     missing = await client.get("/v1/demo/fixtures/nope/pages/1")
@@ -140,4 +142,8 @@ async def test_troubleshoot_and_chat(
         headers=consent_headers,
     )
     assert c.status_code == 200, c.text
-    assert ChatAnswer.model_validate(c.json()).not_in_document is True
+    answer = ChatAnswer.model_validate(c.json())
+    # The Medicaid sample prints a deadline, so the answer quotes it (BUILD_PLAN §5.8 chat row).
+    assert answer.not_in_document is False
+    deadline_spans = {s for d in analysis["demands"] for s in d["span_ids"]}
+    assert answer.grounded_span_ids and set(answer.grounded_span_ids) <= deadline_spans

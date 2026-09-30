@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
+import yaml
 
 from proxyhealth_api.analysis import phrasing as ph
 from proxyhealth_api.contracts.enums import DocumentCategory, ReferTo, RefusalKind, WarningCode
+from proxyhealth_api.settings import DATA_DIR
 from tests.unit._fixtures_wp2 import en_t
 
 C = DocumentCategory
@@ -170,14 +176,79 @@ async def test_dramatize_clause_is_deleted() -> None:
 
 @pytest.mark.asyncio
 async def test_languages_and_unavailable_warning() -> None:
+    """TAXONOMY §8.1/§8.6: the target language is linted only when its section is reviewed;
+    an unlisted or unreviewed language lints English only and warns."""
     es = await ph.enforce(
         "Usted califica para ayuda.", t=en_t(), category=C.benefits, language="es"
     )
-    assert es.replacements == 1 and es.warnings == []
+    assert es.replacements == 0 and es.warnings == [WarningCode.phrasing_lint_unavailable]
     so = await ph.enforce("You qualify.", t=en_t(), category=C.benefits, language="so")
     assert so.warnings == [WarningCode.phrasing_lint_unavailable] and so.replacements == 1
-    assert ph.lint_languages("es-MX") == (["en", "es"], False)
+    assert ph.load_config().reviewed_by["es"] is None
+    assert ph.lint_languages("es-MX") == (["en"], True)
     assert ph.lint_languages("en") == (["en"], False)
+    reviewed = _reviewed_config("es")
+    assert ph.lint_languages("es-MX", reviewed) == (["en", "es"], False)
+    es_reviewed = await ph.enforce(
+        "Usted califica para ayuda.", t=en_t(), category=C.benefits, language="es", cfg=reviewed
+    )
+    assert es_reviewed.replacements == 1 and es_reviewed.warnings == []
+
+
+def _reviewed_config(*tags: str) -> ph.PhrasingConfig:
+    data = yaml.safe_load(ph.PHRASING_YAML.read_text(encoding="utf-8"))
+    for tag in tags:
+        data["languages"][tag]["reviewed_by"] = "test reviewer"
+    return ph.parse_config(data)
+
+
+def test_spanish_attribution_exempts_reported_sentences() -> None:
+    """§8.3 in Spanish: "Su arrendador, …, dice que usted debe pagar" reports the paper."""
+    cfg = _reviewed_config("es")
+    reported = (
+        "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de "
+        "renta y que debe pagar antes del 8 de octubre de 2026 o mudarse."
+    )
+    assert ph.is_attributed(reported, cfg, ["en", "es"])
+    assert not ph.is_attributed(reported, cfg)  # the English regex alone does not cover it
+    assert ph.lint_text(reported, category=C.housing, language="es", cfg=cfg) == []
+    assert ph.lint_text("La carta dice que debe firmar.", language="es", cfg=cfg) == []
+    assert ph.lint_text("Usted debe pagar la renta.", language="es", cfg=cfg) == [
+        ("Usted debe pagar la renta.", ["advice_verb"])
+    ]
+
+
+def _fixture_fields(out: dict[str, Any], lang: str) -> list[tuple[str, str]]:
+    """(language, text) for every model-authored field TAXONOMY §8.1 lints."""
+    fields = [(lang, out.get("summary_title")), (lang, out.get("summary_body"))]
+    fields += [("en", out.get("summary_body_en")), ("en", out.get("clerk_need_en"))]
+    for d in out.get("demands") or []:
+        fields += [(lang, d.get("text")), (lang, d.get("ambiguity_note"))]
+    fields += [(lang, s.get("text")) for s in out.get("plan_steps") or []]
+    fields += [(lang, g.get("explanation")) for g in out.get("glossary") or []]
+    fields += [(lang, r.get("text")) for r in out.get("red_flags") or []]
+    fields += [(lang, q) for q in out.get("questions_to_ask") or []]
+    return [(tag, text) for tag, text in fields if isinstance(text, str) and text]
+
+
+FIXTURE_OUTPUTS = sorted((DATA_DIR / "fixtures").glob("*/out.*.json"))
+
+
+@pytest.mark.parametrize("path", FIXTURE_OUTPUTS, ids=lambda p: f"{p.parent.name}-{p.name}")
+def test_every_fixture_output_lints_clean(path: Path) -> None:
+    """Every recorded golden's model-authored fields pass the lint — as shipped (unreviewed
+    target languages lint English only) and with every language section switched on."""
+    lang = path.name.split(".")[1]
+    out = json.loads(path.read_text(encoding="utf-8"))
+    category = C(out["category"]) if out.get("category") else None
+    all_reviewed = _reviewed_config(*ph.load_config().languages)
+    for tag, text in _fixture_fields(out, lang):
+        for cfg in (ph.load_config(), all_reviewed):
+            assert ph.lint_text(text, category=category, language=tag, cfg=cfg) == [], (tag, text)
+
+
+def test_fixture_outputs_exist() -> None:
+    assert len(FIXTURE_OUTPUTS) >= 18
 
 
 def test_professional_and_referral_words() -> None:

@@ -10,7 +10,7 @@ import pytest
 from proxyhealth_api.contracts.enums import Confidence, DigitSystem, Direction, PackSource, PackTier
 from proxyhealth_api.contracts.langpack import LanguagePack
 from proxyhealth_api.packs.base import BasePack, LanguageTable, pack_etag
-from proxyhealth_api.packs.cache import PackCache, is_valid_tag, t_server
+from proxyhealth_api.packs.cache import PackCache, is_pseudo, is_valid_tag, t_server
 from proxyhealth_api.settings import DATA_DIR
 
 NOW = datetime(2026, 9, 24, 14, 0, tzinfo=UTC)
@@ -61,7 +61,7 @@ def cache_for(
 def test_base_pack_version_is_sha256_of_bytes(base: BasePack, tmp_path: Path) -> None:
     raw = (tmp_path / "langpacks" / "en.json").read_bytes()
     assert base.version == hashlib.sha256(raw).hexdigest()
-    assert base.chunks(2) == [["app.name", "btn.ok"], ["home.hi"]]
+    assert base.chunks(2) == [["app.name", "home.hi"], ["btn.ok"]]  # file order (AI_PROMPTS §7.1)
     real = BasePack.load(DATA_DIR / "langpacks" / "en.json")
     assert all(len(c) <= 60 for c in real.chunks()) and sum(map(len, real.chunks())) == len(
         real.strings
@@ -107,6 +107,24 @@ def test_corrupt_cache_file_is_dropped(tmp_path: Path, base: BasePack) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{not json", encoding="utf-8")
     assert cache.get("x-bad", base.version) is None and not path.exists()
+
+
+def test_pseudo_pack_on_disk_is_never_served(tmp_path: Path, base: BasePack) -> None:
+    """A mock pack written by an older build must not survive a switch to a real provider."""
+    real = make_pack(base, "x-real")
+    pseudo_strings = {k: f"⟦x-mock⟧ {v}" for k, v in base.strings.items()}
+    pseudo = make_pack(base, "x-mock").model_copy(update={"strings": pseudo_strings})
+    assert is_pseudo(pseudo) and not is_pseudo(real)
+    writer = cache_for(tmp_path, base)
+    writer.put(real)
+    writer.put(pseudo)
+    path = tmp_path / "var" / "langpacks" / f"x-mock--{base.version}.json"
+    assert path.is_file()
+    reader = cache_for(tmp_path, base)  # a fresh process: nothing in memory
+    assert reader.get("x-mock", base.version) is None and not path.exists()
+    writer.put(pseudo)
+    assert cache_for(tmp_path, base).prune() == 1 and not path.exists()
+    assert reader.get("x-real", base.version) is not None
 
 
 def test_paths_reject_traversal(tmp_path: Path, base: BasePack) -> None:

@@ -12,8 +12,10 @@ prefixed ``fb_``; it is not stored either.
 ``str`` (CL line to WP0 filed), so ``counter_key`` re-validates them here and replaces anything
 that is not a short identifier with ``OTHER``: a resource id must look like a vetted-DB id (and be
 a known one when the caller passes ``known_resource``), an app version must be semver-like, a model
-id must be a configured/mock model or a lowercase model-style slug. Absent values are stored as
-``''`` so the primary key stays unique in SQLite. Free text therefore never reaches the file.
+id must be ``mock``, a configured ``MODEL_PRO``/``MODEL_FAST`` id or a strict Gemini model-id
+shape (closed suffix vocabulary, so a lowercase hyphenated slug such as a name or street is
+refused). Absent values are stored as ``''`` so the primary key stays unique in SQLite. Free
+text therefore never reaches the file.
 """
 
 from __future__ import annotations
@@ -35,7 +37,14 @@ OTHER = "other"
 MOCK_MODEL_ID = "mock"
 RESOURCE_ID_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 APP_VERSION_RE = re.compile(r"^\d{1,6}\.\d{1,6}\.\d{1,6}([-+][0-9A-Za-z.]{1,20})?$", re.ASCII)
-MODEL_ID_RE = re.compile(r"^[a-z0-9.-]{1,64}$")
+# A Gemini model id: family version, then one to four suffixes from a closed vocabulary or short
+# numeric release tags (gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3-pro-preview-06-05).
+# Deliberately not a generic slug, so a lowercase hyphenated name or address never matches.
+MODEL_ID_RE = re.compile(
+    r"^gemini-\d{1,2}(\.\d{1,2})?"
+    r"(-(pro|flash|lite|nano|ultra|preview|exp|image|live|tts|thinking|\d{2,4})){1,4}$",
+    re.ASCII,
+)
 KEY_COLUMNS: tuple[str, ...] = (
     "kind",
     "surface",
@@ -88,7 +97,9 @@ def _app_version(value: str) -> str:
 def _model_id(value: str | None, known: Collection[str]) -> str:
     if not value:
         return ""
-    if value == MOCK_MODEL_ID or value in known or MODEL_ID_RE.fullmatch(value):
+    if value == MOCK_MODEL_ID or value in known:
+        return value
+    if len(value) <= 64 and MODEL_ID_RE.fullmatch(value):
         return value
     return OTHER
 

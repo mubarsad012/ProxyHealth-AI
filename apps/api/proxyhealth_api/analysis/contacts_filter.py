@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, overload
@@ -33,9 +34,13 @@ ORG_MARKER_KEY = "warning.org_removed_inline"
 ContactKind = Literal["phone", "n11", "url", "email", "address", "org"]
 
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Bare domains take any 2–24-letter TLD ("scamsite.xyz", "bit.ly/abc123"), all lower- or all
+# upper-case so a missing space ("due.Please") is not a domain; file names ("form.pdf") are not.
+_FILE_EXT = r"(?:pdf|docx?|jpe?g|png|heic|gif|webp|txt|csv|xlsx?)"
 _URL_RE = re.compile(
     r"(?:https?://[^\s<>\"')\]]+)"
-    r"|(?<![\w@.-])(?:www\.)?[\w-]+(?:\.[\w-]+)*\.(?:gov|org|com|net|us|edu|info|mil|io|co)\b"
+    r"|(?<![\w@.-])(?:www\.)?[\w-]+(?:\.[\w-]+)*\."
+    rf"(?!{_FILE_EXT}\b)(?-i:[a-z]{{2,24}}|[A-Z]{{2,24}})\b"
     r"(?:/[^\s<>\"')\]]*)?",
     re.IGNORECASE,
 )
@@ -66,7 +71,7 @@ GENERIC_ORG_WORDS = frozenset(
     social security immigration court courts office offices department departments health human
     services service post clinic clinics hospital hospitals legal aid center centre law agency
     agencies association society foundation state county city local public housing school
-    schools tax family medical food benefits benefit federal government us u.s. united states
+    schools tax family medical food benefits benefit federal government us united states
     american national district superior circuit general juvenile traffic small claims civil
     criminal board appeals appeal judge doctor doctor's doctors nurse pharmacy pharmacist bank
     welfare labor justice homeland motor vehicles dmv irs uscis ice eoir ssa medicaid medicare
@@ -83,9 +88,28 @@ _LEADING_STOP = frozenset(
     llame visite pregunte vaya hable lleve envíe el la los las un una su busque
     escriba consulte contacte pida""".split()
 )
+# "of/for/and <Capitalised …>" after the last institution word belongs to the name ("Department
+# of Labor", "Association of Northern Virginia"), unless those words are a language, a weekday or
+# a month ("Ask the Clinic for Dari interpreters", "the Court for Monday's hearing").
+_TAIL_CONNECTORS = frozenset({"of", "for", "and", "&"})
+_TAIL_STOP = frozenset(
+    """monday tuesday wednesday thursday friday saturday sunday january february march april may
+    june july august september october november december english spanish chinese vietnamese
+    tagalog filipino arabic haitian creole portuguese russian ukrainian korean french dari pashto
+    persian farsi urdu hindi punjabi bengali somali swahili amharic burmese nepali kinyarwanda
+    rohingya tigrinya""".split()
+)
+_ORG_SUFFIX_KEYS = frozenset(s.casefold() for s in _ORG_SUFFIXES)
+# "U.S." / "D.C." / "P.O." → "US" / "DC" / "PO" before punctuation is dropped, so they compare as
+# one word ("us" is a generic word) instead of the two tokens "u" and "s".
+_INITIALISM_RE = re.compile(r"(?<![\w.])(?:[A-Za-z]\.){2,}")
+_AND_SPLIT_RE = re.compile(r"\s+(?:and|&)\s+", re.IGNORECASE)
+_PAREN_RE = re.compile(r"\(([^()]*)\)")
+_FORMERLY_RE = re.compile(r"^\s*formerly\s+", re.IGNORECASE)
 # A replacement right at the start of a sentence gets a capital letter ("An organization …").
 _SENTENCE_START_RE = re.compile(r"(?:^\s*|[.!?]\s+|\n\s*)$")
 _PUNCT_RE = re.compile(r"[^\w\s]")
+_POSSESSIVE_RE = re.compile(r"(?<=\w)['’]s\b")
 _WS_RE = re.compile(r"\s+")
 # An article just before a replaced organisation is absorbed into the replacement, so
 # "Visit the Fake Law Center" becomes "Visit an organization (…)", not "Visit the an organization".
@@ -103,8 +127,11 @@ class ContactMatch:
 
 
 def _norm_words(text: str) -> str:
-    """NFKC, casefold, punctuation → space, collapse whitespace (org/address comparison key)."""
-    out = _PUNCT_RE.sub(" ", unicodedata.normalize("NFKC", text).casefold())
+    """NFKC, ``U.S.`` → ``us``, casefold, punctuation → space, collapse whitespace (org/address
+    comparison key)."""
+    text = unicodedata.normalize("NFKC", text)
+    text = _INITIALISM_RE.sub(lambda m: m.group(0).replace(".", ""), text)
+    out = _PUNCT_RE.sub(" ", text.casefold())
     return _WS_RE.sub(" ", out).strip()
 
 
@@ -135,18 +162,44 @@ def normalize_org(text: str) -> str:
     return re.sub(r"\s+(?:inc|llc|corp|co)$", "", key)
 
 
+def _ends_sentence(word: str) -> bool:
+    """True for a word that closes a sentence or clause ("Labor.", "Center,"); initialisms
+    ("U.S.") and single initials ("J.") do not."""
+    if word[-1:] in ",;:!?":
+        return True
+    return word.endswith(".") and len(word) > 2 and not _INITIALISM_RE.fullmatch(word)
+
+
+def _name_end(words: Sequence[re.Match[str]], last_suffix: int) -> int:
+    """Index of the last word of the name whose last institution word is ``words[last_suffix]``:
+    trailing "of/for/and <Capitalised …>" groups belong to it ("Department of Immigration
+    Payments", "Office of Fast Visas"), up to the end of the sentence."""
+    end = last_suffix
+    i = end + 1
+    while i < len(words) and not _ends_sentence(words[end].group(0)):
+        if words[i].group(0).casefold() not in _TAIL_CONNECTORS:
+            break
+        k = i + 1
+        while k < len(words) and words[k].group(0)[:1].isupper():
+            if _POSSESSIVE_RE.sub("", words[k].group(0)).casefold().strip(".,;:!?") in _TAIL_STOP:
+                break
+            k += 1
+            if _ends_sentence(words[k - 1].group(0)):
+                break
+        if k == i + 1:
+            break
+        end, i = k - 1, k
+    return end
+
+
 def _org_spans(text: str) -> list[ContactMatch]:
     spans: list[ContactMatch] = []
     for run in _CAP_RUN_RE.finditer(text):
         words = list(re.finditer(r"\S+", run.group(0)))
-        end_index = -1
-        for i, w in enumerate(words):
-            bare = w.group(0).rstrip(".,;:")
-            if bare in _ORG_SUFFIXES:
-                end_index = i
-        if end_index < 1:
+        suffixes = [i for i, w in enumerate(words) if w.group(0).rstrip(".,;:") in _ORG_SUFFIXES]
+        if not suffixes:
             continue
-        chosen = words[: end_index + 1]
+        chosen = words[: _name_end(words, suffixes[-1]) + 1]
         while chosen and chosen[0].group(0).casefold().strip(".,;:") in _LEADING_STOP:
             chosen = chosen[1:]
         if len(chosen) < 2:
@@ -155,8 +208,10 @@ def _org_spans(text: str) -> list[ContactMatch]:
             continue
         start = run.start() + chosen[0].start()
         stop = run.start() + chosen[-1].end()
-        if text[stop - 1] == ".":
-            stop -= 1
+        # A closing "." is the sentence's, unless the sentence goes on ("… Inc. can help").
+        if text[stop - 1] == "." and not _INITIALISM_RE.fullmatch(chosen[-1].group(0)):
+            if not re.match(r"\s+[a-z]", text[stop:]):
+                stop -= 1
         spans.append(ContactMatch("org", start, stop, text[start:stop]))
     return spans
 
@@ -189,13 +244,32 @@ def find_contacts(text: str, *, include_orgs: bool = True) -> list[ContactMatch]
     return out
 
 
+def _url_parts(text: str) -> tuple[str, str]:
+    """``(host, path)`` of a URL or bare domain (lower-case; no scheme, ``www.`` or trailing
+    punctuation or slash)."""
+    host, _, path = normalize_url(text).partition("/")
+    return host.rstrip("."), path.rstrip("/")
+
+
+def _org_aliases(raw: str) -> set[str]:
+    """Normalised whole names under which a DB entry may be named: the full name, the name
+    without its parentheses, each parenthesised name ("formerly …" dropped) and the part before
+    a subtitle colon ("HHS Office for Civil Rights: Limited English …" → "HHS Office for Civil
+    Rights")."""
+    names = {raw, _PAREN_RE.sub(" ", raw)}
+    names |= {_FORMERLY_RE.sub("", p) for p in _PAREN_RE.findall(raw)}
+    names |= {n.split(":", 1)[0] for n in list(names)}
+    return {k for k in (normalize_org(n) for n in names) if k}
+
+
 @dataclass(frozen=True)
 class AllowList:
     """What may survive the scrubber: contacts printed on the paper plus DB organisation names."""
 
     phones: frozenset[str]
     n11: frozenset[str]
-    compact_text: str
+    urls: frozenset[tuple[str, str]]
+    emails: frozenset[str]
     word_text: str
     org_names: frozenset[str]
 
@@ -210,18 +284,16 @@ class AllowList:
         """Allow-list from the transcript (and e.g. troubleshoot ``screen_text`` in ``extra_texts``)
         and ``ResourceRepo.names()`` (raw names; normalised here)."""
         corpus = "\n".join([transcript_text, *extra_texts])
-        phones = {
-            normalize_phone(c.text)
-            for c in find_contacts(corpus, include_orgs=False)
-            if c.kind == "phone"
-        }
+        printed = find_contacts(corpus, include_orgs=False)
+        phones = {normalize_phone(c.text) for c in printed if c.kind == "phone"}
         phones |= {normalize_phone(m) for m in re.findall(r"\d{10,15}", ascii_digits(corpus))}
         n11 = frozenset(m.group(1) for m in _N11_RE.finditer(corpus))
-        orgs = frozenset(n for n in (normalize_org(x) for x in resource_names) if n)
+        orgs = frozenset(a for x in resource_names for a in _org_aliases(x))
         return cls(
             phones=frozenset(p for p in phones if p),
             n11=n11,
-            compact_text=_norm_compact(corpus),
+            urls=frozenset(_url_parts(c.text) for c in printed if c.kind == "url"),
+            emails=frozenset(_norm_compact(c.text) for c in printed if c.kind == "email"),
             word_text=f" {_norm_words(corpus)} ",
             org_names=orgs,
         )
@@ -232,27 +304,77 @@ class AllowList:
             return normalize_phone(match.text) in self.phones
         if match.kind == "n11":
             return match.text in self.n11
-        if match.kind in ("url", "email"):
-            key = normalize_url(match.text) if match.kind == "url" else _norm_compact(match.text)
-            return bool(key) and key in self.compact_text
+        if match.kind == "url":
+            return self.allows_url(match.text)
+        if match.kind == "email":
+            return _norm_compact(match.text) in self.emails
         if match.kind == "address":
             key = _norm_words(match.text)
             return bool(key) and f" {key} " in self.word_text
         return self.allows_org(match.text)
 
+    def allows_url(self, url: str) -> bool:
+        """The same host as a URL printed on the paper (``irs.co`` ≠ ``irs.com``, ``county.gov``
+        ≠ ``fairfaxcounty.gov``) and no path, the printed path, or a whole-segment prefix of it."""
+        host, path = _url_parts(url)
+        return bool(host) and any(
+            h == host and (not path or p == path or p.startswith(f"{path}/")) for h, p in self.urls
+        )
+
     def allows_org(self, name: str) -> bool:
-        """Generic institution words, a name on the paper, or a (part of a) DB name pass."""
-        words = _norm_words(name).split()
+        """Generic institution words, a name on the paper, or a whole DB name pass.
+
+        D-10 / AI_PROMPTS §11.3: a DB name counts only as a whole (``U.S. Department`` is not
+        ``U.S. Department of Labor …``); a name counts as printed only when its words (from the
+        first specific word through the institution suffix) sit together as one stretch of the
+        paper, in order or reordered within that stretch ("Immigration Court, Arlington" for
+        "Arlington Immigration Court"). Specific words scattered over the page plus generic
+        institution words ("Fairfax County Legal Aid Society" on a Department of Family Services
+        letter) never pass. Two names joined by "and" ("Legal Aid Justice Center and CASA") pass
+        when each one does.
+        """
+        if self._allows_one_org(name):
+            return True
+        for m in _AND_SPLIT_RE.finditer(name):
+            left, right = name[: m.start()], name[m.end() :]
+            if left.strip() and right.strip() and self._allows_one_org(left):
+                if self.allows_org(right):
+                    return True
+        return False
+
+    def _allows_one_org(self, name: str) -> bool:
+        words = _norm_words(_POSSESSIVE_RE.sub("", name)).split()  # "Doctor's" → "doctor"
         if all(w in GENERIC_ORG_WORDS for w in words):
             return True
         key = normalize_org(name)
-        if not key or f" {key} " in self.word_text:
+        if not key or f" {key} " in self.word_text or key in self.org_names:
             return True
-        if any(key == n or f" {key} " in f" {n} " for n in self.org_names):
+        core = key.split()
+        core = core[next((i for i, w in enumerate(core) if w not in GENERIC_ORG_WORDS), 0) :]
+        if self._printed_together(core):
             return True
-        # Every specific word is printed on the paper ("Immigration Court, Arlington, VA").
-        specific = [w for w in words if w not in GENERIC_ORG_WORDS]
-        return all(f" {w} " in self.word_text for w in specific)
+        # Trailing generic words the paper does not print: "U.S. Citizenship and Immigration
+        # Services Office" is printed when "… Immigration Services" is (the rest must still end
+        # in an institution word, so "Fairfax Immigration Court" never shrinks to "Fairfax").
+        while len(core) > 1 and core[-1] in GENERIC_ORG_WORDS:
+            core = core[:-1]
+            if core[-1] in _ORG_SUFFIX_KEYS and self._printed_together(core):
+                return True
+        return False
+
+    def _printed_together(self, core: list[str]) -> bool:
+        """True when some run of ``len(core)`` consecutive paper words is exactly ``core``'s
+        words (as a multiset, so a printed "Court, Arlington" matches "Arlington Court")."""
+        if not core:
+            return False
+        if f" {' '.join(core)} " in self.word_text:
+            return True
+        paper = self.word_text.split()
+        size, target = len(core), Counter(core)
+        return any(
+            paper[i] in target and Counter(paper[i : i + size]) == target
+            for i in range(len(paper) - size + 1)
+        )
 
 
 @dataclass(frozen=True)
@@ -336,6 +458,13 @@ class ContactScrubber:
     def scrub_all(self, texts: Sequence[str]) -> list[str]:
         """Scrub every string of a list (``questions_to_ask``, ``cautions`` …)."""
         return [self.scrub(t) for t in texts]
+
+    def would_change(self, text: str) -> bool:
+        """True when ``scrub(text)`` would replace anything; the counts are left alone, so text
+        that is dropped rather than shown (clerk card checks) never inflates
+        ``verification.contacts_stripped``."""
+        result = scrub_text(text, self.allow, marker=self.marker, org_marker=self.org_marker)
+        return result.text != text
 
     @property
     def total(self) -> int:

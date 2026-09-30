@@ -2,10 +2,12 @@
   "analysis_id": "sample-inova_final_notice-en",
   "category": "medical",
   "clerk_message": {
-    "appended_line_keys": [],
-    "english": "a hospital bill - the amount, what it is for, and help paying it",
+    "appended_line_keys": [
+      "clerk.interpreter_hhs"
+    ],
+    "english": "Hello. I speak English. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a hospital bill - the amount, what it is for, and help paying it"
+    "translated": "Hello. I speak English. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -29,7 +31,7 @@
       ],
       "text": "The bill says the amount due is $1,240.00.",
       "value_verbatim": "$1,240.00",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -40,19 +42,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 28, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-28"
       },
       "documents": [],
       "id": "d2",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "payment_due",
       "source_quote": "Please pay by October 28, 2026.",
       "span_ids": [
@@ -60,7 +62,7 @@
       ],
       "text": "The bill asks for payment by October 28, 2026.",
       "value_verbatim": "October 28, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -80,7 +82,7 @@
       ],
       "text": "The bill says financial assistance is available. You can ask about it before you pay.",
       "value_verbatim": "Financial assistance is available.",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -100,15 +102,15 @@
       ],
       "text": "Phone for questions about this bill, from your paper: (703) 555-0142.",
       "value_verbatim": "(703) 555-0142",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "medical_information_only",
   "disclaimers": [
-    "medical_information_only",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "medical_bill",
@@ -339,9 +341,9 @@
           "text": "ملاحظة: إذا كنت تتحدث اللغة العربية، فإن خدمات المساعدة اللغوية متوفرة لك مجانًا."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -407,9 +409,291 @@
     "How do I apply for financial assistance?",
     "Did my insurance pay part of this bill?"
   ],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": null,
+      "kind": "urgency_pressure",
+      "page": 1,
+      "severity": "medium",
+      "source_quote": "FINAL NOTICE",
+      "span_ids": [
+        "p1b5"
+      ],
+      "text": "The bill is marked FINAL NOTICE. This puts pressure on you, but it is not a court paper.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-inova_final_notice-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_proof_va_address",
+          "text_en": "Proof of your Virginia address"
+        },
+        {
+          "key": "bring_the_bill",
+          "text_en": "The bill or account number"
+        },
+        {
+          "key": "bring_household_ids",
+          "text_en": "ID for everyone in your household"
+        },
+        {
+          "key": "bring_itemized_bill_request",
+          "text_en": "Ask for an itemized bill"
+        },
+        {
+          "key": "bring_insurance_card",
+          "text_en": "Your insurance card, if you have one"
+        }
+      ],
+      "eligibility_note_key": "residency_required",
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "You must live in the Inova service area in Virginia. Uninsured people with lower incomes often pay nothing. Ask for the plain-language summary in your language."
+        },
+        "hours": "Mon–Fri 8:00–16:30",
+        "id": "inova_fa",
+        "languages": [
+          "en",
+          "es",
+          "am",
+          "ar",
+          "prs",
+          "fa",
+          "ko",
+          "zh-Hans",
+          "ur",
+          "vi"
+        ],
+        "link_health": "ok",
+        "name": "Inova Financial Assistance",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "hospital_program",
+        "phone": "+15714725880",
+        "prepare_checklist_keys": [
+          "bring_proof_income",
+          "bring_proof_va_address",
+          "bring_the_bill",
+          "bring_household_ids"
+        ],
+        "priority": 80,
+        "serves": {
+          "cities": [],
+          "counties": [
+            "Fairfax",
+            "Loudoun",
+            "Arlington",
+            "Alexandria City",
+            "Fairfax City",
+            "Falls Church City"
+          ],
+          "scope": "county",
+          "states": [
+            "VA"
+          ],
+          "zip3": [
+            "201",
+            "220",
+            "221",
+            "222",
+            "223"
+          ]
+        },
+        "status_note_key": "residency_required",
+        "tags": [
+          "medical_bill",
+          "charity_care"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.inova.org/patient-and-visitor-information/financial-assistance",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [
+          "warn.ask_for_plain_language_summary"
+        ],
+        "what_it_does": {
+          "en": "Helps people who cannot pay an Inova hospital bill apply for free or reduced-cost care. Apply online (MyChart), by mail, or in person."
+        }
+      },
+      "score": 6.2,
+      "why": [
+        "Named on your paper (Inova Health System)",
+        "For hospital and doctor bills",
+        "Check that they serve your area",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.institution_match",
+        "why.for_medical_bill",
+        "why.check_service_area",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_the_bill",
+          "text_en": "The bill or account number"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_itemized_bill_request",
+          "text_en": "Ask for an itemized bill"
+        },
+        {
+          "key": "bring_insurance_card",
+          "text_en": "Your insurance card, if you have one"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with a nonprofit hospital bill."
+        },
+        "hours": null,
+        "id": "dollarfor",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "Dollar For",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "nonprofit",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_the_bill",
+          "bring_proof_income"
+        ],
+        "priority": 75,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "charity_care",
+          "medical_bill"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://dollarfor.org/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Free help checking if a hospital must reduce or forgive your bill, and help filling out the charity care application."
+        }
+      },
+      "score": 5.75,
+      "why": [
+        "Made for this kind of paper",
+        "For hospital and doctor bills",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_medical_bill",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_the_bill",
+          "text_en": "The bill or account number"
+        },
+        {
+          "key": "bring_itemized_bill_request",
+          "text_en": "Ask for an itemized bill"
+        },
+        {
+          "key": "bring_insurance_card",
+          "text_en": "Your insurance card, if you have one"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with a bill from a nonprofit hospital."
+        },
+        "hours": null,
+        "id": "irs_501r",
+        "languages": [
+          "en"
+        ],
+        "link_health": "ok",
+        "name": "IRS: Hospital Financial Assistance Policy rules (Section 501(r)(4))",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_the_bill"
+        ],
+        "priority": 40,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "charity_care",
+          "medical_bill"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.irs.gov/charities-non-profits/financial-assistance-policy-and-emergency-medical-care-policy-section-501r4",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Nonprofit hospitals must have a written financial assistance policy, a plain-language summary and an application. This page explains the rule you can point to when you ask for help with a bill."
+        }
+      },
+      "score": 4.9,
+      "why": [
+        "For hospital and doctor bills",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_medical_bill",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "medical_bill",
     "charity_care"
@@ -419,7 +703,9 @@
     "emergency": false,
     "emergency_kinds": []
   },
-  "scam_reasons": [],
+  "scam_reasons": [
+    "scam.urgency_pressure"
+  ],
   "scam_risk": "none",
   "schema_version": 1,
   "sender_as_written": "Inova Health System",
@@ -445,23 +731,26 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 26,
+    "driving_demand_id": "d2",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.medium.date_soon",
+    "headline_params": {
+      "date": "October 28, 2026",
+      "date_iso": "2026-10-28"
+    },
+    "level": "medium",
+    "nearest_date_iso": "2026-10-28",
     "past_date": false,
     "verify_resource_id": null
   },
   "verification": {
     "contacts_stripped": 0,
-    "facts_checked": 4,
+    "facts_checked": 5,
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

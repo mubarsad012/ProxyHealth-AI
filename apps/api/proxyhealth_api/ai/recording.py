@@ -11,9 +11,10 @@ that fixture's own ``page-<n>.png`` files (AI_PROMPTS §10.4 "fixture bytes only
 upload"): a sample id alongside any other image, or with no image at all, is passed through
 untouched and nothing is written, so a user's paper is never recorded (ARCHITECTURE §7).
 
-Recordings are reviewed by a human before commit. ``scripts/make_fixtures.py --check`` reports the
-recorded file as drift until the reviewer folds it into that fixture's ``template.yaml`` (the
-templates stay the single source) or deletes it.
+Recordings are reviewed by a human before commit. ``scripts/make_fixtures.py`` keeps a recorded
+file (``_meta.recorded_by == "recording_provider"``) instead of overwriting or deleting it, and
+``--check`` reports it as drift, until the reviewer folds it into that fixture's
+``template.yaml`` (the templates stay the single source) or deletes it.
 """
 
 from __future__ import annotations
@@ -28,12 +29,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from proxyhealth_api.ai import prompt_loader
 from proxyhealth_api.ai.provider import AIProvider, Part, StructuredResult, Task
 from proxyhealth_api.contracts.enums import ModelTier, Provider, ThinkingLevel
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, TroubleshootModelOut
 from proxyhealth_api.settings import DATA_DIR, Settings
 
-PROMPTS_VERSION_FILE = Path(__file__).resolve().parent / "prompts" / "VERSION"
 RECORDED_TASKS = frozenset({Task.analyze_single, Task.troubleshoot})
 _ID_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 _LANG_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
@@ -52,9 +53,11 @@ def recording_allowed(settings: Settings) -> bool:
 
 
 def prompts_version() -> str:
-    if PROMPTS_VERSION_FILE.is_file():
-        return PROMPTS_VERSION_FILE.read_text("utf-8").strip() or "unknown"
-    return "unknown"
+    """``prompt_loader.prompts_version()`` (the one parser), or ``unknown`` if unreadable."""
+    try:
+        return prompt_loader.prompts_version()
+    except (OSError, prompt_loader.PromptError):
+        return "unknown"
 
 
 class RecordingProvider:

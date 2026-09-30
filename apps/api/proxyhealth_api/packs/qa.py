@@ -6,9 +6,13 @@ Every translated string is checked against its English base string:
 * ``placeholders`` — the set of ``{name}`` placeholders differs (the app fills them later);
 * ``length``       — longer than 1.6× the English (2× for ``btn.*`` keys), with a small absolute
   allowance for very short strings ("OK" → "Aceptar" is fine);
-* ``html``         — an HTML tag or entity the English does not have;
+* ``html``         — an HTML tag or entity, or a bare ``<``/``>``, the English does not have;
 * ``digits``       — a run of 3+ digits (any script) that the English does not contain, so the
-  model can never smuggle in a phone number (D-10 applies to packs too).
+  model can never smuggle in a phone number (D-10 applies to packs too);
+* ``safety_digits`` — a safety key (``disclaimer.*``, ``emergency.*``, ``scam.*``, ``fixed.*``,
+  ``consent.*``, ``privacy.*``) that dropped a number the English has ("911" must stay "911");
+* ``adapting``     — ``langpack.adapting`` left in English in a non-English pack (pack level:
+  ``check_pack(..., language_tag=...)``).
 
 A key that fails any check is filled with English and listed in ``fallback_keys``. Bundled packs
 (``data/langpacks/<tag>.json``) must pass with zero failures (``tests/unit/test_packs_qa.py``).
@@ -22,13 +26,17 @@ from dataclasses import dataclass, field
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 HTML_RE = re.compile(r"</?[A-Za-z][^<>]*>|&[A-Za-z]+;|&#\d+;")
 DIGIT_RUN_RE = re.compile(r"\d{3,}")
+NUMBER_RE = re.compile(r"\d+")
+ANGLE_RE = re.compile(r"[<>]")
+SAFETY_PREFIXES = ("disclaimer.", "emergency.", "scam.", "fixed.", "consent.", "privacy.")
+ADAPTING_KEY = "langpack.adapting"
 
 LENGTH_RATIO = 1.6
 LENGTH_RATIO_BUTTON = 2.0
 # Short strings get this many extra characters before the ratio applies.
 LENGTH_SLACK_CHARS = 16
 
-CHECKS = ("empty", "placeholders", "length", "html", "digits")
+CHECKS = ("empty", "placeholders", "length", "html", "digits", "safety_digits", "adapting")
 
 
 @dataclass(frozen=True)
@@ -74,6 +82,19 @@ def _digit_runs(text: str) -> set[str]:
     return set(DIGIT_RUN_RE.findall(normalize_digits(PLACEHOLDER_RE.sub(" ", text))))
 
 
+def _numbers(text: str) -> set[str]:
+    """Every digit run (any length, any script) outside ``{placeholders}``."""
+    return set(NUMBER_RE.findall(normalize_digits(PLACEHOLDER_RE.sub(" ", text))))
+
+
+def is_safety_key(key: str) -> bool:
+    return key.startswith(SAFETY_PREFIXES)
+
+
+def is_english_tag(tag: str) -> bool:
+    return tag.split("-", 1)[0].casefold() == "en"
+
+
 def max_length(key: str, english: str) -> int:
     ratio = LENGTH_RATIO_BUTTON if key.startswith("btn.") else LENGTH_RATIO
     return max(int(len(english) * ratio), len(english) + LENGTH_SLACK_CHARS)
@@ -93,23 +114,38 @@ def check_string(key: str, english: str, translated: str) -> list[QaIssue]:
     limit = max_length(key, english)
     if len(translated) > limit:
         issues.append(QaIssue(key, "length", f"{len(translated)} chars > limit {limit}"))
-    if HTML_RE.search(translated) and not HTML_RE.search(english):
+    if (HTML_RE.search(translated) and not HTML_RE.search(english)) or (
+        ANGLE_RE.search(translated) and not ANGLE_RE.search(english)
+    ):
         issues.append(QaIssue(key, "html", "contains HTML markup"))
     extra_runs = _digit_runs(translated) - _digit_runs(english)
     if extra_runs:
         issues.append(QaIssue(key, "digits", f"digit runs not in English: {sorted(extra_runs)}"))
+    if is_safety_key(key):
+        dropped = _numbers(english) - _numbers(translated)
+        if dropped:
+            issues.append(QaIssue(key, "safety_digits", f"numbers dropped: {sorted(dropped)}"))
     return issues
 
 
-def check_pack(base: Mapping[str, str], translated: Mapping[str, str]) -> QaReport:
-    """QA every base key; keys absent from ``translated`` are reported as ``missing``."""
+def check_pack(
+    base: Mapping[str, str], translated: Mapping[str, str], *, language_tag: str | None = None
+) -> QaReport:
+    """QA every base key; keys absent from ``translated`` are reported as ``missing``.
+
+    With a non-English ``language_tag``, ``langpack.adapting`` must also differ from the English
+    (it is the first string a user sees while their pack is built — AI_PROMPTS §7.5).
+    """
     report = QaReport()
+    need_adapting = language_tag is not None and not is_english_tag(language_tag)
     for key, english in base.items():
         value = translated.get(key)
         if value is None:
             report.missing.append(key)
             continue
         found = check_string(key, english, value)
+        if need_adapting and key == ADAPTING_KEY and value.strip() == english.strip():
+            found.append(QaIssue(key, "adapting", "still English in a non-English pack"))
         if found:
             report.issues.extend(found)
         else:
@@ -119,9 +155,9 @@ def check_pack(base: Mapping[str, str], translated: Mapping[str, str]) -> QaRepo
 
 
 def merge_with_fallback(
-    base: Mapping[str, str], translated: Mapping[str, str]
+    base: Mapping[str, str], translated: Mapping[str, str], *, language_tag: str | None = None
 ) -> tuple[dict[str, str], list[str], QaReport]:
     """Base-ordered strings with every failed/missing key filled from English."""
-    report = check_pack(base, translated)
+    report = check_pack(base, translated, language_tag=language_tag)
     strings = {key: report.accepted.get(key, english) for key, english in base.items()}
     return strings, report.fallback_keys, report

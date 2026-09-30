@@ -12,6 +12,8 @@ from proxyhealth_api.demo.fixtures import FixtureStore
 from proxyhealth_api.deps import (
     get_ai,
     get_fixtures,
+    get_languages,
+    get_pack_cache,
     get_request_id,
     get_resources,
     get_rules,
@@ -19,6 +21,8 @@ from proxyhealth_api.deps import (
 )
 from proxyhealth_api.errors import error_responses
 from proxyhealth_api.middleware import consent_and_tier_gate
+from proxyhealth_api.packs.base import LanguageTable
+from proxyhealth_api.packs.cache import PackCache
 from proxyhealth_api.ratelimit import rate_limit_dependency
 from proxyhealth_api.resources.loader import ResourceRepo
 from proxyhealth_api.resources.rules_repo import RulesRepo
@@ -38,7 +42,10 @@ def build_deps(
     rules: Annotated[RulesRepo, Depends(get_rules)],
     fixtures: Annotated[FixtureStore, Depends(get_fixtures)],
     request_id: Annotated[str, Depends(get_request_id)],
+    packs: Annotated[PackCache, Depends(get_pack_cache)],
+    languages: Annotated[LanguageTable, Depends(get_languages)],
 ) -> PipelineDeps:
+    """One request's ``PipelineDeps`` from ``app.state`` (shared by the three gated routers)."""
     return PipelineDeps(
         settings=settings,
         ai=ai,
@@ -48,6 +55,8 @@ def build_deps(
         request_id=request_id,
         data_use_tier=settings.data_use_tier,
         clock=lambda: datetime.now(UTC),
+        packs=packs,
+        languages=languages,
     )
 
 

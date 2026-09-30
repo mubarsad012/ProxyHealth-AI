@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from proxyhealth_api.analysis import transcript as tr
 from proxyhealth_api.contracts.enums import Legibility, WarningCode
 from tests.unit._fixtures_wp2 import block
@@ -13,6 +15,44 @@ def test_ssn_masks_always_keep_last_four() -> None:
     assert masked == "Social Security Number: ***-**-6789."
     # a bare 9-digit run without the SSN cue is left alone (could be a case number)
     assert tr.mask_ssn("Case 123456789") == "Case 123456789"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Social Security Number: 123 45 6789", "Social Security Number: ***-**-6789"),
+        ("SSN: 123\u201345\u20136789", "SSN: ***-**-6789"),  # en dashes
+        ("Your SSN is 123.45.6789", "Your SSN is ***-**-6789"),
+        ("SSN: 123 - 45 - 6789.", "SSN: ***-**-6789."),
+        ("Número de Seguro Social: 123 45 6789", "Número de Seguro Social: ***-**-6789"),
+        ("123 45 6789 is your SSN.", "***-**-6789 is your SSN."),  # cue after the number
+        ("Ref 123\u201445\u20146789", "Ref ***-**-6789"),  # dashed form needs no cue
+    ],
+)
+def test_ssn_masks_accept_dash_space_and_dot_separators(text: str, expected: str) -> None:
+    """D-19: every SSN-like pattern becomes ``***-**-1234`` (API_CONTRACT ``original_text``)."""
+    assert tr.mask_ssn(text) == expected
+    assert "6789" in expected and "123" not in tr.mask_sensitive(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Room 123 45 6789",  # spaced digits without an SSN cue
+        "Call Social Security at 800 772 1213.",  # a phone number next to the cue
+        "Phone 703-555-0142",
+    ],
+)
+def test_ssn_masks_leave_other_numbers_alone(text: str) -> None:
+    assert tr.mask_ssn(text) == text
+
+
+@pytest.mark.parametrize(
+    "text", ["A 123-456-789", "A123456789", "A-123 456 789", "A# 123-456-789"]
+)
+def test_grouped_a_numbers_are_masked_when_requested(text: str) -> None:
+    assert tr.mask_sensitive(text) == text
+    assert tr.mask_sensitive(text, hide_id_numbers=True) == "A•••••6789"
 
 
 def test_id_numbers_masked_only_when_requested() -> None:

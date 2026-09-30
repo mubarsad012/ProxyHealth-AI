@@ -293,3 +293,22 @@ def test_match_key_folds_case_before_the_ocr_map() -> None:
     assert v.find_quote("filing", "FILING").found
     assert v.match_key("BOSIL") == v.match_key("bosil") == v.match_key("80511")
     assert v.match_key("Straße") == v.match_key("STRASSE")
+
+
+def test_fuzzy_window_off_the_coarse_grid_is_found() -> None:
+    """D-09 / BUILD_PLAN §5.3: a quote whose best sliding-window ratio is ≥ 0.92 verifies at
+    every offset, not only where the window lands on the coarse ``n // 8`` grid."""
+    target = (
+        "Please bring your identification documents and proof of address to the interview office"
+    )
+    quote = (
+        target.replace("identification", "identifcaton")
+        .replace("address", "adres")
+        .replace("interview", "intervew")
+    )
+    for offset in (1, 2, 11, 12, 21, 22, 31, 32):
+        corpus = "x" * offset + " " + target + " " + "y" * 50
+        check = v.find_quote(quote, corpus)
+        assert check.found, (offset, check)
+        assert check.ratio is not None and check.ratio >= v.FUZZY_THRESHOLD
+    assert v.fuzzy_ratio(quote, "x " + target + " " + "y" * 50) > 0.93

@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { getInstallId } from '@/lib/ids';
 import type { ConsentRecord } from '@/storage/index';
 import { buildConsentRecord, type ConsentDecision, consentStore, type TierSeen } from '@/storage/consent';
+import { registerWipeHook } from '@/storage/wipe';
 import { useSession } from '@/store/session';
 
 interface ConsentDecisionState {
@@ -46,6 +47,10 @@ export function resetConsentState(): void {
   loading = null;
   useConsentDecision.setState({ decision: 'none', loaded: false });
 }
+
+// "Delete everything" clears the consent record from `kv` (S17 item 8, COMPLIANCE_PRIVACY §9.5);
+// forget the in-memory decision and the cached load too, so after S1 the user lands on S2 again.
+registerWipeHook(resetConsentState, 'memory');
 
 /** "I understand, continue": store `{consent_version, accepted_at, tier_seen, platform}`. */
 export async function acceptConsent(consentVersion: string, tierSeen: TierSeen): Promise<ConsentRecord> {

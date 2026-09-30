@@ -35,12 +35,30 @@ export function afterLanguageHref(from: 'onboarding' | 'settings', decision: str
   return (decision === 'none' ? '/onboarding/consent' : '/(tabs)') as Href;
 }
 
-export interface LanguageScreenProps {
-  from?: 'onboarding' | 'settings';
-  navigate?(href: Href): void;
+/**
+ * How S1/S1b leave the flow once a language is active. From S17 the flow pops back to the Settings
+ * screen that pushed it (`dismissTo`), so the existing `(tabs)` route stays the only one: `replace`
+ * would stack a second, hidden tabs navigator on every language change. If that Settings screen is
+ * gone (web reload on the S1 URL), `dismissTo` replaces instead. From onboarding: `replace`.
+ */
+export function leaveLanguageFlow(from: 'onboarding' | 'settings', href: Href): void {
+  if (from === 'settings') router.dismissTo(href);
+  else router.replace(href);
 }
 
-export function LanguageScreen({ from = 'onboarding', navigate = (h) => router.replace(h) }: LanguageScreenProps) {
+export interface LanguageScreenProps {
+  from?: 'onboarding' | 'settings';
+  /** Moves inside the flow (S1 → S1b). */
+  navigate?(href: Href): void;
+  /** Leaves the flow (to S17, S2 or the tabs); defaults to `leaveLanguageFlow`. */
+  finish?(href: Href): void;
+}
+
+export function LanguageScreen({
+  from = 'onboarding',
+  navigate = (h) => router.replace(h),
+  finish = (h) => leaveLanguageFlow(from, h),
+}: LanguageScreenProps) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
@@ -69,7 +87,7 @@ export function LanguageScreen({ from = 'onboarding', navigate = (h) => router.r
       setBusy(true);
       try {
         await switchLanguage(choice.tag);
-        navigate(afterLanguageHref(from, decision));
+        finish(afterLanguageHref(from, decision));
       } finally {
         setBusy(false);
       }

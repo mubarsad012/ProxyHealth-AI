@@ -126,7 +126,11 @@ function byId(id: string): Resource | null {
   return bundledResources().find((r) => r.id === id) ?? null;
 }
 
-/** RESOURCE_DB §6.9 order, from the bundle, de-duplicated against `exclude`. */
+/** Offline national fallbacks from the bundle, de-duplicated against `exclude`. NOT the literal
+ *  RESOURCE_DB §6.9 list (211; immlawhelp; hrsa_fqhc; ftc_reportfraud + dhs_oig; 988 on
+ *  emergency) that the server's `matcher.national_fallbacks` returns: offline there is no
+ *  server-side §6.6 forced ordering, so crisis lines for the request's tags (988, dv_hotline,
+ *  trafficking, poison) go first, then scam reporting, then the §6.9 entries (CL-045). */
 export function offlineFallbacksFor(req: ResourceMatchRequest, exclude: ReadonlySet<string> = new Set()): Resource[] {
   const ids: string[] = [];
   if (req.emergency || req.tags.includes('crisis')) ids.push('988');

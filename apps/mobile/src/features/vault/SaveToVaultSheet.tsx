@@ -21,7 +21,7 @@ import { space } from '@/design/tokens';
 import { buildStoredDocument, isSampleAnalysis } from './documents';
 import { useMembers } from './hooks';
 import { MemberChip, MemberForm } from './MemberParts';
-import { ME_MEMBER_ID, memberName, nextColor } from './members';
+import { ME_MEMBER_ID, memberName, nextColor, savedAnnouncement } from './members';
 import { Sheet } from './Sheet';
 import { bumpVault } from './store';
 
@@ -77,7 +77,7 @@ export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
       await vault.documents.save(doc, pageInputs);
       bumpVault();
       try {
-        AccessibilityInfo.announceForAccessibility(`${t('vault.saved')} ${t('vault.saved_to', { member: savedFor })}`);
+        AccessibilityInfo.announceForAccessibility(savedAnnouncement(t, savedFor));
       } catch {
         // best-effort announcement
       }

@@ -35,10 +35,18 @@ Clock = Callable[[], datetime]
 _TAG_RE = re.compile(LANGUAGE_TAG_PATTERN)
 _VERSION_RE = re.compile(r"^[0-9a-f]{64}$")
 LRU_SIZE = 256
+# A generated pack thinner than this is served to its client but never cached (AI_PROMPTS §7.8).
+MIN_CACHE_COVERAGE = 0.9
 
 
 def is_valid_tag(tag: str) -> bool:
     return bool(_TAG_RE.match(tag))
+
+
+def is_pseudo(pack: LanguagePack) -> bool:
+    """A mock pseudo-localized pack (``⟦tag⟧ English``, AI_PROMPTS §7.10); never cached."""
+    marker = f"⟦{pack.language_tag}⟧"
+    return any(value.startswith(marker) for value in pack.strings.values())
 
 
 class _SafeVars(dict[str, Any]):
@@ -110,8 +118,8 @@ class PackCache:
         except ValueError:
             path.unlink(missing_ok=True)  # corrupt cache file: regenerate
             return None
-        if not self._fresh(loaded) or loaded.language_tag != tag:
-            path.unlink(missing_ok=True)
+        if not self._fresh(loaded) or loaded.language_tag != tag or is_pseudo(loaded):
+            path.unlink(missing_ok=True)  # stale, misfiled, or a mock pack from an older build
             return None
         pack = loaded.model_copy(update={"source": PackSource.cache})
         self._remember(pack)
@@ -133,14 +141,14 @@ class PackCache:
             raise
 
     def prune(self) -> int:
-        """Delete stale or unreadable generated packs; returns how many files were removed."""
+        """Delete stale, unreadable or pseudo generated packs; returns how many were removed."""
         if not self.var_dir.is_dir():
             return 0
         removed = 0
         for path in self.var_dir.glob("*--*.json"):
             try:
                 pack = LanguagePack.model_validate_json(path.read_bytes())
-                stale = not self._fresh(pack)
+                stale = not self._fresh(pack) or is_pseudo(pack)
             except ValueError:
                 stale = True
             if stale:

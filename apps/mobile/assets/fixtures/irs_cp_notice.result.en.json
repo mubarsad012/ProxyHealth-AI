@@ -3,9 +3,9 @@
   "category": "tax",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "an IRS letter - what it says and the date to respond by",
+    "english": "Hello. I speak English. I am here about: an IRS letter from Internal Revenue Service. I need help with: an IRS letter - what it says and the date to respond by. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "an IRS letter - what it says and the date to respond by"
+    "translated": "Hello. I speak English. I am here about: an IRS letter from Internal Revenue Service. I need help with: an IRS letter - what it says and the date to respond by. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -29,7 +29,7 @@
       ],
       "text": "The notice says the amount due is $312.45.",
       "value_verbatim": "$312.45",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -40,19 +40,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 26, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-26"
       },
       "documents": [],
       "id": "d2",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "payment_due",
       "source_quote": "Pay by: October 26, 2026",
       "span_ids": [
@@ -60,7 +60,7 @@
       ],
       "text": "The notice gives October 26, 2026 as the date to pay.",
       "value_verbatim": "October 26, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -80,15 +80,15 @@
       ],
       "text": "IRS phone for questions, from your paper: (800) 555-0110.",
       "value_verbatim": "(800) 555-0110",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "general_information",
   "disclaimers": [
-    "general_information",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "irs_notice",
@@ -309,9 +309,9 @@
           "text": "Keep this notice for your records."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -400,13 +400,16 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 24,
+    "driving_demand_id": "d2",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.medium.date_soon",
+    "headline_params": {
+      "date": "October 26, 2026",
+      "date_iso": "2026-10-26"
+    },
+    "level": "medium",
+    "nearest_date_iso": "2026-10-26",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -416,7 +419,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

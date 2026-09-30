@@ -93,7 +93,7 @@ def cmd_check(base: BasePack) -> int:
     failures = 0
     for tag in bundled_tags():
         pack = LanguagePack.model_validate_json((LANGPACKS / f"{tag}.json").read_bytes())
-        report = check_pack(base.strings, pack.strings)
+        report = check_pack(base.strings, pack.strings, language_tag=tag)
         stale = pack.pack_version != base.version
         status = "ok" if report.ok and not stale else "FAIL"
         print(
@@ -126,7 +126,7 @@ def cmd_assemble(tag: str, flat_path: Path, base: BasePack, languages: LanguageT
         raise SystemExit(f"{flat_path} must be a flat JSON object")
     translated = {str(k): str(v) for k, v in flat.items() if k in base.strings}
     unknown = sorted(set(flat) - set(base.strings))
-    strings, fallback, report = merge_with_fallback(base.strings, translated)
+    strings, fallback, report = merge_with_fallback(base.strings, translated, language_tag=tag)
     accepted = {k: v for k, v in strings.items() if k not in fallback}
     pack = build_pack(tag, accepted, fallback, base, languages)
     path = write_pack(pack)
@@ -142,7 +142,8 @@ async def cmd_generate(tags: list[str], base: BasePack, languages: LanguageTable
     settings = Settings()
     if not settings.gemini_keys:
         print(
-            "gen_packs.py needs GEMINI_KEYS (billed keys; see apps/api/.env.example). "
+            "gen_packs.py needs GEMINI_KEYS (billed keys) in apps/api/.env or the environment; "
+            "see apps/api/.env.example. "
             "Without keys, author packs by hand and use --assemble / --rebase / --check.",
             file=sys.stderr,
         )

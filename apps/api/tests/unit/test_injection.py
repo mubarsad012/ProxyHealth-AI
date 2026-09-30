@@ -93,6 +93,7 @@ def test_red_flag_and_warning() -> None:
     assert flag.span_ids == ["p1b2"] and flag.page == 1 and flag.severity is Severity.medium
     assert flag.fixed_copy_key is None and flag.source_quote is None
     assert inj.INJECTION_WARNING is WarningCode.injection_masked
+    assert inj.injection_red_flag(t, ["p1b2"]).text == flag.text  # never the raw pack key
 
 
 def test_clean_transcript_and_chat_helper() -> None:

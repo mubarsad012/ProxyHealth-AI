@@ -3,7 +3,8 @@
 // text means" (quoted error LTR-isolated with an EN chip; hidden when null); "Do this next" (steps
 // in order, the on-screen label as written in bold, each with a checkbox); "Careful"; red flags;
 // "Ask a person" → S11 with `resource_tags` (primary when `needs_human_help`); confidence chip;
-// the fixed general-information disclaimer; counts-only feedback.
+// the fixed general-information disclaimer; counts-only feedback. In scam mode the DB reporting
+// resources follow the scam card (J-F) and "Save as proof" follows the screen summary.
 
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
@@ -14,10 +15,14 @@ import { AppText, Bidi, BigButton, Card, ConfidenceChip, FeedbackRow, Icon } fro
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { Chip, ChipRow } from '@/features/help/Chip';
+import { disclaimerKey } from '@/features/help/format';
 import { ScamNotice } from '@/features/help/HelpForDocument';
+import { memberName, savedAnnouncement } from '@/features/vault/members';
 import { useDirection } from '@/i18n/direction';
 import { keyExists } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
+
+import { ScamReportResources } from './ScamReport';
 
 export function askPersonHref(result: Pick<TroubleshootResult, 'resource_tags'>): Href {
   const tags = (result.resource_tags ?? []).join(',');
@@ -83,7 +88,51 @@ function StepRow({ step, checked, onToggle }: { step: TroubleshootStep; checked:
   );
 }
 
-export function TroubleshootResultCards({ result }: { result: TroubleshootResult }) {
+/** "Save as proof" (scam mode, a picked screenshot only). */
+export interface EvidenceControl {
+  onSave(): void;
+  saved: boolean;
+  busy: boolean;
+  failed: boolean;
+  /** Display name of the member the proof was saved for (defaults to "Me"). */
+  member?: string;
+}
+
+export function EvidenceButton({ evidence }: { evidence: EvidenceControl }) {
+  const t = useT();
+  return (
+    <View style={styles.wrap}>
+      <BigButton
+        label={t('btn.save_evidence')}
+        icon={evidence.saved ? 'check' : 'papers'}
+        variant="secondary"
+        size={56}
+        onPress={evidence.onSave}
+        disabled={evidence.busy || evidence.saved}
+        testID="troubleshoot-save-evidence"
+      />
+      {evidence.saved ? (
+        // `vault.saved` ("It stays on this phone") is false on web, where the vault is memory-only
+        // unless IndexedDB is opted in — the helper announces only `vault.saved_to` there (CL-042).
+        <AppText role="status">{savedAnnouncement(t, evidence.member || memberName(null, t))}</AppText>
+      ) : null}
+      {evidence.failed ? (
+        <AppText role="alert" color="danger">
+          {t('err.internal')}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
+
+export function TroubleshootResultCards({
+  result,
+  evidence,
+}: {
+  result: TroubleshootResult;
+  /** Present in scam mode when the person picked a screenshot (never for a sample). */
+  evidence?: EvidenceControl | null;
+}) {
   const t = useT();
   const { colors } = useTheme();
   const [done, setDone] = useState<Record<number, boolean>>({});
@@ -97,6 +146,7 @@ export function TroubleshootResultCards({ result }: { result: TroubleshootResult
       {result.scam_risk !== 'none' ? (
         <View style={styles.wrap}>
           <ScamNotice risk={result.scam_risk} />
+          <ScamReportResources risk={result.scam_risk} />
           {result.scam_reasons?.length ? (
             <ChipRow>
               {result.scam_reasons
@@ -125,6 +175,7 @@ export function TroubleshootResultCards({ result }: { result: TroubleshootResult
         <AppText>{result.screen_summary}</AppText>
         <ConfidenceChip confidence={result.confidence} />
       </Card>
+      {evidence ? <EvidenceButton evidence={evidence} /> : null}
       {result.error_text_quoted ? (
         <Card id="ts-error" headingKey="troubleshoot.card_error" speakText={result.error_meaning} accentColor={colors.danger}>
           <View style={[styles.quote, { borderColor: colors.danger }]}>
@@ -171,7 +222,7 @@ export function TroubleshootResultCards({ result }: { result: TroubleshootResult
         testID="troubleshoot-ask-person"
       />
       <AppText variant="caption" color="textMuted">
-        {t(`disclaimer.${result.disclaimer_kind ?? 'general_information'}`)}
+        {t(disclaimerKey(result.disclaimer_kind))}
       </AppText>
       <FeedbackRow surface="troubleshoot" modelId={result.model_meta?.model_id ?? null} />
     </View>

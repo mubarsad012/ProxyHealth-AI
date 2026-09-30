@@ -4,7 +4,7 @@
 
 import { Image } from 'expo-image';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useApi, useServerConfig } from '@/api/config';
@@ -18,35 +18,68 @@ import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
-import { useI18n } from '@/i18n/store';
+import { keyExists, useI18n } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
 import { newId } from '@/lib/ids';
 import { useOnline } from '@/lib/network';
 import { pdfSizeMb } from '@/lib/pdf';
 import { type CapturedPage, useSession } from '@/store/session';
 
+import { useBlurHints } from './blurHints';
 import { turnPage } from './compress';
 import { usePickImage } from './index';
 import { MaskEditor } from './MaskEditor';
-import { pagesAfterPick, type PickOutcome } from './pageQueue';
+import { movePage, pagesAfterPick, type PickOutcome } from './pageQueue';
 import { forgetWebFile } from './pick';
 import { samplePages } from './samples';
 
-function PageCard({ page, n, sample, onRetake, onTurn, onRemove, onHide }: {
+/** Reorder copy is pending WP0 (CL line in DECISIONS §14); the controls appear once both keys
+ *  exist so the UI never shows a raw key. Document order is kept in RTL too (PRODUCT_SPEC §5.2). */
+export const REORDER_KEYS = { up: 'review.move_up', down: 'review.move_down' } as const;
+
+export function reorderAvailable(): boolean {
+  return keyExists(REORDER_KEYS.up) && keyExists(REORDER_KEYS.down);
+}
+
+const subscribeNoop = () => () => {};
+
+/** `false` while hydrating the static web HTML (rendered without the query string), `true` after
+ *  that and always on native — keeps the first client render identical to the static page. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeNoop, () => true, () => false);
+}
+
+function PageCard({ page, n, total, sample, onRetake, onTurn, onRemove, onHide, onMove }: {
   page: CapturedPage;
   n: number;
+  total: number;
   sample: boolean;
   onRetake(e?: unknown): void;
   onTurn(): void;
   onRemove(): void;
   onHide(): void;
+  onMove(delta: -1 | 1): void;
 }) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
   const aspect = page.width && page.height ? page.width / page.height : 0.77;
+  const reorder = !sample && total > 1 && reorderAvailable();
+  const actions = reorder
+    ? [
+        ...(n > 1 ? [{ name: 'moveUp', label: t(REORDER_KEYS.up) }] : []),
+        ...(n < total ? [{ name: 'moveDown', label: t(REORDER_KEYS.down) }] : []),
+      ]
+    : undefined;
   return (
-    <View testID={`review-page-${n}`} style={[styles.card, { borderColor: colors.divider, backgroundColor: colors.surface }]}>
+    <View
+      testID={`review-page-${n}`}
+      accessibilityActions={actions}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'moveUp') onMove(-1);
+        if (e.nativeEvent.actionName === 'moveDown') onMove(1);
+      }}
+      style={[styles.card, { borderColor: colors.divider, backgroundColor: colors.surface }]}>
       <View style={styles.imageWrap}>
         <Image source={{ uri: page.uri }} contentFit="contain" style={[styles.image, { aspectRatio: aspect }]} accessibilityLabel={`${n}`} />
         {page.masks.map((m, i) => (
@@ -66,16 +99,22 @@ function PageCard({ page, n, sample, onRetake, onTurn, onRemove, onHide }: {
           <SmallAction label={t('review.rotate')} icon="refresh" onPress={onTurn} />
           <SmallAction label={t('review.hide_parts')} icon="lock" onPress={onHide} />
           <SmallAction label={t('review.remove')} icon="close" onPress={onRemove} danger />
+          {reorder && n > 1 ? <SmallAction label={t(REORDER_KEYS.up)} icon="arrow-back" onPress={() => onMove(-1)} /> : null}
+          {reorder && n < total ? <SmallAction label={t(REORDER_KEYS.down)} icon="chevron-right" onPress={() => onMove(1)} /> : null}
         </View>
       )}
     </View>
   );
 }
 
-function SmallAction({ label, icon, onPress, danger }: { label: string; icon: 'camera' | 'refresh' | 'lock' | 'close'; onPress(e?: unknown): void; danger?: boolean }) {
+type SmallIcon = 'camera' | 'refresh' | 'lock' | 'close' | 'arrow-back' | 'chevron-right';
+
+function SmallAction({ label, icon, onPress, danger }: { label: string; icon: SmallIcon; onPress(e?: unknown): void; danger?: boolean }) {
   const { colors } = useTheme();
   const dir = useDirection();
   const color = danger ? colors.danger : colors.primary;
+  // Earlier/later arrows mirror in RTL; the other icons (incl. rotate) are never mirrored.
+  const mirror = icon === 'arrow-back' || icon === 'chevron-right';
   return (
     <Pressable
       role="button"
@@ -83,7 +122,7 @@ function SmallAction({ label, icon, onPress, danger }: { label: string; icon: 'c
       hitSlop={size.hitSlop}
       onPress={(e) => onPress(e)}
       style={[styles.small, { borderColor: color, flexDirection: dir.row }]}>
-      <Icon name={icon} size={18} color={color} />
+      <Icon name={icon} size={18} color={color} mirror={mirror} />
       <AppText variant="caption" weight="bold" colorValue={color}>
         {label}
       </AppText>
@@ -104,6 +143,7 @@ export function ReviewScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const limits = config?.limits ?? null;
+  const hydrated = useHydrated();
   const sampleParam = typeof params.sample === 'string' && params.sample ? params.sample : null;
 
   useEffect(() => {
@@ -116,6 +156,7 @@ export function ReviewScreen() {
 
   const sample = Boolean(demoSampleId);
   const isPdf = pages.length === 1 && pages[0].mimeType === 'application/pdf';
+  const blurry = useBlurHints(pages, !sample && !isPdf);
 
   const applyOutcome = (o: PickOutcome) => {
     useSession.getState().setPages(o.pages);
@@ -164,7 +205,8 @@ export function ReviewScreen() {
     setMessage(t('capture.offline_queue'));
   };
 
-  if (!pages.length && !sampleParam) {
+  // Web static HTML has no query, so a deep link / reload must first render the empty state.
+  if (!pages.length && !(hydrated && sampleParam)) {
     return (
       <Screen back testID="review-screen">
         <EmptyState text={t('home.scan_hint')} icon="camera" actionLabel={t('btn.scan')} onAction={() => addPages()} />
@@ -199,6 +241,11 @@ export function ReviewScreen() {
           {message}
         </AppText>
       ) : null}
+      {blurry.map((n) => (
+        <AppText key={`blur-${n}`} role="status" color="warning" testID={`review-blur-${n}`}>
+          {t('review.blur_hint', { n })}
+        </AppText>
+      ))}
       {isPdf ? (
         <PdfCard page={pages[0]} onRemove={() => remove(pages[0])} />
       ) : (
@@ -208,7 +255,12 @@ export function ReviewScreen() {
               <PageCard
                 page={p}
                 n={i + 1}
+                total={pages.length}
                 sample={sample}
+                onMove={(delta) => {
+                  const s = useSession.getState();
+                  s.setPages(movePage(s.pages, p.id, delta));
+                }}
                 onRetake={(e) => retake(p, e)}
                 onTurn={() => turn(p)}
                 onRemove={() => remove(p)}

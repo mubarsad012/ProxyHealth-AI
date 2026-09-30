@@ -3,9 +3,9 @@
   "category": "benefits",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a SNAP (food assistance) notice - my interview or the papers it asks for",
+    "english": "Hello. I speak English. I am here about: a SNAP notice from Sample County Department of Social Services. I need help with: a SNAP (food assistance) notice - my interview or the papers it asks for. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a SNAP (food assistance) notice - my interview or the papers it asks for"
+    "translated": "Hello. I speak English. I am here about: a SNAP notice from Sample County Department of Social Services. I need help with: a SNAP (food assistance) notice - my interview or the papers it asks for. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 9, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": "10:00 AM",
-        "value_iso": null
+        "value_iso": "2026-10-09"
       },
       "documents": [],
       "id": "d1",
       "kind": "appointment",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "appointment",
       "source_quote": "Your SNAP interview is by phone on October 9, 2026 at 10:00 AM.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "Be ready for a phone interview on October 9, 2026 at 10:00 AM.",
       "value_verbatim": "October 9, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -63,7 +63,7 @@
       ],
       "text": "Have these papers ready: a photo ID, pay stubs for the last 30 days, and your lease or a rent receipt.",
       "value_verbatim": "Photo ID for the head of household",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -83,15 +83,15 @@
       ],
       "text": "Phone to change the appointment, from your paper: (703) 555-0126.",
       "value_verbatim": "(703) 555-0126",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "benefits_information_only",
   "disclaimers": [
-    "benefits_information_only",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "snap_notice",
@@ -309,9 +309,9 @@
           "text": "If you miss the interview, your application may be denied."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -379,7 +379,300 @@
   ],
   "red_flags": [],
   "request_id": "offline-snap_interview_notice-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_household_ids",
+          "text_en": "ID for everyone in your household"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_proof_rent_utilities",
+          "text_en": "Your rent and utility bills"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [
+          "https://www.fna.usda.gov/snap/recipient/eligibility"
+        ],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with a SNAP case or notice. Rules differ for each person in the household; parents can apply for eligible children."
+        },
+        "hours": null,
+        "id": "snap_state",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "unknown_403",
+        "name": "SNAP State Directory of Resources",
+        "name_note": "USDA Food and Nutrition Administration (formerly Food and Nutrition Service)",
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_household_ids",
+          "bring_proof_income",
+          "bring_proof_rent_utilities"
+        ],
+        "priority": 85,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "snap",
+          "food"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.fna.usda.gov/snap/state-directory",
+        "verification_method": "browser",
+        "verified_on": "2026-09-23",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Each state's SNAP (food stamps) hotline and application website. States decide within 30 days and require an interview; emergency cases within 7 days."
+        }
+      },
+      "score": 5.08,
+      "why": [
+        "Made for this kind of paper",
+        "For SNAP (food stamps)",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_snap",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_household_ids",
+          "text_en": "ID for everyone in your household"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_proof_rent_utilities",
+          "text_en": "Your rent and utility bills"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Residents of Fairfax County, Fairfax City and Falls Church."
+        },
+        "hours": "Mon–Fri 8:00–16:30",
+        "id": "fairfax_csp",
+        "languages": [
+          "en",
+          "es",
+          "am",
+          "yue",
+          "prs",
+          "tl",
+          "ht",
+          "hi",
+          "it",
+          "kn",
+          "ko",
+          "ps",
+          "pa",
+          "so",
+          "ta",
+          "ur",
+          "interpreters_200+"
+        ],
+        "link_health": "ok",
+        "name": "Fairfax County Coordinated Services Planning (CSP)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": "+17032220880",
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_household_ids",
+          "bring_proof_income"
+        ],
+        "priority": 85,
+        "serves": {
+          "cities": [],
+          "counties": [
+            "Fairfax",
+            "Fairfax City",
+            "Falls Church City"
+          ],
+          "scope": "county",
+          "states": [
+            "VA"
+          ],
+          "zip3": [
+            "220",
+            "221",
+            "201"
+          ]
+        },
+        "status_note_key": null,
+        "tags": [
+          "rent_assistance",
+          "utility_shutoff",
+          "food",
+          "benefits_navigation"
+        ],
+        "text_line": null,
+        "tty": "711",
+        "url": "https://www.fairfaxcounty.gov/neighborhood-community-services/coordinated-services-planning",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "One phone call for emergency help with rent, utilities, food and medical needs in Fairfax County, and for signing up for county programs. 703-222-0880 (TTY 711), Mon–Fri 8:00–4:30, with interpreters."
+        }
+      },
+      "score": 3.55,
+      "why": [
+        "For food help",
+        "Check that they serve your area",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_food",
+        "why.check_service_area",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_household_ids",
+          "text_en": "ID for everyone in your household"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_proof_rent_utilities",
+          "text_en": "Your rent and utility bills"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone who needs food in the DC area."
+        },
+        "hours": null,
+        "id": "cafb",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "Capital Area Food Bank: Get Help (Hunger Lifeline)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "food_bank",
+        "phone": "+12026449807",
+        "prepare_checklist_keys": [],
+        "priority": 75,
+        "serves": {
+          "cities": [],
+          "counties": [
+            "Fairfax",
+            "Arlington",
+            "Alexandria City",
+            "Fairfax City",
+            "Falls Church City",
+            "Loudoun",
+            "Prince William",
+            "Manassas City",
+            "Manassas Park City",
+            "District of Columbia",
+            "Montgomery",
+            "Prince George's"
+          ],
+          "scope": "county",
+          "states": [
+            "VA",
+            "DC",
+            "MD"
+          ],
+          "zip3": [
+            "200",
+            "201",
+            "202",
+            "203",
+            "204",
+            "205",
+            "207",
+            "208",
+            "209",
+            "220",
+            "221",
+            "222",
+            "223"
+          ]
+        },
+        "status_note_key": null,
+        "tags": [
+          "food"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.capitalareafoodbank.org/find-food-assistance/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Find a free food pantry near you in DC, Maryland or Northern Virginia with the address map, or call the Hunger Lifeline 202-644-9807. No ID requirement is stated."
+        }
+      },
+      "score": 3.32,
+      "why": [
+        "For food help",
+        "Check that they serve your area",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_food",
+        "why.check_service_area",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "snap",
     "food",
@@ -415,13 +708,16 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 7,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.high.date_soon",
+    "headline_params": {
+      "date": "October 9, 2026",
+      "date_iso": "2026-10-09"
+    },
+    "level": "high",
+    "nearest_date_iso": "2026-10-09",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -431,7 +727,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

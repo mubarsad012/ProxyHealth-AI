@@ -13,7 +13,7 @@ import { AppText, BigButton, ErrorState, FeedbackRow, Heading, Screen } from '@/
 import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { useRegion } from '@/features/help/RegionControl';
-import { buildMatchRequestForAnalysis, lastMatchForDocument } from '@/features/help/request';
+import { buildMatchRequestForAnalysis, lastMatchForDocument, offlineMatchResponse } from '@/features/help/request';
 import { useResourceMatch } from '@/features/help/useResourceMatch';
 import { usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
@@ -51,7 +51,12 @@ export function QuickSheetScreen({ analysis, documentId }: QuickSheetScreenProps
     [analysis, region, meta.tag],
   );
   const match = useResourceMatch(req, { documentId: docId });
-  const data = match.data ?? lastMatchForDocument(docId);
+  // Last list for this paper, else (offline / server error) the bundled DB subset for its tags.
+  const data =
+    match.data ??
+    lastMatchForDocument(docId) ??
+    lastMatchForDocument(analysis.analysis_id) ??
+    (match.error ? offlineMatchResponse(req) : null);
   const sheet = useMemo(() => {
     const results = data?.results ?? analysis.resource_preview ?? [];
     return buildQuickSheetText(analysis, resourcesFor(results, data?.national_fallbacks ?? []), t, {

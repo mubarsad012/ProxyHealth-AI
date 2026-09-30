@@ -3,9 +3,9 @@
   "category": "court",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer",
+    "english": "Hello. I speak English. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer"
+    "translated": "Hello. I speak English. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 7, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": "8:30 AM",
-        "value_iso": null
+        "value_iso": "2026-10-07"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "hearing_date",
       "source_quote": "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, Fairfax, VA 22030 on October 7, 2026 at 8:30 AM.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "Go to the immigration court on October 7, 2026 at 8:30 AM.",
       "value_verbatim": "October 7, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -57,25 +57,14 @@
       ],
       "text": "The court address is printed on your paper.",
       "value_verbatim": "100 Sample Plaza, Suite 200, Fairfax, VA 22030",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
       "ambiguity_note": null,
       "amount": null,
       "confidence": "high",
-      "date": {
-        "anchor_demand_id": null,
-        "anchor_quote": null,
-        "formula": null,
-        "kind": "unresolved",
-        "localized_line": "within five working days",
-        "rule_id": null,
-        "rule_source_url": null,
-        "rule_verification": null,
-        "time_text": null,
-        "value_iso": null
-      },
+      "date": null,
       "documents": [],
       "id": "d3",
       "kind": "action",
@@ -88,15 +77,15 @@
       ],
       "text": "The paper says to tell the court about any new address within five working days, with Form EOIR-33.",
       "value_verbatim": "within five working days, using Form EOIR-33",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "legal_information_only",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "nta",
@@ -323,9 +312,9 @@
           "text": "You must notify the Immigration Court of any change of address within five working days, using Form EOIR-33."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -388,9 +377,238 @@
     "Where can I find free legal help before the hearing?",
     "How do I send Form EOIR-33 if I move?"
   ],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": "fixed.address_change_multi_agency",
+      "kind": "address_change_multi_agency",
+      "page": null,
+      "severity": "high",
+      "source_quote": null,
+      "span_ids": [],
+      "text": "If you move, the court needs its own address form (EOIR-33). USPS forwarding does not update the court or USCIS.",
+      "verified": true
+    },
+    {
+      "fixed_copy_key": "fixed.court_date_is_the_deadline",
+      "kind": "court_date_is_the_deadline",
+      "page": null,
+      "severity": "high",
+      "source_quote": null,
+      "span_ids": [],
+      "text": "The court date on this paper is the date that matters. If you miss it, the judge can decide your case without you. Go, even if you do not have a lawyer yet.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-nta_hearing_date-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_a_number",
+          "text_en": "Your A-number (Alien Registration Number, 8 or 9 digits)"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with an immigration court case. If your A-number has 8 digits, add a 0 in front."
+        },
+        "hours": "24/7",
+        "id": "eoir_hotline",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "EOIR Automated Case Information Hotline",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "hotline",
+        "phone": "+18008987180",
+        "prepare_checklist_keys": [
+          "bring_a_number"
+        ],
+        "priority": 85,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "court_notice",
+          "removal_proceedings"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.justice.gov/eoir/customer-service-initiatives",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Call and enter your A-number to hear your next court date, the judge's decision, and appeal due dates. Works day and night."
+        }
+      },
+      "score": 5.68,
+      "why": [
+        "Made for this kind of paper",
+        "For immigration court cases",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_removal_proceedings",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_a_number",
+          "text_en": "Your A-number (Alien Registration Number, 8 or 9 digits)"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with an immigration court case."
+        },
+        "hours": null,
+        "id": "eoir_acis",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "EOIR Automated Case Information (online)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_a_number"
+        ],
+        "priority": 80,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "court_notice",
+          "removal_proceedings"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://acis.eoir.justice.gov/en/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Enter your A-number to see your next immigration court date, time and court, and any decision."
+        }
+      },
+      "score": 5.63,
+      "why": [
+        "Made for this kind of paper",
+        "For immigration court cases",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_removal_proceedings",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_a_number",
+          "text_en": "Your A-number (Alien Registration Number, 8 or 9 digits)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with an immigration court case."
+        },
+        "hours": null,
+        "id": "eoir_icor",
+        "languages": [
+          "en"
+        ],
+        "link_health": "ok",
+        "name": "EOIR Immigration Court Online Resource",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [],
+        "priority": 55,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "removal_proceedings",
+          "court_notice"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.justice.gov/eoir/immigration-court-online-resource",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Plain-language guides from the immigration courts about hearings, notices and finding a representative."
+        }
+      },
+      "score": 5.38,
+      "why": [
+        "Made for this kind of paper",
+        "For immigration court cases",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_removal_proceedings",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "removal_proceedings",
     "court_notice",
@@ -426,15 +644,18 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 5,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.critical.date_soon",
+    "headline_params": {
+      "date": "October 7, 2026",
+      "date_iso": "2026-10-07"
+    },
+    "level": "critical",
+    "nearest_date_iso": "2026-10-07",
     "past_date": false,
-    "verify_resource_id": null
+    "verify_resource_id": "eoir_hotline"
   },
   "verification": {
     "contacts_stripped": 0,
@@ -442,7 +663,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

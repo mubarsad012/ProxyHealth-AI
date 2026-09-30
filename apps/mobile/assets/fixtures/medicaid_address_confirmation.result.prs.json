@@ -2,10 +2,12 @@
   "analysis_id": "sample-medicaid_address_confirmation-prs",
   "category": "benefits",
   "clerk_message": {
-    "appended_line_keys": [],
-    "english": "a Medicaid letter asking me to confirm my address by October 14, 2026",
+    "appended_line_keys": [
+      "clerk.interpreter_hhs"
+    ],
+    "english": "Hello. I speak Dari. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦prs⟧ a Medicaid letter asking me to confirm my address by October 14, 2026"
+    "translated": "⟦prs⟧ Hello. I speak Dari. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +19,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 14, 2026",
+        "kind": "stated",
+        "localized_line": "۲۰۲۶-۱۰-۱۴",
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-14"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "response_due",
       "source_quote": "Please confirm or update your address by October 14, 2026.",
       "span_ids": [
@@ -37,7 +39,7 @@
       ],
       "text": "آدرس خود را تا ۱۴ اکتبر ۲۰۲۶ تأیید یا نو کنید.",
       "value_verbatim": "October 14, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -59,15 +61,15 @@
       ],
       "text": "آدرس خود را از طریق انترنت، تلفون، یا با پست کردن فورم ضمیمه تأیید کنید.",
       "value_verbatim": "confirm your address online, by phone",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "benefits_information_only",
   "disclaimers": [
-    "benefits_information_only",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -261,9 +263,9 @@
           "text": "Enclosed: Address confirmation form"
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -320,7 +322,236 @@
   ],
   "red_flags": [],
   "request_id": "offline-medicaid_address_confirmation-prs",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_case_number",
+          "text_en": "Your case number (printed on the letter)"
+        },
+        {
+          "key": "bring_proof_address",
+          "text_en": "Proof of where you live (a bill or lease with your name)"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": "hhs_funded_health",
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone with Medicaid or CHIP, or a letter about it."
+        },
+        "hours": null,
+        "id": "medicaid_state",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "Medicaid.gov: Where Can People Get Help With Medicaid & CHIP",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_case_number"
+        ],
+        "priority": 85,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": "hhs_funded_health",
+        "tags": [
+          "medicaid_renewal",
+          "benefits_navigation"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Every state's Medicaid office with phone numbers and links to check a renewal or ask about a notice."
+        }
+      },
+      "score": 4.98,
+      "why": [
+        "Made for this kind of paper",
+        "For Medicaid letters",
+        "Anywhere in the U.S."
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_medicaid_renewal",
+        "why.anywhere_in_us"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_case_number",
+          "text_en": "Your case number (printed on the letter)"
+        },
+        {
+          "key": "bring_proof_address",
+          "text_en": "Proof of where you live (a bill or lease with your name)"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [
+          "https://www.healthcare.gov/medicaid-chip/"
+        ],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone. Coverage rules for many immigrants changed in 2026 and 2027; a navigator can say what applies."
+        },
+        "hours": "24/7",
+        "id": "healthcare_gov",
+        "languages": [
+          "en",
+          "es",
+          "interpreters_200+"
+        ],
+        "link_health": "ok",
+        "name": "HealthCare.gov (Health Insurance Marketplace)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": "+18003182596",
+        "prepare_checklist_keys": [],
+        "priority": 55,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "medicaid_renewal",
+          "insurance_denial",
+          "benefits_navigation"
+        ],
+        "text_line": null,
+        "tty": "+18558894325",
+        "url": "https://www.healthcare.gov/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [
+          "warn.hr1_coverage_changes"
+        ],
+        "what_it_does": {
+          "en": "Apply for health coverage, find local help (navigators), and apply for Medicaid or CHIP any time of year. Call center 1-800-318-2596."
+        }
+      },
+      "score": 4.05,
+      "why": [
+        "For Medicaid letters",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_medicaid_renewal",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_case_number",
+          "text_en": "Your case number (printed on the letter)"
+        },
+        {
+          "key": "bring_proof_address",
+          "text_en": "Proof of where you live (a bill or lease with your name)"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Families with children."
+        },
+        "hours": null,
+        "id": "insurekidsnow",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "InsureKidsNow.gov",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": "+18775437669",
+        "prepare_checklist_keys": [],
+        "priority": 60,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "medicaid_renewal"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.insurekidsnow.gov/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Free or low-cost health coverage for children (Medicaid and CHIP), by state. Call 1-877-KIDS-NOW."
+        }
+      },
+      "score": 3.57,
+      "why": [
+        "For Medicaid letters",
+        "Anywhere in the U.S."
+      ],
+      "why_keys": [
+        "why.for_medicaid_renewal",
+        "why.anywhere_in_us"
+      ]
+    }
+  ],
   "resource_tags": [
     "medicaid_renewal",
     "change_of_address",
@@ -356,13 +587,16 @@
   "translation_confidence": "medium",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 12,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.high.date_soon",
+    "headline_params": {
+      "date": "October 14, 2026",
+      "date_iso": "2026-10-14"
+    },
+    "level": "high",
+    "nearest_date_iso": "2026-10-14",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -372,9 +606,10 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

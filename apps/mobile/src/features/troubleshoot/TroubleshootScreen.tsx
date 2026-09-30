@@ -20,16 +20,23 @@ import {
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
+import { bumpVault, ME_MEMBER_ID, memberName, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
 import { platformName } from '@/lib/platform';
+import { useVault } from '@/storage/StorageProvider';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
+
+import { canSaveEvidence, saveScamEvidence } from './evidence';
 
 import { pickScreenshot, type Screenshot, toPageInput } from './pick';
 import { buildTroubleshootRequest, MAX_GOAL_CHARS, PORTAL_HINTS, SAMPLE_SCREENSHOT_ID } from './request';
-import { CredentialGuard, TroubleshootResultCards } from './ResultCards';
+import { CredentialGuard, type EvidenceControl, TroubleshootResultCards } from './ResultCards';
 import { useTroubleshoot } from './useTroubleshoot';
+
+const NO_EVIDENCE = { saved: false, busy: false, failed: false };
 
 export interface TroubleshootScreenProps {
   initialMode?: TroubleshootMode;
@@ -48,6 +55,10 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   const [hint, setHint] = useState<PortalHint | null>(null);
   const [pickFailed, setPickFailed] = useState(false);
   const [emergencyClosed, setEmergencyClosed] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<{ saved: boolean; busy: boolean; failed: boolean }>(NO_EVIDENCE);
+  const vault = useVault();
+  const { members } = useMembers();
+  const hideIds = useSettings((s) => s.hideIdNumbers);
   const ts = useTroubleshoot();
   const emergency = useEmergencyTrigger(ts.result?.safety ?? null);
   const resultId = ts.result?.request_id ?? null;
@@ -64,6 +75,7 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
       .then((s) => {
         if (s) {
           setShot(s);
+          setEvidence(NO_EVIDENCE);
           ts.reset();
         }
       })
@@ -77,11 +89,40 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   };
   const onSample = () => {
     setShot(null);
+    setEvidence(NO_EVIDENCE);
     void ts.runSample(
       (screenshot) => buildTroubleshootRequest({ ...common, screenshot, demoSampleId: SAMPLE_SCREENSHOT_ID }),
       meta.tag,
     );
   };
+
+  const onSaveEvidence = () => {
+    if (!canSaveEvidence(shot) || evidence.busy || evidence.saved) return;
+    setEvidence({ saved: false, busy: true, failed: false });
+    saveScamEvidence(vault, shot, { title: t('vault.title_scam_check') })
+      .then(() => {
+        bumpVault();
+        setEvidence({ saved: true, busy: false, failed: false });
+      })
+      .catch(() => setEvidence({ saved: false, busy: false, failed: true }));
+  };
+  // Scam mode, a real picked screenshot, a real (non-demo) result: offer "Save as proof". Not while
+  // `settings.hide_ids` is on: the proof is the unmasked image, and saves with that setting keep no
+  // page images (vault/documents.ts `buildStoredDocument`).
+  const evidenceControl: EvidenceControl | null =
+    mode === 'scam_check' &&
+    !hideIds &&
+    canSaveEvidence(shot) &&
+    ts.result &&
+    !ts.offlineSample &&
+    !ts.result.model_meta?.demo
+      ? {
+          ...evidence,
+          onSave: onSaveEvidence,
+          // saveScamEvidence stores the proof for "Me" (evidence.ts default).
+          member: memberName(members.find((m) => m.id === ME_MEMBER_ID) ?? null, t),
+        }
+      : null;
 
   const loading = ts.status === 'loading';
   const title = mode === 'scam_check' ? t('troubleshoot.mode_scam') : t('home.tile_troubleshoot');
@@ -157,6 +198,7 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
         ) : null}
         <BigButton
           label={t(mode === 'scam_check' ? 'troubleshoot.cta_scam' : 'troubleshoot.cta')}
+          sublabel={online ? undefined : t('state.offline_disabled')}
           icon="search"
           variant="primary"
           size={72}
@@ -183,7 +225,7 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
         {ts.result ? (
           <View style={styles.wrap}>
             {ts.result.model_meta?.demo || ts.offlineSample ? <Banner kind="demo" /> : null}
-            <TroubleshootResultCards result={ts.result} />
+            <TroubleshootResultCards result={ts.result} evidence={evidenceControl} />
           </View>
         ) : null}
       </View>

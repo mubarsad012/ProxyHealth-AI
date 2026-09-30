@@ -2,10 +2,12 @@
   "analysis_id": "sample-insurance_denial_180d-en",
   "category": "medical",
   "clerk_message": {
-    "appended_line_keys": [],
-    "english": "an insurance denial letter and the appeal date on it",
+    "appended_line_keys": [
+      "clerk.interpreter_hhs"
+    ],
+    "english": "Hello. I speak English. I am here about: an insurance denial letter from Blue Ridge Sample Health Plan. I need help with: an insurance denial letter and the appeal date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "an insurance denial letter and the appeal date on it"
+    "translated": "Hello. I speak English. I am here about: an insurance denial letter from Blue Ridge Sample Health Plan. I need help with: an insurance denial letter and the appeal date on it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +19,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "April 20, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-04-20"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "notice_date",
       "source_quote": "Date of this notice: April 20, 2026",
       "span_ids": [
@@ -37,7 +39,7 @@
       ],
       "text": "The date of this notice is April 20, 2026.",
       "value_verbatim": "April 20, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -45,16 +47,16 @@
       "amount": null,
       "confidence": "high",
       "date": {
-        "anchor_demand_id": null,
-        "anchor_quote": null,
-        "formula": null,
-        "kind": "unresolved",
-        "localized_line": "within 180 days of the date of this notice",
-        "rule_id": null,
-        "rule_source_url": null,
-        "rule_verification": null,
+        "anchor_demand_id": "d1",
+        "anchor_quote": "Date of this notice: April 20, 2026",
+        "formula": "April 20, 2026 + 180 calendar days",
+        "kind": "estimated",
+        "localized_line": null,
+        "rule_id": "aca_internal_appeal_180d",
+        "rule_source_url": "https://www.healthcare.gov/appeal-insurance-company-decision/internal-appeals/",
+        "rule_verification": "verified",
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-17"
       },
       "documents": [],
       "id": "d2",
@@ -68,7 +70,7 @@
       ],
       "text": "The letter says to ask for an internal appeal within 180 days of the date of this notice.",
       "value_verbatim": "within 180 days of the date of this notice",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -91,7 +93,7 @@
       ],
       "text": "The letter lists what to send for an appeal: the appeal form and letters from your doctor.",
       "value_verbatim": "the enclosed appeal form",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -111,15 +113,15 @@
       ],
       "text": "Phone for questions, from your paper: (804) 555-0199.",
       "value_verbatim": "(804) 555-0199",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "medical_information_only",
   "disclaimers": [
-    "medical_information_only",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "insurance_denial",
@@ -337,9 +339,9 @@
           "text": "You may also ask for a copy of the rules the plan used to make this decision, free of charge."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -436,13 +438,16 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 15,
+    "driving_demand_id": "d2",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.medium.estimated",
+    "headline_params": {
+      "date": "2026-10-17",
+      "date_iso": "2026-10-17"
+    },
+    "level": "medium",
+    "nearest_date_iso": "2026-10-17",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -452,7 +457,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

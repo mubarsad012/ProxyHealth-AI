@@ -94,13 +94,23 @@ def test_free_text_in_identifier_fields_never_reaches_disk(tmp_path: Path) -> No
         )
     )
     store.record(request(resource_id="Maria Lopez", app_version="1.0", model_id="Maria Lopez"))
+    # Lowercase hyphenated slugs look like ids but are not model ids; with or without the
+    # configured models passed in, they are counted as OTHER.
+    store.record(request(model_id="maria-lopez-12-oak-st"))
+    store.record(
+        request(model_id="maria-lopez-12-oak-st-a123456789", app_version="x"),
+        known_models=("gemini-3.8-pro", "gemini-3.8-flash"),
+    )
+    store.record(request(model_id="gemini-3-maria-lopez", app_version="y"))
     raw = path.read_bytes()
     for absent in (b"John Smith", b"Oak St", b"A-123456789", b"case number", b"x" * 65,
-                   b"Maria", b"Lopez"):  # fmt: skip
+                   b"Maria", b"Lopez", b"maria", b"lopez", b"oak-st", b"a123456789"):  # fmt: skip
         assert absent not in raw
     rows = store.counts()
     assert ("unclear", "demands", "en", "medicaid_renewal", OTHER, OTHER, OTHER, "1") in rows
-    assert all(row[4] in ("", OTHER) and row[5] == OTHER and row[6] == OTHER for row in rows)
+    assert ("unclear", "demands", "prs", "medicaid_renewal", "", "1.0.0", OTHER, "1") in rows
+    assert all(row[4] in ("", OTHER) and row[6] == OTHER for row in rows)
+    assert sum(int(row[7]) for row in rows) == 5
 
 
 def test_identifier_fields_keep_real_ids_only() -> None:
@@ -116,4 +126,8 @@ def test_identifier_fields_keep_real_ids_only() -> None:
         known_resource=known, known_models=models,
     )  # fmt: skip
     assert unknown[4:] == (OTHER, "1.0.0+build.7", OTHER)
+    for slug in ("maria-lopez-12-oak-st", "gemini-3-maria-lopez", "custom-model-1"):
+        assert counter_key(request(model_id=slug), known_models=models)[6] == OTHER
+    for model in ("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3-pro-preview-06-05"):
+        assert counter_key(request(model_id=model))[6] == model  # shape-valid, not configured
     assert counter_key(request(model_id=None, resource_id=None))[4:] == ("", "1.0.0", "")

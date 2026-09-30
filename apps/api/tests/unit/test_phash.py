@@ -84,6 +84,9 @@ def test_match_respects_kind() -> None:
     assert STORE.match_dhash(copy, MAX_HAMMING, kind="document") is None
     matched = STORE.match_dhash(copy, MAX_HAMMING, kind="screenshot")
     assert matched is not None and matched.id == "portal_file_too_large"
+    # The BUILD_PLAN §4.1 two-argument form searches every fixture, screenshots included.
+    anywhere = STORE.match_dhash(copy, MAX_HAMMING)
+    assert anywhere is not None and anywhere.id == "portal_file_too_large"
 
 
 def test_unrelated_images_do_not_match() -> None:

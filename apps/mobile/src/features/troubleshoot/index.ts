@@ -11,6 +11,14 @@ export {
   PORTAL_HINTS,
   SAMPLE_SCREENSHOT_ID,
 } from './request';
-export { askPersonHref, CredentialGuard, TroubleshootResultCards } from './ResultCards';
+export { buildEvidenceDocument, canSaveEvidence, saveScamEvidence } from './evidence';
+export {
+  askPersonHref,
+  CredentialGuard,
+  EvidenceButton,
+  type EvidenceControl,
+  TroubleshootResultCards,
+} from './ResultCards';
+export { MAX_REPORT_RESOURCES, reportingResources, ScamReportResources } from './ScamReport';
 export { TroubleshootScreen, type TroubleshootScreenProps } from './TroubleshootScreen';
 export { offlineSampleResult, type TroubleshootState, useTroubleshoot } from './useTroubleshoot';

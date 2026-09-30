@@ -6,9 +6,10 @@ memory. Fixture files are committed, synthetic and watermarked SAMPLE; nothing u
 ever read or written here (ARCHITECTURE §7).
 
 ``out(lang)`` returns the recorded model output with the ``_meta`` object removed (AI_PROMPTS
-§10.2); ``match_dhash`` compares an uploaded page against the precomputed page hashes of the
-fixtures of one ``kind`` and returns the nearest one within ``max_hamming`` (ties → manifest
-order), so a photographed printed SAMPLE sheet resolves to its fixture in zero-key mode.
+§10.2); ``match_dhash`` compares an uploaded page against the precomputed page hashes of every
+fixture (or of one ``kind`` when given) and returns the nearest one within ``max_hamming``
+(ties → manifest order), so a photographed printed SAMPLE sheet resolves to its fixture in
+zero-key mode.
 """
 
 from __future__ import annotations
@@ -198,9 +199,13 @@ class FixtureStore:
         return self._by_id.get(DEFAULT_FIXTURE_ID) or next(iter(self._by_id.values()), None)
 
     def match_dhash(
-        self, png_or_jpeg: bytes, max_hamming: int, *, kind: FixtureKind | None = "document"
+        self, png_or_jpeg: bytes, max_hamming: int, *, kind: FixtureKind | None = None
     ) -> Fixture | None:
-        """Nearest fixture of ``kind`` (any kind when ``None``) within ``max_hamming`` bits."""
+        """Nearest fixture within ``max_hamming`` bits (BUILD_PLAN §4.1 two-argument form).
+
+        Searches every fixture by default; ``kind`` (additive keyword) narrows the search to
+        documents or portal screenshots, as ``MockProvider`` does per task.
+        """
         try:
             value = dhash(png_or_jpeg)
         except HashError:

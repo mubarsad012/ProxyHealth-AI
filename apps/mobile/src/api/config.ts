@@ -1,6 +1,8 @@
 // API client singleton + `/v1/config` (ARCHITECTURE §3 "config.ts", PRODUCT_SPEC S0).
-// The server config is cached in `kv` so the app can reason about the tier offline; when the
-// server is unreachable and nothing is cached the tier is `'unknown'` (scan disabled, samples on).
+// The server config is cached in `kv` so server-derived rows (versions, models) can still be shown
+// offline marked `state.cached`; but whenever `GET /v1/config` is unreachable the tier is
+// `'unknown'` (scan disabled, samples on, S2 "Cannot confirm") even if a cached config exists
+// (COMPLIANCE_PRIVACY §3 tier table, PRODUCT_SPEC S2 States).
 
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
@@ -17,14 +19,14 @@ import { currentConsentVersion, type UiTier, useSession } from '@/store/session'
 let singleton: ApiClient | null = null;
 
 /**
- * CL-010 (Apple 5.1.1(ii)): the install id is created lazily at consent, not at first launch.
- * Before any consent decision exists the header is simply omitted.
+ * CL-010 (Apple 5.1.1(ii)): the install id is created at consent acceptance, not at first launch
+ * and not after "Not now" / "Stop sending papers". Without one the header is simply omitted.
  */
 export async function installIdForRequests(): Promise<string | null> {
   const existing = await kv.get(KV_KEYS.installId);
   if (existing) return existing;
   const decision = await consentStore.getDecision();
-  if (decision === 'none') return null;
+  if (decision !== 'accepted') return null;
   return getInstallId();
 }
 
@@ -60,7 +62,10 @@ export async function loadCachedServerConfig(): Promise<ServerConfig | null> {
   return null;
 }
 
-/** GET /v1/config, cache it and push it into the session store. Returns null when unreachable. */
+/**
+ * GET /v1/config, cache it and push it into the session store. Returns null when unreachable; the
+ * tier is then `'unknown'` while any cached config stays in the store for display only.
+ */
 export async function refreshServerConfig(client: ApiClient = getClient()): Promise<ServerConfig | null> {
   try {
     const config = await client.getConfig();
@@ -68,6 +73,7 @@ export async function refreshServerConfig(client: ApiClient = getClient()): Prom
     useSession.getState().setServerConfig(config);
     return config;
   } catch {
+    useSession.getState().setTier('unknown');
     return null;
   }
 }
@@ -93,9 +99,8 @@ export function ensureServerConfig(client: ApiClient = getClient()): Promise<Ser
       if (cached && !useSession.getState().serverConfig) {
         useSession.getState().setServerConfig(cached);
       }
-      const fresh = await refreshServerConfig(client);
-      if (!fresh && !cached) useSession.getState().setTier('unknown');
-      return fresh ?? cached;
+      // A failed refresh sets tier 'unknown' even when a cached config was loaded above.
+      return refreshServerConfig(client);
     })();
   }
   return firstFetch;
@@ -128,7 +133,9 @@ export function useServerConfig(): ServerConfigState {
     } catch (e) {
       const err = toApiError(e);
       setError(err);
-      if (!useSession.getState().serverConfig) useSession.getState().setTier('unknown');
+      setFresh(false);
+      // Unreachable → 'unknown' tier; any cached config stays for display-only (`state.cached`) rows.
+      useSession.getState().setTier('unknown');
       return null;
     } finally {
       setLoading(false);

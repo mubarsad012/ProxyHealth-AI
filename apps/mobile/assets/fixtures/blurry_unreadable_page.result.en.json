@@ -3,17 +3,17 @@
   "category": "other",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "understanding a paper I received",
-    "need_line_source": "ai",
-    "translated": "⟦en⟧ understanding a paper I received"
+    "english": "Hello. I speak English. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
+    "need_line_source": "template",
+    "translated": "Hello. I speak English. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [],
   "detected_language": "und",
   "disclaimer_kind": "general_information",
   "disclaimers": [
-    "general_information",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -47,9 +47,9 @@
   "original_text": [
     {
       "blocks": [],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -85,13 +85,8 @@
     "title": "This page is too blurry to read"
   },
   "target_language": "en",
-  "translated_text": [
-    {
-      "page": 1,
-      "text": ""
-    }
-  ],
-  "translation_confidence": "medium",
+  "translated_text": [],
+  "translation_confidence": "low",
   "unverified": [],
   "urgency": {
     "days_until": null,
@@ -110,9 +105,11 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "low_quality_image",
+    "document_language_differs",
     "demo_sample"
   ]
 }

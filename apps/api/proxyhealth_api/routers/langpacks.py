@@ -11,16 +11,24 @@ from fastapi.responses import JSONResponse, Response
 
 from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.contracts.common import LanguageTag
-from proxyhealth_api.contracts.enums import ErrorCode
+from proxyhealth_api.contracts.enums import ErrorCode, Provider
 from proxyhealth_api.contracts.langpack import LanguagePack, LanguagePackRequest
-from proxyhealth_api.deps import get_ai, get_languages, get_pack_cache, get_packs, get_request_id
+from proxyhealth_api.deps import (
+    get_ai,
+    get_languages,
+    get_pack_cache,
+    get_packs,
+    get_request_id,
+    get_settings,
+)
 from proxyhealth_api.errors import ApiError, error_responses
 from proxyhealth_api.logging_ import log_event
 from proxyhealth_api.packs.base import BasePack, LanguageTable
-from proxyhealth_api.packs.cache import PackCache
+from proxyhealth_api.packs.cache import MIN_CACHE_COVERAGE, PackCache, is_pseudo
 from proxyhealth_api.packs.generator import Target, generate_pack
 from proxyhealth_api.packs.resolve import Resolution, resolve_language
 from proxyhealth_api.ratelimit import rate_limit_dependency
+from proxyhealth_api.settings import Settings
 
 router = APIRouter(prefix="/v1/language-packs", tags=["language-packs"])
 
@@ -78,12 +86,25 @@ async def get_language_pack(
     return _pack_response(pack)
 
 
-def _hinted(req: LanguagePackRequest, languages: LanguageTable, cache: PackCache) -> str | None:
-    """The client's ``hint_tag`` counts only when the server already knows that tag."""
+def _hinted(req: LanguagePackRequest, languages: LanguageTable) -> str | None:
+    """The client's ``hint_tag`` counts only when it is in ``languages.yaml`` (AI_PROMPTS §7.2)."""
     hint = req.hint_tag
-    if hint and (languages.get(hint) is not None or cache.lookup(hint) is not None):
+    if hint and languages.get(hint) is not None:
         return hint
     return None
+
+
+def _cacheable(pack: LanguagePack, settings: Settings) -> bool:
+    """Only real packs with coverage >= 0.9 reach ``var/langpacks`` (AI_PROMPTS §7.8, §7.10).
+
+    Mock pseudo-localized packs are never written, so switching ``AI_PROVIDER`` never serves one;
+    a thinner pack is returned to this client and regenerated on the next request.
+    """
+    return (
+        settings.provider is not Provider.mock
+        and pack.coverage >= MIN_CACHE_COVERAGE
+        and not is_pseudo(pack)
+    )
 
 
 def _target(resolution: Resolution, languages: LanguageTable) -> Target:
@@ -111,9 +132,10 @@ async def create_language_pack(
     cache: Annotated[PackCache, Depends(get_pack_cache)],
     base: Annotated[BasePack, Depends(get_packs)],
     languages: Annotated[LanguageTable, Depends(get_languages)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     _check_version(req.pack_version, base)
-    hinted = _hinted(req, languages, cache)
+    hinted = _hinted(req, languages)
     if hinted is not None:
         entry = languages.get(hinted)
         resolution = Resolution(
@@ -132,6 +154,7 @@ async def create_language_pack(
         if cached is not None:
             return _pack_response(cached)
         generated = await generate_pack(_target(resolution, languages), base, ai, request_id=rid)
-        cache.put(generated.pack)
+        if _cacheable(generated.pack, settings):
+            cache.put(generated.pack)
         log_event(request_id=rid, route="langpack.generated", target_language=resolution.tag)
         return _pack_response(generated.pack)

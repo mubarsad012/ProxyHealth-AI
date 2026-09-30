@@ -3,9 +3,9 @@
   "category": "housing",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a notice from my landlord about rent - what it says and the date on it",
+    "english": "Hello. I speak Dari. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦prs⟧ a notice from my landlord about rent - what it says and the date on it"
+    "translated": "⟦prs⟧ Hello. I speak Dari. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -29,7 +29,7 @@
       ],
       "text": "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید.",
       "value_verbatim": "$1,450.00",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -40,19 +40,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 8, 2026",
+        "kind": "stated",
+        "localized_line": "۲۰۲۶-۱۰-۰۸",
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-08"
       },
       "documents": [],
       "id": "d2",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "response_due",
       "source_quote": "You must pay the full amount by October 8, 2026, or your lease will be terminated.",
       "span_ids": [
@@ -60,7 +60,7 @@
       ],
       "text": "اطلاعیه ۸ اکتبر ۲۰۲۶ را روز پرداخت کامل مبلغ می‌گوید.",
       "value_verbatim": "October 8, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -72,7 +72,7 @@
         "anchor_quote": null,
         "formula": null,
         "kind": "unresolved",
-        "localized_line": "within 14 days of the date of this notice",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
@@ -91,7 +91,7 @@
       ],
       "text": "اطلاعیه ۱۴ روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است.",
       "value_verbatim": "within 14 days of the date of this notice",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -111,15 +111,15 @@
       ],
       "text": "تلفون دفتر کرایه، از کاغذ شما: (703) 555-0175.",
       "value_verbatim": "(703) 555-0175",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "housing_information_only",
   "disclaimers": [
-    "housing_information_only",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -312,9 +312,9 @@
           "text": "Signed: Property Manager, Oak Hollow Property Management LLC"
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -330,7 +330,7 @@
       "span_ids": [
         "p1b4"
       ],
-      "text": "پیش از تاریخ این کاغذ با یک وکیل یا مشاور مسکن صحبت کنید."
+      "text": "پیش از تاریخ این کاغذ با یک وکیل یا مشاور مسکن صحبت کنید. یک وکیل یا مشاور مسکن می‌تواند به شما مشوره بدهد. در «کمک نزدیک» یکی را پیدا کنید."
     },
     {
       "demand_id": "d1",
@@ -367,9 +367,239 @@
     "$1,450.00 را کجا و چطور پرداخت کنم؟",
     "وقتی پرداخت کنم به من رسید می‌دهید؟"
   ],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": "fixed.pay_or_quit",
+      "kind": "not_a_court_order",
+      "page": null,
+      "severity": "high",
+      "source_quote": null,
+      "span_ids": [],
+      "text": "این حکم محکمه نیست. فقط محکمه می‌تواند شما را مجبور به رفتن کند.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-va_pay_or_quit_14d-prs",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_lease",
+          "text_en": "Your lease"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [
+          "https://www.consumerfinance.gov/coronavirus/mortgage-and-housing-assistance/renter-protections/"
+        ],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone."
+        },
+        "hours": null,
+        "id": "hud_counselor",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "js_rendered",
+        "name": "HUD: Find a Housing Counselor",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": "+18005694287",
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_lease"
+        ],
+        "priority": 75,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "housing_counseling",
+          "eviction",
+          "rent_assistance"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.hud.gov/findacounselor",
+        "verification_method": "browser",
+        "verified_on": "2026-09-23",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Free or low-cost HUD-approved counselors for rent problems, eviction prevention and housing questions. Call 800-569-4287 to find one."
+        }
+      },
+      "score": 5.95,
+      "why": [
+        "Made for this kind of paper",
+        "For eviction notices",
+        "Anywhere in the U.S."
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_eviction",
+        "why.anywhere_in_us"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_lease",
+          "text_en": "Your lease"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone."
+        },
+        "hours": null,
+        "id": "usa_housing_help",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "USA.gov: Housing help",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [],
+        "priority": 45,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "rent_assistance",
+          "eviction",
+          "housing_counseling"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.usa.gov/housing-help",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Government overview of rental assistance, emergency housing and eviction help, with links to programs."
+        }
+      },
+      "score": 5.25,
+      "why": [
+        "For eviction notices",
+        "Anywhere in the U.S."
+      ],
+      "why_keys": [
+        "why.for_eviction",
+        "why.anywhere_in_us"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_the_summons",
+          "text_en": "The summons or court paper"
+        },
+        {
+          "key": "bring_lease",
+          "text_en": "Your lease"
+        },
+        {
+          "key": "bring_proof_rent_utilities",
+          "text_en": "Your rent and utility bills"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Tenants and landlords in Virginia."
+        },
+        "hours": null,
+        "id": "va_courts_landlord_tenant",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "Virginia Courts Self-Help: Landlord–Tenant (eviction cases)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "court",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_the_summons",
+          "bring_lease",
+          "bring_proof_rent_utilities"
+        ],
+        "priority": 70,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "state",
+          "states": [
+            "VA"
+          ],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "eviction"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://selfhelp.vacourts.gov/page/10/landlord-tenant",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [
+          "warn.court_date_is_the_deadline"
+        ],
+        "what_it_does": {
+          "en": "Official Virginia court information about eviction (unlawful detainer) cases, which are heard in General District Court. Forms and what to expect on your court date."
+        }
+      },
+      "score": 4.87,
+      "why": [
+        "Made for this kind of paper",
+        "For eviction notices",
+        "Serves Virginia"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_eviction",
+        "why.serves_your_state"
+      ]
+    }
+  ],
   "resource_tags": [
     "eviction",
     "housing_counseling",
@@ -405,13 +635,16 @@
   "translation_confidence": "medium",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 6,
+    "driving_demand_id": "d2",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.high.date_soon",
+    "headline_params": {
+      "date": "October 8, 2026",
+      "date_iso": "2026-10-08"
+    },
+    "level": "high",
+    "nearest_date_iso": "2026-10-08",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -421,9 +654,10 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

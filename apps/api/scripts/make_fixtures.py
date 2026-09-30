@@ -19,6 +19,9 @@ Block ids are ``p<page>b<n>`` in reading order (AI_PROMPTS §4.1). Template line
 
 ``--check`` regenerates everything in memory and exits 1 when any byte would change (CI gate);
 ``--only <id>`` limits the run while authoring; ``--distances`` prints the pairwise dHash matrix.
+A write run never overwrites or deletes an ``out.<lang>.json`` whose ``_meta.recorded_by`` is
+``recording_provider`` (``ai/recording.py``, AI_PROMPTS §10.4): it is kept for human review and
+``--check`` keeps reporting it until it is folded into ``template.yaml`` or deleted by hand.
 """
 
 from __future__ import annotations
@@ -45,6 +48,7 @@ from pydantic import ValidationError
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
+from proxyhealth_api.ai import prompt_loader  # noqa: E402
 from proxyhealth_api.contracts.enums import ResourceTag  # noqa: E402
 from proxyhealth_api.contracts.model_out import (  # noqa: E402
     AnalysisModelOut,
@@ -55,7 +59,6 @@ from proxyhealth_api.demo.phash import dhash, hamming, hash_to_hex  # noqa: E402
 DATA = API_ROOT / "data"
 FIXTURES_DIR = DATA / "fixtures"
 FONTS_DIR = DATA / "fonts"
-PROMPTS_VERSION_FILE = API_ROOT / "proxyhealth_api" / "ai" / "prompts" / "VERSION"
 DEFAULT_PROMPTS_VERSION = "2026-09-27.1"  # AI_PROMPTS §10.2 until WP2 lands ai/prompts/VERSION
 RECORDED_ON = "2026-09-27"
 
@@ -745,9 +748,24 @@ def _json_bytes(value: dict[str, Any]) -> bytes:
 
 
 def prompts_version() -> str:
-    if PROMPTS_VERSION_FILE.is_file():
-        return PROMPTS_VERSION_FILE.read_text("utf-8").strip() or DEFAULT_PROMPTS_VERSION
-    return DEFAULT_PROMPTS_VERSION
+    """``prompt_loader.prompts_version()`` — the one ``ai/prompts/VERSION`` parser."""
+    if not prompt_loader.VERSION_FILE.is_file():
+        return DEFAULT_PROMPTS_VERSION
+    try:
+        return prompt_loader.prompts_version()
+    except prompt_loader.PromptError as exc:
+        raise TemplateError(str(exc)) from exc
+
+
+def is_recording(path: Path) -> bool:
+    """True for an ``out.<lang>.json`` written by ``ai/recording.py`` (kept for human review)."""
+    if not (path.name.startswith("out.") and path.name.endswith(".json")):
+        return False
+    try:
+        meta = json.loads(path.read_text("utf-8")).get("_meta")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(meta, dict) and meta.get("recorded_by") == "recording_provider"
 
 
 def build_fixture(tpl_dir: Path) -> Built:
@@ -872,6 +890,7 @@ def main(argv: list[str] | None = None) -> int:
     if failures:
         return 1
     drift: list[str] = []
+    kept: list[str] = []
     changed = 0
     for b in built:
         target = FIXTURES_DIR / b.id
@@ -881,6 +900,8 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if args.check:
                 drift.append(f"{'differs' if path.is_file() else 'missing'}: {path.name} in {b.id}")
+            elif is_recording(path):
+                kept.append(f"{b.id}/{path.name}")
             else:
                 path.write_bytes(content)
                 changed += 1
@@ -889,9 +910,15 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if args.check:
                 drift.append(f"stray: {path.name} in {b.id}")
+            elif is_recording(path):
+                kept.append(f"{b.id}/{path.name}")
             else:
                 path.unlink()
                 changed += 1
+    for name in kept:
+        # A RecordingProvider capture awaits human review (AI_PROMPTS §10.4): never overwrite or
+        # delete it here; the reviewer folds it into template.yaml or deletes it by hand.
+        print(f"kept recording for review: {name}", file=sys.stderr)
     if args.check:
         for line in drift:
             print(line, file=sys.stderr)

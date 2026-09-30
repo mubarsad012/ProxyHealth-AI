@@ -423,25 +423,36 @@ describe('S14 grouping and the Home next-date card', () => {
     expect(groups[1].items[0].eventDate).toBe('2026-10-03');
   });
 
-  it('shows the soonest saved date within 30 days', () => {
+  it('Home card: the soonest switched-on reminder date within 30 days (S3)', () => {
     const row = (id: string, next: string | null): DocumentRow => ({
       id,
       memberId: 'me',
-      title: id,
+      title: id === 'an_1' ? 'Medicaid letter' : id,
       category: 'benefits',
       documentType: 'medicaid_renewal',
       createdAt: '2026-09-01T00:00:00.000Z',
       nextDateIso: next,
       pageCount: 1,
     });
-    expect(pickNextDate([row('far', '2026-11-30'), row('none', null)], [], NOW)).toBeNull();
-    expect(pickNextDate([row('a', '2026-10-20'), row('b', '2026-10-14'), row('old', '2026-09-01')], [], NOW)).toEqual({
-      documentId: 'b',
-      title: 'b',
+    const docs = new Map([['an_1', doc]]);
+    // A saved paper with a date but no reminder does not show the card.
+    expect(pickNextDate([row('an_1', '2026-10-14'), row('none', null)], [], docs, NOW)).toBeNull();
+    // A reminder that is switched off does not count either.
+    const off = rem('x', '2026-10-13T13:00:00.000Z', { enabled: false });
+    expect(pickNextDate([row('an_1', '2026-10-14')], [off], docs, NOW)).toBeNull();
+    // The card shows the date the reminder is about, not the fire time.
+    expect(pickNextDate([row('an_1', '2026-10-14')], [rem('a', '2026-10-07T13:00:00.000Z')], docs, NOW)).toEqual({
+      documentId: 'an_1',
+      title: 'Medicaid letter',
       dateIso: '2026-10-14',
     });
+    // Own dates compete on the same terms; more than 30 days away is ignored.
     const own = rem('o', '2026-10-01T13:00:00.000Z', { documentId: '', demandId: 'own:2026-10-02:z', label: 'Clinic' });
-    expect(pickNextDate([row('b', '2026-10-14')], [own], NOW)?.title).toBe('Clinic');
+    const far = rem('f', '2026-11-29T13:00:00.000Z', { documentId: '', demandId: 'own:2026-11-30:y', label: 'Far' });
+    expect(pickNextDate([row('an_1', '2026-10-14')], [rem('a', '2026-10-07T13:00:00.000Z'), own], docs, NOW)?.title).toBe(
+      'Clinic',
+    );
+    expect(pickNextDate([], [far], docs, NOW)).toBeNull();
   });
 });
 

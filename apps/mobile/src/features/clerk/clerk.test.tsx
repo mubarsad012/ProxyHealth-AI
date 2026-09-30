@@ -9,6 +9,7 @@ import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AnalysisResult } from '@/api/types';
+import { ThemeProvider } from '@/design/theme';
 import { palette } from '@/design/tokens';
 import { EMERGENCY_ROWS, EmergencyCard, emergencyTrigger } from '@/features/emergency';
 import { bundledPackFor, EN_PACK, t, useI18n } from '@/i18n/store';
@@ -27,6 +28,9 @@ jest.mock('expo-router', () => ({
   Stack: { Screen: () => null },
 }));
 
+let mockScheme: 'light' | 'dark' = 'light';
+jest.mock('@/hooks/use-color-scheme', () => ({ useColorScheme: () => mockScheme }));
+
 const clerkMessage = {
   english: 'Hello. I speak Dari. I am here about: a Virginia Medicaid letter asking me to confirm my address. Thank you.',
   translated: 'سلام. من دری صحبت می‌کنم.',
@@ -41,6 +45,7 @@ function flatStyle(style: unknown): Record<string, unknown> {
 }
 
 afterEach(() => {
+  mockScheme = 'light';
   useI18n.getState().setPack(EN_PACK);
   useSession.getState().reset();
 });
@@ -86,6 +91,23 @@ describe('<ClerkScreen>', () => {
     expect(body.color).toBe(palette.highContrast.text);
     expect(flatStyle(getByTestId('clerk-screen').props.style).backgroundColor).toBe(palette.highContrast.background);
     expect(getByText(t('clerk.brightness_tip'))).toBeTruthy();
+  });
+
+  it('keeps "What this card says" black on white in the dark colour scheme', async () => {
+    mockScheme = 'dark';
+    const { getByText, getByRole } = await render(
+      <ThemeProvider>
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <ClerkScreen analysis={{ clerk_message: clerkMessage } as unknown as AnalysisResult} />
+        </SafeAreaProvider>
+      </ThemeProvider>,
+    );
+    const title = t('clerk.what_it_says');
+    expect(flatStyle(getByText(title).props.style).color).toBe(palette.highContrast.text);
+    await act(async () => {
+      fireEvent.press(getByRole('button', { name: title }));
+    });
+    expect(flatStyle(getByText(clerkMessage.translated, { exact: false }).props.style).color).toBe(palette.highContrast.text);
   });
 });
 

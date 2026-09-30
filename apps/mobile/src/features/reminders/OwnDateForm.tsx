@@ -7,8 +7,8 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { BigButton } from '@/design/components/BigButton';
 import { AppText } from '@/design/components/Text';
-import { useTheme } from '@/design/theme';
-import { radius, size, space } from '@/design/tokens';
+import { useScaled, useTheme } from '@/design/theme';
+import { radius, size, space, type as typeScale } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 
@@ -28,6 +28,7 @@ function digits(v: string, max: number): string {
 export function OwnDateForm({ onSubmit, onCancel }: OwnDateFormProps) {
   const t = useT();
   const { colors } = useTheme();
+  const scaled = useScaled();
   const dir = useDirection();
   const [week] = useState(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const [title, setTitle] = useState('');
@@ -37,7 +38,10 @@ export function OwnDateForm({ onSubmit, onCancel }: OwnDateFormProps) {
   const [note, setNote] = useState('');
   const [error, setError] = useState<'title' | 'date' | null>(null);
 
-  const inputStyle = [styles.input, { color: colors.text, borderColor: colors.border }];
+  const inputStyle = [
+    styles.input,
+    { color: colors.text, borderColor: colors.border, fontSize: scaled(typeScale.size.body) },
+  ];
   const submit = () => {
     const y = Number(year);
     const m = Number(month);
@@ -118,7 +122,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
-    fontSize: 18,
   },
   center: {
     textAlign: 'center',

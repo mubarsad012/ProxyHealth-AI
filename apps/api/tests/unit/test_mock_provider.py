@@ -5,11 +5,15 @@ Rows that are served without a model (``/v1/resources/*``, ``/v1/rules``, ``/v1/
 owners (WP3) and by ``tests/contract/test_demo.py`` / ``test_feedback.py`` (WP7).
 """
 
+import importlib.util
 import io
 import json
+import shutil
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import httpx
@@ -18,6 +22,7 @@ from fastapi import FastAPI
 from PIL import Image
 from pydantic import BaseModel
 
+from proxyhealth_api.ai import prompt_loader
 from proxyhealth_api.ai.mock import MockProvider, direction_for, resolve_language
 from proxyhealth_api.ai.provider import AIProvider, Part, StructuredResult, Task
 from proxyhealth_api.ai.recording import RecordingProvider
@@ -396,6 +401,8 @@ async def test_recording_provider_writes_sample_outputs_only(tmp_path: Path) -> 
     body = json.loads((out_dir / "w2_form" / "out.en.json").read_text("utf-8"))
     assert body["_meta"]["recorded_by"] == "recording_provider"
     assert body["_meta"]["recorded_on"] == "2026-09-27" and body["_meta"]["model_id"] == "mock"
+    # The bare YYYY-MM-DD.n value, not the raw ``prompts_version = …`` line of ai/prompts/VERSION.
+    assert body["_meta"]["prompts_version"] == prompt_loader.prompts_version()
     assert AnalysisModelOut.model_validate({k: v for k, v in body.items() if k != "_meta"})
 
 
@@ -413,3 +420,38 @@ async def test_recording_provider_never_records_a_non_fixture_image(tmp_path: Pa
     await call(recorder, Task.analyze_single, [], **hints)
     assert list(out_dir.rglob("out.*.json")) == []
     assert recorder.recorded == []
+
+
+def load_make_fixtures(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    path = Path(__file__).resolve().parents[2] / "scripts" / "make_fixtures.py"
+    spec = importlib.util.spec_from_file_location("make_fixtures_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)  # dataclasses resolve via sys.modules
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_make_fixtures_keeps_recordings_for_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # AI_PROMPTS §10.4: a RecordingProvider capture is reviewed by a human, so a write run of
+    # make_fixtures.py neither overwrites nor deletes it; --check keeps reporting it as drift.
+    mf = load_make_fixtures(monkeypatch)
+    assert mf.prompts_version() == prompt_loader.prompts_version()
+    shutil.copytree(mf.FIXTURES_DIR / "w2_form", tmp_path / "w2_form")
+    folder = tmp_path / "w2_form"
+    capture = json.dumps({"_meta": {"recorded_by": "recording_provider"}, "summary": {}})
+    (folder / "out.en.json").write_text(capture, "utf-8")  # in place of the template's output
+    (folder / "out.fr.json").write_text(capture, "utf-8")  # a language the template lacks
+    (folder / "out.es.json").write_text('{"_meta": {"recorded_by": "hand"}}', "utf-8")
+    monkeypatch.setattr(mf, "FIXTURES_DIR", tmp_path)
+    assert mf.main(["--only", "w2_form"]) == 0
+    assert (folder / "out.en.json").read_text("utf-8") == capture
+    assert (folder / "out.fr.json").read_text("utf-8") == capture
+    assert not (folder / "out.es.json").exists()  # a stray non-recording is still removed
+    assert mf.main(["--check", "--only", "w2_form"]) == 1
+    (folder / "out.en.json").unlink()
+    (folder / "out.fr.json").unlink()
+    assert mf.main(["--only", "w2_form"]) == 0
+    assert mf.main(["--check", "--only", "w2_form"]) == 0

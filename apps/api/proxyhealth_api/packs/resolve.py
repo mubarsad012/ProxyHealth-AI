@@ -5,8 +5,10 @@ Order: (1) ``data/languages.yaml`` — tag, English name, native name, the paren
 a region/script variant of a known primary tag ("es-MX") maps to it; (2) the fast model
 (``Task.resolve_language``) only for names the table does not know — its tag is accepted when it
 matches ``LanguageTag`` and ``confidence != low``; (3) otherwise the private-use ``x-<slug>`` of
-the typed name. A query with no letters at all ("123", "!!!") is ``422 language_unresolved``
-before any model call; a typed private tag ("x-foo") resolves to itself without one.
+the typed name, also when the model's answer is unusable or blocked (the ``502``/``422`` that
+``AIService`` raises never escape the route). A query with no letters at all ("123", "!!!") is
+``422 language_unresolved`` before any model call; a typed private tag ("x-foo") resolves to
+itself without one.
 """
 
 import hashlib
@@ -37,6 +39,7 @@ ALIASES: dict[str, str] = {
 }  # fmt: skip
 
 _NON_SLUG = re.compile(r"[^a-z0-9]+")
+_RESOLVE_SOFT_ERRORS = frozenset({ErrorCode.model_output_invalid, ErrorCode.content_blocked})
 _SLUG_MAX = 32
 
 
@@ -48,9 +51,11 @@ class Resolution:
     source: str  # "table" | "model" | "private"
     name_en: str
     name_native: str
-    direction: Direction = Direction.ltr
+    # ``None`` when nothing is known (a plain ``x-<slug>``): the generator then uses the chunk
+    # output's values after the AI_PROMPTS §7.6 sanity table.
+    direction: Direction | None = None
     script: str | None = None
-    digit_system: DigitSystem = DigitSystem.western
+    digit_system: DigitSystem | None = None
 
 
 def fold(text: str) -> str:
@@ -121,14 +126,22 @@ async def resolve_language(
     folded = fold(raw)
     if folded.startswith("x-") and is_valid_tag(folded) and folded == f"x-{slug}":
         return Resolution(tag=folded, source="private", name_en=raw, name_native=raw)
-    outcome = await ai.generate(
-        task=Task.resolve_language,
-        parts=[Part.of_text(resolve_prompt(raw))],
-        system=system_prompt(),
-        schema=LanguageResolveOut,
-        request_id=request_id,
-        hints={"language_query": raw},
-    )
+    private = Resolution(tag=f"x-{slug}", source="private", name_en=raw, name_native=raw)
+    try:
+        outcome = await ai.generate(
+            task=Task.resolve_language,
+            parts=[Part.of_text(resolve_prompt(raw))],
+            system=system_prompt(),
+            schema=LanguageResolveOut,
+            request_id=request_id,
+            hints={"language_query": raw},
+        )
+    except ApiError as exc:
+        # Unusable or blocked model output is not the user's fault: fall back to x-<slug>
+        # (AI_PROMPTS §7 step 2; CL-029(b)). Quota/upstream errors still propagate (429/503).
+        if exc.code in _RESOLVE_SOFT_ERRORS:
+            return private
+        raise
     out = outcome.result.parsed
     if isinstance(out, LanguageResolveOut):
         tag = (out.language_tag or "").strip()
@@ -150,4 +163,4 @@ async def resolve_language(
             tag=f"x-{slug}", source="private", name_en=raw, name_native=raw,
             direction=out.direction, script=out.script, digit_system=out.digit_system,
         )  # fmt: skip
-    return Resolution(tag=f"x-{slug}", source="private", name_en=raw, name_native=raw)
+    return private

@@ -1,15 +1,16 @@
 """Phrasing lint — information, not advice (D-17; DOCUMENT_TAXONOMY §8; AI_PROMPTS §11.9).
 
 Every model-authored sentence is linted against ``data/safety/phrasing.yaml`` (English always;
-the text's own language when the file has a section for it). A hit gets **one** rewrite through
-the caller's ``rewrite`` callable (task ``phrasing_rewrite``, template "The paper says X. A
-{professional} can tell you what it means for you."); the rewrite must pass the lint and contain
-no contact the original sentence did not already carry (contacts printed on the paper were vetted
-by ``contacts_filter.py`` and are left alone here). Otherwise the family's fixed hedge — an
-existing ``chat.refusal.*`` template via ``t`` — replaces the sentence; for ``dramatize`` the
-offending clause is deleted instead (and the sentence dropped when nothing remains). Each
-replacement counts in ``verification.phrasing_rewrites``. Fixed copy never passes through here;
-quotes never do either.
+the text's own language only when its section is reviewed, i.e. ``reviewed_by`` is set —
+otherwise English only plus ``phrasing_lint_unavailable``, TAXONOMY §8.1/§8.6). A hit gets
+**one** rewrite through the caller's ``rewrite`` callable (task ``phrasing_rewrite``, template
+"The paper says X. A {professional} can tell you what it means for you."); the rewrite must
+pass the lint and contain no contact the original sentence did not already carry (contacts
+printed on the paper were vetted by ``contacts_filter.py`` and are left alone here). Otherwise
+the family's fixed hedge — an existing ``chat.refusal.*`` template via ``t`` — replaces the
+sentence; for ``dramatize`` the offending clause is deleted instead (and the sentence dropped
+when nothing remains). Each replacement counts in ``verification.phrasing_rewrites``. Fixed
+copy never passes through here; quotes never do either.
 """
 
 from __future__ import annotations
@@ -75,6 +76,9 @@ class PhrasingConfig:
     professional_words: tuple[str, ...]
     languages: Mapping[str, tuple[Family, ...]]
     reviewed_by: Mapping[str, str | None]
+    # §8.3 attribution exemption per language (``languages.<tag>.attribution_regex``), used on
+    # top of the English ``attribution`` when that language's families are linted.
+    attribution_by_language: Mapping[str, re.Pattern[str]] = field(default_factory=dict)
 
 
 def _compile(p: str) -> re.Pattern[str]:
@@ -85,7 +89,10 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
     """Compile a loaded ``phrasing.yaml`` mapping (raises on a bad regex)."""
     languages: dict[str, tuple[Family, ...]] = {}
     reviewed: dict[str, str | None] = {}
+    attribution: dict[str, re.Pattern[str]] = {}
     for tag, raw in (data.get("languages") or {}).items():
+        if raw.get("attribution_regex"):
+            attribution[str(tag)] = _compile(str(raw["attribution_regex"]))
         fams: list[Family] = []
         for f in raw.get("families") or []:
             words = f.get("medical_words")
@@ -109,6 +116,7 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
         professional_words=tuple(str(w).lower() for w in data.get("professional_words") or []),
         languages=languages,
         reviewed_by=reviewed,
+        attribution_by_language=attribution,
     )
 
 
@@ -125,12 +133,14 @@ def _base(tag: str | None) -> str | None:
 def lint_languages(
     language: str | None, cfg: PhrasingConfig | None = None
 ) -> tuple[list[str], bool]:
-    """(languages to lint with, ``unavailable``): ``en`` plus the text's language when listed."""
+    """(languages to lint with, ``unavailable``): ``en`` plus the text's language when its
+    section is reviewed (TAXONOMY §8.1/§8.6: an unlisted *or unreviewed* language lints English
+    only, and the caller warns ``phrasing_lint_unavailable``)."""
     c = cfg or load_config()
     tags = ["en"]
     if language and _base(language) != "en":
         match = next((t for t in c.languages if t == language or _base(t) == _base(language)), None)
-        if match is None:
+        if match is None or not c.reviewed_by.get(match):
             return tags, True
         tags.append(match)
     return tags, False
@@ -141,9 +151,19 @@ def split_sentences(text: str) -> list[str]:
     return [s for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s]
 
 
-def is_attributed(sentence: str, cfg: PhrasingConfig | None = None) -> bool:
-    """True when the sentence reports what the paper says ("The letter says …", "It says …")."""
-    return bool((cfg or load_config()).attribution.search(normalize(sentence)))
+def is_attributed(
+    sentence: str, cfg: PhrasingConfig | None = None, languages: Sequence[str] = ("en",)
+) -> bool:
+    """True when the sentence reports what the paper says ("The letter says …", "It says …";
+    "La carta dice …" with the ``es`` section's own ``attribution_regex``)."""
+    c = cfg or load_config()
+    text = normalize(sentence)
+    if c.attribution.search(text):
+        return True
+    return any(
+        (rx := c.attribution_by_language.get(tag)) is not None and rx.search(text)
+        for tag in languages
+    )
 
 
 def lint_sentence(
@@ -163,7 +183,7 @@ def lint_sentence(
     """
     c = cfg or load_config()
     text = normalize(sentence)
-    attributed = is_attributed(text, c)
+    attributed = is_attributed(text, c, languages)
     hits: list[str] = []
     for tag in languages:
         for fam in c.languages.get(tag, ()):
@@ -264,7 +284,7 @@ async def enforce(
     """Lint every sentence of one model-authored string; rewrite once, else hedge.
 
     ``language`` is the language the string is written in (``summary.body`` → target language,
-    ``body_en`` → ``en``); an unlisted language lints English only and warns
+    ``body_en`` → ``en``); an unlisted or unreviewed language lints English only and warns
     ``phrasing_lint_unavailable``. ``rewrite`` is optional: without it (or when it returns
     ``None``/a still-failing sentence) the fixed hedge is used directly.
     """

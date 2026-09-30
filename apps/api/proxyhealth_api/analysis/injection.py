@@ -22,7 +22,7 @@ from typing import Any
 
 import yaml
 
-from proxyhealth_api.analysis.i18n import Translator
+from proxyhealth_api.analysis.i18n import Translator, english_translator
 from proxyhealth_api.analysis.transcript import Transcript
 from proxyhealth_api.analysis.verify import normalize
 from proxyhealth_api.contracts.analysis import RedFlag
@@ -137,10 +137,12 @@ def mask_boxes(transcript: Transcript, hit_ids: Sequence[str]) -> MaskPlan:
 def injection_red_flag(
     transcript: Transcript, hit_ids: Sequence[str], t: Translator | None = None
 ) -> RedFlag:
-    """The ``injection_suspected`` red flag (text ``warning.injection_masked`` in the pack)."""
+    """The ``injection_suspected`` red flag: text = ``t_server("warning.injection_masked")``
+    (AI_PROMPTS §11.8); without ``t`` the English pack's text, never the raw key."""
     ids = transcript.existing(hit_ids)
+    text = (t or english_translator())(WARNING_KEY)
     return RedFlag(
-        kind=RedFlagKind.injection_suspected, text=t(WARNING_KEY) if t else WARNING_KEY,
+        kind=RedFlagKind.injection_suspected, text=text,
         source_quote=None, span_ids=ids, page=transcript.page_of(ids), severity=Severity.medium,
         fixed_copy_key=None, verified=True,
     )  # fmt: skip

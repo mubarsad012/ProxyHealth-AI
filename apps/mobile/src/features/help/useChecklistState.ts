@@ -4,11 +4,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { vault } from '@/storage';
+import type { Vault } from '@/storage';
+import { useVault } from '@/storage/StorageProvider';
 
 const memory = new Map<string, Record<string, boolean>>();
 
-async function isSaved(documentId: string): Promise<boolean> {
+async function isSaved(vault: Vault, documentId: string): Promise<boolean> {
   try {
     return (await vault.documents.get(documentId)) !== null;
   } catch {
@@ -22,6 +23,7 @@ export interface ChecklistStateApi {
 }
 
 export function useChecklistState(documentId: string | null): ChecklistStateApi {
+  const vault = useVault();
   const memKey = documentId ?? '__help_tab__';
   const [state, setState] = useState<Record<string, boolean>>(() => memory.get(memKey) ?? {});
 
@@ -29,7 +31,7 @@ export function useChecklistState(documentId: string | null): ChecklistStateApi 
     let cancelled = false;
     if (!documentId) return;
     (async () => {
-      if (!(await isSaved(documentId))) return;
+      if (!(await isSaved(vault, documentId))) return;
       try {
         const stored = await vault.checklist.get(documentId);
         if (!cancelled) {
@@ -44,7 +46,7 @@ export function useChecklistState(documentId: string | null): ChecklistStateApi 
     return () => {
       cancelled = true;
     };
-  }, [documentId, memKey]);
+  }, [vault, documentId, memKey]);
 
   const toggle = useCallback(
     (id: string, checked: boolean) => {
@@ -55,7 +57,7 @@ export function useChecklistState(documentId: string | null): ChecklistStateApi 
       });
       if (documentId) {
         void (async () => {
-          if (await isSaved(documentId)) {
+          if (await isSaved(vault, documentId)) {
             try {
               await vault.checklist.set(documentId, id, checked);
             } catch {
@@ -65,7 +67,7 @@ export function useChecklistState(documentId: string | null): ChecklistStateApi 
         })();
       }
     },
-    [documentId, memKey],
+    [vault, documentId, memKey],
   );
 
   return { state, toggle };

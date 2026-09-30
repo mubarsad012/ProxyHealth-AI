@@ -4,6 +4,7 @@
 // an `ApiError`; transport failures become `code: 'network'`, aborts `code: 'timeout'`.
 
 import { ApiError, apiErrorFromStatus, timeoutError, toApiError } from '@/api/errors';
+import { useSession } from '@/store/session';
 import type {
   AnalysisResult,
   AnalyzeRequest,
@@ -162,6 +163,17 @@ async function parseErrorBody(res: Response): Promise<ErrorResponse | null> {
   }
 }
 
+/**
+ * CL-039: after a `quota_exhausted` error remember until when the helper is busy
+ * (now + `retry_after_seconds`) so S3 can show `home.busy_until`. Memory only (session store).
+ */
+export function noteQuotaCooling(err: ApiError, now: number = Date.now()): void {
+  if (!err.isQuotaExhausted()) return;
+  const seconds = err.retryAfterSeconds;
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return;
+  useSession.getState().setQuotaCoolingUntil(new Date(now + seconds * 1000).toISOString());
+}
+
 export function createClient(options: CreateClientOptions): ApiClient {
   const doFetch: typeof fetch = options.fetch ?? ((...args) => fetch(...args));
   const newRequestId = options.newRequestId ?? fallbackRequestId;
@@ -211,8 +223,11 @@ export function createClient(options: CreateClientOptions): ApiClient {
     const retryAfter = res.headers.get('Retry-After');
     const requestId = res.headers.get('X-Request-Id');
     const envelope = await parseErrorBody(res);
-    if (envelope) throw ApiError.fromErrorResponse(res.status, envelope, { retryAfterHeader: retryAfter });
-    throw apiErrorFromStatus(res.status, { retryAfterHeader: retryAfter, requestId });
+    const err = envelope
+      ? ApiError.fromErrorResponse(res.status, envelope, { retryAfterHeader: retryAfter })
+      : apiErrorFromStatus(res.status, { retryAfterHeader: retryAfter, requestId });
+    noteQuotaCooling(err);
+    throw err;
   }
 
   async function json<T>(res: Response): Promise<T> {

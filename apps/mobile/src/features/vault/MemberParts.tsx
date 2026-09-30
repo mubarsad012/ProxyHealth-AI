@@ -8,8 +8,8 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { BigButton } from '@/design/components/BigButton';
 import { Icon } from '@/design/components/Icon';
 import { AppText } from '@/design/components/Text';
-import { useTheme } from '@/design/theme';
-import { radius, size, space } from '@/design/tokens';
+import { useScaled, useTheme } from '@/design/theme';
+import { radius, size, space, type as typeScale } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import type { Member } from '@/storage/index';
@@ -74,6 +74,44 @@ export function MemberChip({ member, selected, onPress, testID }: MemberChipProp
   );
 }
 
+export interface ColorSwatchesProps {
+  value: string;
+  onChange(color: string): void;
+  /** Each swatch gets `${testID}-${index}`. */
+  testID?: string;
+}
+
+/** The `member.color` ("Change color") label and the 8-swatch radiogroup (Add someone, S13). */
+export function ColorSwatches({ value, onChange, testID = 'member-color' }: ColorSwatchesProps) {
+  const t = useT();
+  const { colors } = useTheme();
+  const dir = useDirection();
+  return (
+    <>
+      <AppText weight="bold">{t('member.color')}</AppText>
+      <View role="radiogroup" accessibilityLabel={t('member.color')} style={[styles.swatches, { flexDirection: dir.row }]}>
+        {MEMBER_COLORS.map((c, i) => {
+          const on = c.toLowerCase() === value.toLowerCase();
+          return (
+            <Pressable
+              key={c}
+              testID={`${testID}-${i}`}
+              role="radio"
+              aria-checked={on}
+              accessibilityState={{ checked: on }}
+              accessibilityLabel={`${t('member.color')} ${i + 1}`}
+              hitSlop={size.hitSlop / 2}
+              onPress={() => onChange(c)}
+              style={[styles.swatch, { backgroundColor: c, borderColor: on ? colors.text : 'transparent' }]}>
+              {on ? <Icon name="check" color="#FFFFFF" /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
+  );
+}
+
 export interface MemberFormProps {
   initialName?: string;
   initialColor: string;
@@ -87,6 +125,7 @@ export function MemberForm({ initialName = '', initialColor, submitLabel, onSubm
   const { colors } = useTheme();
   const dir = useDirection();
   const [name, setName] = useState(initialName);
+  const scaled = useScaled();
   const [color, setColor] = useState(initialColor);
   const clean = cleanMemberName(name);
   return (
@@ -102,28 +141,18 @@ export function MemberForm({ initialName = '', initialColor, submitLabel, onSubm
           placeholderTextColor={colors.textMuted}
           accessibilityLabel={t('member.name')}
           autoCapitalize="words"
-          style={[styles.input, { color: colors.text, borderColor: colors.border, textAlign: dir.textAlign }]}
+          style={[
+            styles.input,
+            {
+              color: colors.text,
+              borderColor: colors.border,
+              textAlign: dir.textAlign,
+              fontSize: scaled(typeScale.size.body),
+            },
+          ]}
         />
       </View>
-      <AppText weight="bold">{t('member.color')}</AppText>
-      <View role="radiogroup" accessibilityLabel={t('member.color')} style={[styles.swatches, { flexDirection: dir.row }]}>
-        {MEMBER_COLORS.map((c, i) => {
-          const on = c === color;
-          return (
-            <Pressable
-              key={c}
-              role="radio"
-              aria-checked={on}
-              accessibilityState={{ checked: on }}
-              accessibilityLabel={`${t('member.color')} ${i + 1}`}
-              hitSlop={size.hitSlop / 2}
-              onPress={() => setColor(c)}
-              style={[styles.swatch, { backgroundColor: c, borderColor: on ? colors.text : 'transparent' }]}>
-              {on ? <Icon name="check" color="#FFFFFF" /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
+      <ColorSwatches value={color} onChange={setColor} />
       <BigButton
         testID="member-form-submit"
         label={submitLabel}
@@ -189,7 +218,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
-    fontSize: 18,
   },
   swatches: {
     flexWrap: 'wrap',

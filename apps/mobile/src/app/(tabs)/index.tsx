@@ -1,8 +1,12 @@
 // S3 — Home (PRODUCT_SPEC S3): one obvious 72 pt action, banners (offline → unpaid → sample mode →
 // web session-only), the next-date card (`useNextDate`, → S14), four 56 pt tiles, the trust footer.
-// Web: "Take a photo" / "Pick a photo or PDF" call the picker as the first statement of the press
-// handler (browser gesture rule). Consent missing → the CTA opens S2. Unpaid/mixed tier → real
+// Web: "Take a photo" calls the picker as the first statement of the press handler (browser gesture
+// rule): `takePhoto` (camera `<input capture>`) on touch browsers, the library picker otherwise.
+// "Pick a photo or PDF" opens a two-button chooser (photos · one PDF); each button calls its picker
+// as its first statement, and the chooser closes once the picker settles. Consent missing → the CTA opens S2. Unpaid/mixed tier → real
 // papers are off and the sample tile leads. `?sample=1` (from S2) or sample mode opens the picker.
+// Quota cooling: after a recent `429 quota_exhausted` the CTA keeps working and shows
+// `home.busy_until` (the shared signal is `session.quotaCoolingUntil`, CL-039).
 
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -22,10 +26,11 @@ import { radius, size, space } from '@/design/tokens';
 import { openSample } from '@/features/demo/openSample';
 import { SamplePickerSheet } from '@/features/demo/SamplePicker';
 import { useSampleMode } from '@/features/demo/useSampleMode';
+import { Sheet } from '@/features/vault/Sheet';
 import { useConsentDecision } from '@/features/onboarding/consentState';
-import { formatDay } from '@/features/reminders/format';
+import { formatClock, formatDay } from '@/features/reminders/format';
 import { useReminderTapRouting } from '@/features/reminders/useReminderTapRouting';
-import { usePickImage } from '@/features/scan';
+import { pagesAfterPick, usePickImage } from '@/features/scan';
 import { useDocuments, useNextDate } from '@/features/vault/hooks';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
@@ -35,6 +40,16 @@ import { useSettings } from '@/store/settings';
 
 const isWeb = Platform.OS === 'web';
 let pickerShownThisSession = false;
+
+/** Web on a phone/tablet browser (coarse pointer): the CTA opens the camera (PRODUCT_SPEC S4). */
+function touchBrowser(): boolean {
+  if (!isWeb || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
 
 function openPicked(pending: Promise<CapturedPage[]>): void {
   pending
@@ -47,6 +62,21 @@ function openPicked(pending: Promise<CapturedPage[]>): void {
       router.push('/scan/review' as Href);
     })
     .catch(() => undefined);
+}
+
+/** `session.quotaCoolingUntil` (CL-039 → WP4), read defensively so Home works before it lands;
+ *  null once the time has passed (a timer re-renders at that moment). */
+function useQuotaCoolingUntil(): string | null {
+  const until = useSession((s) => (s as { quotaCoolingUntil?: string | null }).quotaCoolingUntil ?? null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!until) return undefined;
+    const ms = Date.parse(until) - Date.now();
+    if (!(ms > 0)) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(ms + 500, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [until]);
+  return until && Date.parse(until) > now ? until : null;
 }
 
 function NextDateCard() {
@@ -83,15 +113,19 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const dir = useDirection();
   const params = useLocalSearchParams<{ sample?: string }>();
-  const { tier } = useServerConfig();
+  const { tier, config } = useServerConfig();
   const { online } = useOnline();
   const decision = useConsentDecision((s) => s.decision);
   const consent = useSession((s) => s.consent);
   const webPersist = useSettings((s) => s.webPersist);
+  const tag = useSettings((s) => s.languageTag);
+  const coolingUntil = useQuotaCoolingUntil();
   const sample = useSampleMode();
   const picker = usePickImage();
   const { rows } = useDocuments();
   const [manualOpen, setManualOpen] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [pickMessage, setPickMessage] = useState<string | null>(null);
   const [autoDismissed, setAutoDismissed] = useState(false);
   // Judging builds / sample mode: the picker is open when Home first appears (once per session).
   // (the Settings toggle / judging-build default only — not the mock server's forced sample mode).
@@ -118,17 +152,41 @@ export default function HomeScreen() {
       return;
     }
     if (isWeb) {
-      openPicked(picker.pickFromLibrary(e));
+      openPicked(touchBrowser() ? picker.takePhoto(e) : picker.pickFromLibrary(e));
       return;
     }
     router.push('/scan/capture' as Href);
   };
-  const pick = (e?: GestureResponderEvent) => {
+  const pick = () => {
     if (!consentOk) {
       router.push('/onboarding/consent' as Href);
       return;
     }
-    openPicked(picker.pickFromLibrary(e));
+    setPickMessage(null);
+    setChooserOpen(true);
+  };
+  // Chooser buttons: the picker call is the first statement (web gesture rule); the sheet stays
+  // open while the system picker is up and closes when it settles.
+  const chooseImages = (e: GestureResponderEvent) => {
+    const pending = picker.pickFromLibrary(e);
+    pending.finally(() => setChooserOpen(false)).catch(() => undefined);
+    openPicked(pending);
+  };
+  const choosePdf = (e: GestureResponderEvent) => {
+    const pending = picker.pickPdf(e);
+    pending.finally(() => setChooserOpen(false)).catch(() => undefined);
+    openPicked(
+      pending.then((pdf) => {
+        if (!pdf) return [];
+        const outcome = pagesAfterPick([], [pdf], config?.limits ?? null);
+        if (outcome.kind === 'too_large') {
+          const mb = Math.floor((config?.limits.max_pdf_bytes ?? 12582912) / 1048576);
+          setPickMessage(t('err.payload_too_large', { max_pdf_mb: mb }));
+          return [];
+        }
+        return outcome.pages;
+      }),
+    );
   };
   const newest = [...rows].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
   const clerkHref = newest ? `/result/${encodeURIComponent(newest.id)}/clerk` : '/result/generic/clerk';
@@ -164,6 +222,7 @@ export default function HomeScreen() {
           size={72}
           disabled={unpaid && consentOk}
           accessibilityHint={t('home.scan_hint')}
+          sublabel={coolingUntil ? t('home.busy_until', { time: formatClock(coolingUntil, tag) }) : undefined}
           onPress={scan}
         />
         {!online ? <AppText color="textMuted">{t('home.offline_line')}</AppText> : null}
@@ -184,6 +243,11 @@ export default function HomeScreen() {
         disabled={unpaid && consentOk}
         onPress={pick}
       />
+      {pickMessage ? (
+        <AppText role="status" weight="bold">
+          {pickMessage}
+        </AppText>
+      ) : null}
       <Tile
         testID="home-tile-troubleshoot"
         title={t('home.tile_troubleshoot')}
@@ -215,6 +279,28 @@ export default function HomeScreen() {
           </AppText>
         </View>
       </View>
+      <Sheet
+        visible={chooserOpen}
+        title={t('home.tile_pick')}
+        onClose={() => setChooserOpen(false)}
+        testID="home-pick-chooser">
+        <BigButton
+          testID="home-pick-photos"
+          label={t('capture.pick_from_photos')}
+          icon="image"
+          variant="secondary"
+          size={56}
+          onPress={chooseImages}
+        />
+        <BigButton
+          testID="home-pick-pdf"
+          label={t('capture.pick_pdf')}
+          icon="papers"
+          variant="secondary"
+          size={56}
+          onPress={choosePdf}
+        />
+      </Sheet>
       <SamplePickerSheet
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}

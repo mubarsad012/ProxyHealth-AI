@@ -2,7 +2,7 @@
 
 import type { Cost, LinkHealth, Resource } from '@/api/types';
 import { formatPhone } from '@/features/quicksheet/contacts';
-import { BASE_STRINGS, languageInfoFor } from '@/i18n/store';
+import { BASE_STRINGS, keyExists, languageInfoFor } from '@/i18n/store';
 
 export type T = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -31,6 +31,16 @@ export function daysBetween(fromIso: string, now: Date): number {
 
 export function isStale(verifiedOn: string, now: Date = new Date()): boolean {
   return daysBetween(verifiedOn, now) > STALE_DAYS;
+}
+
+/**
+ * Pack key for a result's fixed disclaimer. `DisclaimerKind` also carries banner-only kinds
+ * (`machine_translation`, `demo_sample`…) that have no `disclaimer.*` line; those fall back to
+ * the general-information line so a raw key is never shown.
+ */
+export function disclaimerKey(kind: string | null | undefined): string {
+  const key = `disclaimer.${kind ?? 'general_information'}`;
+  return keyExists(key) ? key : 'disclaimer.general_information';
 }
 
 export function isVisible(resource: Resource): boolean {

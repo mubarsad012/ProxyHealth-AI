@@ -1,7 +1,8 @@
-// S13 — Member detail (PRODUCT_SPEC S13): initials + colour header, "Change name", this person's
-// papers, "Move all papers", and "Delete {name} and all their papers" behind a confirm (per-member
-// wipe). "Me" can be renamed but never deleted. Changing a member's colour needs a vault call the
-// §4.2 `Vault` interface does not have yet (CL filed to WP4), so the colour is shown, not edited.
+// S13 — Member detail (PRODUCT_SPEC S13): initials + colour header, "Change name", "Change color"
+// (the Add-someone swatches; `vault.members.recolor`, CL-036), this person's papers, "Move all
+// papers", and "Delete {name} and all their papers" behind a confirm (per-member wipe). "Me" can be
+// renamed and recoloured but never deleted. "Me" is created on the first save (§9.2), so "Change
+// name" and "Change color" appear once that row exists.
 
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
@@ -11,8 +12,8 @@ import { BigButton } from '@/design/components/BigButton';
 import { Screen } from '@/design/components/Screen';
 import { EmptyState } from '@/design/components/States';
 import { Heading } from '@/design/components/Text';
-import { useTheme } from '@/design/theme';
-import { radius, size, space } from '@/design/tokens';
+import { useScaled, useTheme } from '@/design/theme';
+import { radius, size, space, type as typeScale } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import { useVault } from '@/storage/StorageProvider';
@@ -20,8 +21,8 @@ import { useVault } from '@/storage/StorageProvider';
 import { deleteMember, moveDocuments } from './actions';
 import { DocumentList } from './DocumentList';
 import { useDocuments, useMembers } from './hooks';
-import { Avatar, MemberPickerSheet } from './MemberParts';
-import { cleanMemberName, isMe, MEMBER_NAME_MAX, memberName } from './members';
+import { Avatar, ColorSwatches, MemberPickerSheet } from './MemberParts';
+import { cleanMemberName, emptyVaultText, isMe, MEMBER_NAME_MAX, memberName } from './members';
 import { ConfirmDialog } from './Sheet';
 import { bumpVault } from './store';
 
@@ -34,7 +35,11 @@ export function MemberScreen({ memberId }: { memberId: string }) {
   const { rows, loading } = useDocuments({ memberId });
   const member = members.find((m) => m.id === memberId) ?? null;
   const name = memberName(member, t);
+  // `withMe` shows a placeholder "Me" (createdAt '') until the first save creates the row.
+  const canRename = member !== null && member.createdAt !== '';
+  const scaled = useScaled();
   const [draft, setDraft] = useState<string | null>(null);
+  const [recoloring, setRecoloring] = useState(false);
   const [moving, setMoving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -46,6 +51,13 @@ export function MemberScreen({ memberId }: { memberId: string }) {
     setDraft(null);
   };
 
+  const recolor = async (color: string) => {
+    setRecoloring(false);
+    if (member && color.toLowerCase() === member.color.toLowerCase()) return;
+    await vault.members.recolor(memberId, color);
+    bumpVault();
+  };
+
   return (
     <Screen title={name} back testID="member-screen">
       <View style={[styles.header, { flexDirection: dir.row }]}>
@@ -54,7 +66,7 @@ export function MemberScreen({ memberId }: { memberId: string }) {
           <Heading level={2}>{name}</Heading>
         </View>
       </View>
-      {draft === null ? (
+      {!canRename ? null : draft === null ? (
         <BigButton
           testID="member-rename"
           label={t('member.rename')}
@@ -72,7 +84,15 @@ export function MemberScreen({ memberId }: { memberId: string }) {
             placeholder={t('member.name')}
             placeholderTextColor={colors.textMuted}
             accessibilityLabel={t('member.rename')}
-            style={[styles.input, { color: colors.text, borderColor: colors.border, textAlign: dir.textAlign }]}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                borderColor: colors.border,
+                textAlign: dir.textAlign,
+                fontSize: scaled(typeScale.size.body),
+              },
+            ]}
           />
           <BigButton
             label={t('btn.save')}
@@ -85,13 +105,34 @@ export function MemberScreen({ memberId }: { memberId: string }) {
           <BigButton label={t('btn.cancel')} variant="secondary" size={56} onPress={() => setDraft(null)} />
         </View>
       )}
+      {!canRename || !member ? null : !recoloring ? (
+        <BigButton
+          testID="member-recolor"
+          label={t('member.color')}
+          variant="secondary"
+          size={56}
+          onPress={() => setRecoloring(true)}
+        />
+      ) : (
+        <View style={styles.form} testID="member-recolor-panel">
+          <ColorSwatches testID="member-recolor-swatch" value={member.color} onChange={(c) => void recolor(c)} />
+          <BigButton label={t('btn.cancel')} variant="secondary" size={56} onPress={() => setRecoloring(false)} />
+        </View>
+      )}
       {!loading && rows.length === 0 ? (
-        <EmptyState icon="papers" text={t('vault.empty')} />
+        <EmptyState icon="papers" text={emptyVaultText(t)} />
       ) : (
         <DocumentList rows={rows} members={members} showMember={false} />
       )}
       {rows.length > 0 && members.length > 1 ? (
-        <BigButton label={t('btn.move_all')} icon="people" variant="secondary" size={56} onPress={() => setMoving(true)} />
+        <BigButton
+          testID="member-move-all"
+          label={t('btn.move_all')}
+          icon="people"
+          variant="secondary"
+          size={56}
+          onPress={() => setMoving(true)}
+        />
       ) : null}
       {isMe(memberId) || !member ? null : (
         <BigButton
@@ -155,6 +196,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
-    fontSize: 18,
   },
 });

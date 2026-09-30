@@ -8,10 +8,10 @@ import { useVault } from '@/storage/StorageProvider';
 
 import { sortRows } from './documents';
 import { withMe } from './members';
-import { type NextDate, pickNextDate } from './nextDate';
+import { type NextDate, pickNextDate, reminderDocumentIds } from './nextDate';
 import { useVaultVersion } from './store';
 
-export { NEXT_DATE_WINDOW_DAYS, type NextDate, pickNextDate } from './nextDate';
+export { NEXT_DATE_WINDOW_DAYS, type NextDate, pickNextDate, reminderDocumentIds } from './nextDate';
 
 function useLoad<T>(initial: T, load: () => Promise<T>, deps: unknown[]): { value: T; loading: boolean } {
   const [state, setState] = useState<{ value: T; loading: boolean }>({ value: initial, loading: true });
@@ -84,7 +84,7 @@ export function useAllReminders(): { reminders: Reminder[]; loading: boolean } {
   return { reminders: value, loading };
 }
 
-/** The next upcoming date across stored papers and own reminders (Home "next date" card). */
+/** The soonest date within 30 days that has a switched-on reminder (Home "next date" card). */
 export function useNextDate(): { documentId: string; title: string; dateIso: string } | null {
   const vault = useVault();
   const version = useVaultVersion((s) => s.version);
@@ -92,7 +92,9 @@ export function useNextDate(): { documentId: string; title: string; dateIso: str
     null,
     async () => {
       const [rows, reminders] = await Promise.all([vault.documents.list(), vault.reminders.list()]);
-      return pickNextDate(rows, reminders, new Date());
+      const ids = reminderDocumentIds(reminders);
+      const docs = await Promise.all(ids.map((id) => vault.documents.get(id).catch(() => null)));
+      return pickNextDate(rows, reminders, new Map(ids.map((id, i) => [id, docs[i]])), new Date());
     },
     [vault, version],
   );

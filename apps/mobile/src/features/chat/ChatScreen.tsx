@@ -3,7 +3,7 @@
 // every assistant bubble. `ChatAnswer.safety.emergency` opens the S19 card over the chat.
 
 import { type Href, router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { AnalysisResult, ChatAnswer } from '@/api/types';
@@ -18,6 +18,7 @@ import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { emergencyTrigger } from '@/features/emergency';
+import { useTtsFallbackNotice } from '@/features/speech';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
@@ -46,6 +47,8 @@ function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: Analysi
   const a = turn.answer;
   const lines = a ? assistantLines(a, t) : [turn.text];
   const text = lines.join(' ');
+  // Honest TTS line (D-26) under this bubble's speaker when the pack's own voice is missing.
+  const voice = useTtsFallbackNotice(meta.tag);
   return (
     <View
       testID={`chat-${turn.id}`}
@@ -78,23 +81,35 @@ function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: Analysi
       ) : null}
       {mine ? null : (
         <View style={[styles.tools, { flexDirection: dir.row }]}>
-          <SpeakButton text={text} lang={meta.tag} />
+          <SpeakButton text={text} lang={meta.tag} onResolved={voice.onResolved} />
           <View style={styles.flex}>
             <FeedbackRow surface="chat" documentType={analysis.document_type} documentCategory={analysis.category} modelId={a?.model_meta.model_id ?? null} />
           </View>
         </View>
       )}
+      {!mine && voice.notice ? (
+        <AppText variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
+          {voice.notice}
+        </AppText>
+      ) : null}
     </View>
   );
 }
 
-export function ChatScreen({ analysis }: { analysis: AnalysisResult }) {
+export interface ChatScreenProps {
+  analysis: AnalysisResult;
+  /** A prompt tapped on S7 (`?q=`): asked once when the screen opens online. */
+  initialQuestion?: string | null;
+}
+
+export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
   const { online } = useOnline();
   const chat = useChat(analysis);
   const [draft, setDraft] = useState('');
+  const askedInitial = useRef(false);
   const last = [...chat.turns].reverse().find((x) => x.answer)?.answer ?? null;
   const chips = last?.suggested_questions.length ? last.suggested_questions : starterQuestions(analysis, t);
 
@@ -108,6 +123,15 @@ export function ChatScreen({ analysis }: { analysis: AnalysisResult }) {
       if (trig.triggered) router.push(`/emergency?kinds=${trig.kinds.join(',')}` as Href);
     });
   };
+
+  useEffect(() => {
+    const q = initialQuestion?.trim();
+    if (!q || askedInitial.current || !online) return;
+    askedInitial.current = true;
+    ask(q);
+    // `ask` is recreated every render; the ref makes this run once per screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuestion, online]);
 
   const footer = (
     <View style={styles.inputWrap}>

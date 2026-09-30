@@ -1295,7 +1295,7 @@ well_known_ids:           # §4.7 verbatim
    verified_on: 2026-09-23, verification_method: browser, link_health: js_rendered,
    x_meta: {source: "resources.md §1C (browser 2026-09-23); fetch 2026-09-27 → HTTP 200 shell, title 'Find a Health Center'", notes: "Well-known id: fallback_health."}}
 - {id: healthcare_gov, name: "HealthCare.gov (Health Insurance Marketplace)", org_type: government, cost: free, priority: 55,
-   url: "https://www.healthcare.gov/", alt_urls: ["https://www.healthcare.gov/medicaid-chip/"], phone: "+18003185596", hours: "24/7", languages: [en, es, interpreters_200+],
+   url: "https://www.healthcare.gov/", alt_urls: ["https://www.healthcare.gov/medicaid-chip/"], phone: "+18003182596", tty: "+18558894325", hours: "24/7", languages: [en, es, interpreters_200+],
    serves: {scope: national}, tags: [medicaid_renewal, insurance_denial, benefits_navigation], warnings: [hr1_coverage_changes],
    what_it_does: {en: "Apply for health coverage, find local help (navigators), and apply for Medicaid or CHIP any time of year. Call center 1-800-318-2596."},
    eligibility_plain: {en: "Anyone. Coverage rules for many immigrants changed in 2026 and 2027; a navigator can say what applies."},

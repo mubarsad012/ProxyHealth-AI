@@ -1,4 +1,4 @@
-"""``ai/prompts/**`` == the ``text prompt:`` blocks of ``docs/AI_PROMPTS.md`` §5 (AI_PROMPTS §13)."""
+"""``ai/prompts/**`` == the ``text prompt:`` blocks of ``docs/AI_PROMPTS.md`` §5 (§13 there)."""
 
 import re
 from pathlib import Path

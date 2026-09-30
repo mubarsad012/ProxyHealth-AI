@@ -3,17 +3,17 @@
   "category": "employment",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a tax form from my employer (W-2 or 1099) - what the boxes mean",
+    "english": "Hello. I speak English. I am here about: a tax form from my employer from Sample Hardware Store LLC. I need help with: a tax form from my employer (W-2 or 1099) - what the boxes mean. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a tax form from my employer (W-2 or 1099) - what the boxes mean"
+    "translated": "Hello. I speak English. I am here about: a tax form from my employer from Sample Hardware Store LLC. I need help with: a tax form from my employer (W-2 or 1099) - what the boxes mean. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [],
   "detected_language": "en",
-  "disclaimer_kind": "general_information",
+  "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "general_information",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "w2_1099",
@@ -277,9 +277,9 @@
           "text": "Department of the Treasury - Internal Revenue Service"
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -307,7 +307,7 @@
       "span_ids": [
         "p1b1"
       ],
-      "text": "A free tax-help site or a tax professional can explain the boxes with you."
+      "text": "A free tax-help site or a tax professional can explain the boxes with you. A licensed lawyer or a DOJ-accredited representative can advise you about your case. Find one in Get help."
     }
   ],
   "quality": {
@@ -361,7 +361,7 @@
     "days_until": null,
     "driving_demand_id": null,
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
+    "headline_key": "urgency.info.no_action",
     "headline_params": {},
     "level": "info",
     "nearest_date_iso": null,
@@ -374,7 +374,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

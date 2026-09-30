@@ -3,7 +3,7 @@
 
 import { Image } from 'expo-image';
 import { type Href, router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
 import type { ApiError } from '@/api/errors';
@@ -14,6 +14,8 @@ import { ErrorState } from '@/design/components/States';
 import { AppText } from '@/design/components/Text';
 import { space } from '@/design/tokens';
 import { useAnalyze } from '@/features/analysis/useAnalyze';
+import { ConsentScreen, TABS_HREF } from '@/features/onboarding/ConsentScreen';
+import { useConsentDecision } from '@/features/onboarding/consentState';
 import { useI18n } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
 import { newId } from '@/lib/ids';
@@ -39,10 +41,27 @@ function saveForLater() {
   s.enqueueOfflineScan({ id: newId(), pages: s.pages, targetLanguage: useI18n.getState().tag, memberId: null, queuedAt: new Date().toISOString() });
 }
 
+/** S6 `428` row: after S2 is accepted, retry the request once; any other exit goes where S2 says. */
+export function consentThenRetry(opts: {
+  href: Href;
+  accepted: boolean;
+  alreadyRetried: boolean;
+  retry(): void;
+  navigate(href: Href): void;
+}): 'retried' | 'navigated' {
+  if (opts.accepted && !opts.alreadyRetried && opts.href === TABS_HREF) {
+    opts.retry();
+    return 'retried';
+  }
+  opts.navigate(opts.href);
+  return 'navigated';
+}
+
 export function ReadingScreen() {
   const t = useT();
   const run = useAnalyze();
   const started = useRef(false);
+  const [retriedAfterConsent, setRetriedAfterConsent] = useState(false);
   const pages = useSession((s) => s.pages);
   const isSample = useSession((s) => Boolean(s.demoSampleId));
   const { start, status, result } = run;
@@ -61,6 +80,26 @@ export function ReadingScreen() {
     run.cancel();
     backToReview();
   };
+
+  if (status === 'error' && run.error?.isConsentRequired() && !retriedAfterConsent) {
+    // 428 → S2 inline (WP4's screen), then one automatic retry of the same pages.
+    return (
+      <ConsentScreen
+        navigate={(href) =>
+          consentThenRetry({
+            href,
+            accepted: useConsentDecision.getState().decision === 'accepted',
+            alreadyRetried: retriedAfterConsent,
+            retry: () => {
+              setRetriedAfterConsent(true);
+              start();
+            },
+            navigate: (h) => router.replace(h),
+          })
+        }
+      />
+    );
+  }
 
   if (status === 'error' && run.error) {
     return (
@@ -122,6 +161,7 @@ function ReadingError({ error, onRetry, sample }: { error: ApiError; onRetry(): 
     );
   }
   const offlineLike = error.isOffline() || error.isQuotaExhausted() || error.code === 'upstream_unavailable';
+  const call211 = () => void Linking.openURL('tel:211').catch(() => undefined);
   return (
     <View style={styles.stack}>
       <ErrorState
@@ -135,9 +175,14 @@ function ReadingError({ error, onRetry, sample }: { error: ApiError; onRetry(): 
               }
             : undefined
         }
-        onCall211={() => void Linking.openURL('tel:211').catch(() => undefined)}
+        onCall211={call211}
         onTrySample={() => router.replace('/?sample=1' as Href)}
       />
+      {/* BUILD_PLAN §5.6: the network state offers Call 211 too; WP4's ErrorState shows it only for
+          quota/upstream errors, so it is added here for network/timeout (CL line in DECISIONS §14). */}
+      {error.isOffline() ? (
+        <BigButton testID="reading-call-211" label={t('btn.call_211')} icon="phone" variant="secondary" size={56} onPress={call211} />
+      ) : null}
       {BACK_TO_PAGES.has(error.code) ? (
         <BigButton label={t('btn.back')} icon="arrow-back" variant="secondary" size={56} onPress={backToReview} />
       ) : null}

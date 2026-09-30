@@ -139,6 +139,9 @@ export const vault: Vault = {
     async rename(id, name) {
       await (await db()).runAsync('UPDATE members SET name = ? WHERE id = ?', name.slice(0, 40), id);
     },
+    async recolor(id, color) {
+      await (await db()).runAsync('UPDATE members SET color = ? WHERE id = ?', color, id);
+    },
     async remove(id, wipeDocuments) {
       if (id === ME_MEMBER_ID) return; // "Me" cannot be deleted (PRODUCT_SPEC §9.2)
       const d = await db();

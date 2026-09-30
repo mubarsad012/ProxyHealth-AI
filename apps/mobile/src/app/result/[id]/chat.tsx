@@ -1,4 +1,4 @@
-// S9 — Ask about this paper (`/result/[id]/chat`).
+// S9 — Ask about this paper (`/result/[id]/chat`, `?q=<prompt tapped on S7>`).
 
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 
@@ -10,7 +10,7 @@ import { useT } from '@/i18n/useT';
 
 export default function ChatRoute() {
   const t = useT();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, q } = useLocalSearchParams<{ id: string; q?: string }>();
   const { analysis, loading } = useAnalysisFor(String(id ?? ''));
   if (!analysis) {
     return (
@@ -21,5 +21,5 @@ export default function ChatRoute() {
       </Screen>
     );
   }
-  return <ChatScreen analysis={analysis} />;
+  return <ChatScreen analysis={analysis} initialQuestion={typeof q === 'string' ? q : null} />;
 }

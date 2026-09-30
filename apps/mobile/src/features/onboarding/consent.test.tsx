@@ -5,20 +5,23 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 import type { ApiClient } from '@/api/client';
 import { ApiError } from '@/api/errors';
-import { resetServerConfigSession } from '@/api/config';
+import { installIdForRequests, resetServerConfigSession } from '@/api/config';
 import type { ServerConfig } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
 import { consentStore } from '@/storage/consent';
 import { kv, KV_KEYS } from '@/storage/kv';
+import { wipeEverything } from '@/storage/wipe';
 import { useSession } from '@/store/session';
 
 import { consentView, startRoute } from './consentModel';
 import { ConsentScreen } from './ConsentScreen';
-import { resetConsentState, useConsentDecision } from './consentState';
+import { declineConsent, loadConsent, resetConsentState, useConsentDecision, withdrawConsent } from './consentState';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+// "Delete everything" cancels notifications first; keep the real module (Expo Go push warning) out.
+jest.mock('expo-notifications', () => ({ cancelAllScheduledNotificationsAsync: jest.fn(async () => undefined) }));
 
 const keys = (tier: Parameters<typeof consentView>[0]['tier'], platform: 'ios' | 'web' = 'ios', masking = true) =>
   consentView({ tier, platform, features: { hide_parts_server_masking: masking } }).lines.map((l) => l.key);
@@ -86,6 +89,44 @@ describe('startRoute (S0)', () => {
     expect(startRoute({ ...base, serverConsentVersion: '2026-10-01' })).toBe('/onboarding/consent');
     expect(startRoute({ ...base, tier: 'demo' })).toBe('/onboarding/consent');
     expect(startRoute({ ...base, tier: 'unknown', serverConsentVersion: null })).toBe('/(tabs)');
+  });
+});
+
+describe('Delete everything forgets the consent decision (S17 item 8, COMPLIANCE_PRIVACY §9.5)', () => {
+  beforeEach(async () => {
+    resetConsentState();
+    useSession.getState().reset();
+    await kv.clearAll();
+  });
+
+  const routeAfterLanguage = () =>
+    startRoute({
+      languageDecided: true,
+      decision: useConsentDecision.getState().decision,
+      record: useSession.getState().consent,
+      serverConsentVersion: null,
+      tier: 'unknown',
+    });
+
+  it.each([
+    ['not_now', declineConsent],
+    ['withdrawn', withdrawConsent],
+  ] as const)('after %s, a wipe sends the user back through S2', async (seen, choose) => {
+    await loadConsent();
+    await choose();
+    expect(useConsentDecision.getState().decision).toBe(seen);
+    await wipeEverything();
+    expect(useConsentDecision.getState().decision).toBe('none');
+    await loadConsent();
+    expect(useConsentDecision.getState().decision).toBe('none');
+    expect(useConsentDecision.getState().loaded).toBe(true);
+    expect(routeAfterLanguage()).toBe('/onboarding/consent');
+  });
+
+  it('creates no install id after "Not now" (CL-010: only at acceptance)', async () => {
+    await declineConsent();
+    expect(await installIdForRequests()).toBeNull();
+    expect(await kv.get(KV_KEYS.installId)).toBeNull();
   });
 });
 
@@ -177,5 +218,20 @@ describe('<ConsentScreen>', () => {
     expect(await kv.getJSON<{ decision: string }>(KV_KEYS.consentDecision)).toMatchObject({ decision: 'not_now' });
     expect(useConsentDecision.getState().decision).toBe('not_now');
     expect(navigate).toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('cached paid config but unreachable server → still "Cannot confirm" with Continue disabled', async () => {
+    await kv.setJSON(KV_KEYS.serverConfig, { ...demoConfig(), provider: 'gemini', data_use_tier: 'paid' });
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <AppProviders client={configClient(null)} staticMetrics>
+        <ConsentScreen navigate={jest.fn()} />
+      </AppProviders>,
+    );
+    expect(await findByTestId('tier-badge-unknown')).toBeTruthy();
+    expect(queryByTestId('tier-badge-paid')).toBeNull();
+    expect(useSession.getState().tier).toBe('unknown');
+    // The cached config stays for display-only rows (S17 `state.cached`).
+    expect(useSession.getState().serverConfig?.data_use_tier).toBe('paid');
+    expect(getByTestId('consent-continue').props.accessibilityState).toMatchObject({ disabled: true });
   });
 });

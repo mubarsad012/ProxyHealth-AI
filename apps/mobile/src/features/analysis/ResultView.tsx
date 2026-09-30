@@ -3,7 +3,7 @@
 // unverified section → Card 3 → details → glossary → questions → red flags → help preview →
 // ask → footer (AI-generated + verify-with-sender + "Was this clear?").
 
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { AnalysisResult } from '@/api/types';
 import { Banner, type BannerKind } from '@/design/components/Banner';
@@ -11,9 +11,11 @@ import { BigButton } from '@/design/components/BigButton';
 import { FeedbackRow } from '@/design/components/FeedbackRow';
 import { AppText } from '@/design/components/Text';
 import { UrgencyBanner } from '@/design/components/UrgencyBanner';
-import { space } from '@/design/tokens';
+import { useTheme } from '@/design/theme';
+import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { SpeakRow } from '@/features/speech/SpeakRow';
+import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import type { CapturedPage } from '@/store/session';
 
@@ -52,9 +54,16 @@ const TONE_KIND: Record<BannerSpec['tone'], BannerKind> = {
   info: 'demo',
 };
 
+/** S7 item 16: the first two `questions_to_ask` offered as one-tap prompts for S9. */
+export function askPrompts(a: Pick<AnalysisResult, 'questions_to_ask'>): string[] {
+  return a.questions_to_ask.map((q) => q.trim()).filter(Boolean).slice(0, 2);
+}
+
 export function ResultView({ analysis, pages, handlers, offline }: ResultViewProps) {
   const t = useT();
   const meta = usePackMeta();
+  const dir = useDirection();
+  const { colors } = useTheme();
   const emergency = useEmergencyTrigger(analysis.safety);
   const cardProps = { analysis, pages, handlers };
   const driving = drivingDemand(analysis);
@@ -108,6 +117,24 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
             onPress={() => handlers.onAsk?.()}
           />
           {offline ? <AppText color="textMuted">{t('state.offline_disabled')}</AppText> : null}
+          {askPrompts(analysis).length ? (
+            <View style={[styles.prompts, { flexDirection: dir.row }]}>
+              {askPrompts(analysis).map((q, i) => (
+                <Pressable
+                  key={`${i}-${q}`}
+                  testID={`ask-prompt-${i}`}
+                  role="button"
+                  accessibilityLabel={q}
+                  disabled={offline}
+                  onPress={() => handlers.onAsk?.(q)}
+                  style={[styles.prompt, { borderColor: colors.primary, opacity: offline ? 0.5 : 1 }]}>
+                  <AppText variant="caption" color="primary" weight="bold" lang={analysis.target_language}>
+                    {q}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
       <View testID="result-footer" style={styles.footer}>
@@ -136,6 +163,17 @@ const styles = StyleSheet.create({
   },
   ask: {
     gap: space.xs,
+  },
+  prompts: {
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  prompt: {
+    minHeight: size.minTouch,
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.md,
   },
   footer: {
     gap: space.sm,

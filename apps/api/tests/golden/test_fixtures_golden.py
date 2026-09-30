@@ -4,16 +4,20 @@ For every fixture × recorded language: the recorded output validates, every quo
 the page (WP2's ``verify.py`` rejects nothing), no prose carries a contact that is not printed,
 and ``run_analysis`` / ``run_troubleshoot`` through the mock return a valid result with the
 expected readability, demand count and single model call. The Appendix D urgency / date-kind /
-scam / fixed-notice / clerk expectations need WP2's §11 pipeline modules and are marked
-``xfail(strict=False)`` until those modules exist on disk; the resource-order checks call WP3's
+scam / fixed-notice / clerk expectations run through WP2's real §11 pipeline with no
+expected-failure markers (a mismatch is a real failure); the resource-order checks call WP3's
 matcher directly.
 """
 
+from datetime import UTC, datetime, time
 from pathlib import Path
 
 import pytest
 
+from proxyhealth_api.analysis.deadline_rules import apply_deadline_rules, context_for
+from proxyhealth_api.analysis.scam import score_transcript
 from proxyhealth_api.analysis.transcript import assemble_transcript
+from proxyhealth_api.analysis.urgency import compute_urgency
 from proxyhealth_api.analysis.verify import normalize, verify_demands, verify_red_flags
 from proxyhealth_api.contracts.enums import DemandKind, DocumentType, ResourceTag, ScamRisk
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, TroubleshootModelOut
@@ -22,8 +26,6 @@ from proxyhealth_api.resources.matcher import match
 from tests.golden._fixtures_wp7 import (
     RESOURCES,
     RULES,
-    WP2_PIPELINE,
-    DepsUnavailable,
     analyze,
     cases,
     contacts_in,
@@ -33,11 +35,6 @@ from tests.golden._fixtures_wp7 import (
     screenshot_cases,
     troubleshoot,
 )
-
-needs_wp2 = pytest.mark.xfail(
-    not WP2_PIPELINE, reason="needs WP2 §11 pipeline modules (urgency, deadline_rules, scam, "
-    "fixed_notices, clerk, contacts_filter)", strict=False,
-)  # fmt: skip
 
 
 def analysis_out(fid: str, lang: str) -> AnalysisModelOut:
@@ -136,10 +133,7 @@ def test_fixed_red_flags_have_expected_severity(fid: str) -> None:
 @pytest.mark.parametrize(("fid", "lang"), document_cases())
 async def test_pipeline_result_shape(fid: str, lang: str, tmp_path: Path) -> None:
     fx = fixture(fid)
-    try:
-        result, calls = await analyze(fx, lang, tmp_path)
-    except DepsUnavailable as exc:
-        pytest.xfail(f"PipelineDeps needs {exc} (WP2 in progress)")
+    result, calls = await analyze(fx, lang, tmp_path)
     exp = fx.expected
     assert result.document_type == fx.manifest.document_type
     assert result.quality.readable is exp.get("readable", True)
@@ -151,14 +145,10 @@ async def test_pipeline_result_shape(fid: str, lang: str, tmp_path: Path) -> Non
         assert calls == exp["model_calls"]
 
 
-@needs_wp2
 @pytest.mark.parametrize(("fid", "lang"), document_cases())
 async def test_appendix_d_expectations(fid: str, lang: str, tmp_path: Path) -> None:
     fx = fixture(fid)
-    try:
-        result, _ = await analyze(fx, lang, tmp_path)
-    except DepsUnavailable as exc:
-        pytest.xfail(f"PipelineDeps needs {exc} (WP2 in progress)")
+    result, _ = await analyze(fx, lang, tmp_path)
     exp = fx.expected
     assert result.urgency.level in exp["urgency_level"]
     if "nearest_date_iso" in exp:
@@ -203,10 +193,7 @@ async def test_appendix_d_expectations(fid: str, lang: str, tmp_path: Path) -> N
 @pytest.mark.parametrize(("fid", "lang"), screenshot_cases())
 async def test_troubleshoot_golden(fid: str, lang: str, tmp_path: Path) -> None:
     fx = fixture(fid)
-    try:
-        result = await troubleshoot(fx, lang, tmp_path)
-    except DepsUnavailable as exc:
-        pytest.xfail(f"PipelineDeps needs {exc} (WP2 in progress)")
+    result = await troubleshoot(fx, lang, tmp_path)
     exp = fx.expected
     targets = [s.ui_target_as_written for s in result.steps if s.ui_target_as_written]
     assert targets == exp["steps_targets"]
@@ -261,37 +248,27 @@ def test_expected_resource_in_preview(fid: str, resource_id: str) -> None:
 @pytest.mark.parametrize("fid", sorted({fid for fid, _ in document_cases()}))
 def test_validators_compose_to_appendix_d(fid: str) -> None:
     """Runs verify → deadline_rules → urgency → scam on the English output without the pipeline,
-    so the fixture data is checked against WP2's real validators before the pipeline is wired.
-    An import/signature mismatch (WP2 still moving) xfails; a wrong level or kind fails."""
+    so the fixture data is checked against WP2's real validators independently of the wiring."""
     fx = fixture(fid)
     out = analysis_out(fid, "en")
-    try:
-        from datetime import UTC, datetime, time
-
-        from proxyhealth_api.analysis.deadline_rules import apply_deadline_rules, context_for
-        from proxyhealth_api.analysis.scam import score_transcript
-        from proxyhealth_api.analysis.urgency import compute_urgency
-
-        transcript = assemble_transcript(out.blocks, pages_received=fx.manifest.pages)
-        checked = verify_demands(out.demands, transcript)
-        now = datetime.combine(fx.today, time(14, 0), tzinfo=UTC)
-        ctx = context_for(
-            document_type=out.document_type, rules=RULES.deadline_rules(), now=now,
-            state=fx.expected.get("state"), language=out.detected_language,
-            transcript_text=transcript.full_text,
-        )  # fmt: skip
-        demands = apply_deadline_rules(checked.verified, checked.sources, ctx, transcript)
-        urgency = compute_urgency(
-            out.document_type, out.category, demands, emergency=False, today=ctx.today
-        ).urgency
-        flags = verify_red_flags(out.red_flags, transcript).flags
-        scam = score_transcript(
-            transcript, document_type=out.document_type, sender_kind=out.sender_kind,
-            sender_as_written=out.sender_as_written, model_flags=flags,
-            model_signals=out.scam_signals, demands=demands,
-        )  # fmt: skip
-    except (ImportError, TypeError, AttributeError) as exc:
-        pytest.xfail(f"WP2 validator API not settled: {exc!r}")
+    transcript = assemble_transcript(out.blocks, pages_received=fx.manifest.pages)
+    checked = verify_demands(out.demands, transcript)
+    now = datetime.combine(fx.today, time(14, 0), tzinfo=UTC)
+    ctx = context_for(
+        document_type=out.document_type, rules=RULES.deadline_rules(), now=now,
+        state=fx.expected.get("state"), language=out.detected_language,
+        transcript_text=transcript.full_text,
+    )  # fmt: skip
+    demands = apply_deadline_rules(checked.verified, checked.sources, ctx, transcript)
+    urgency = compute_urgency(
+        out.document_type, out.category, demands, emergency=False, today=ctx.today
+    ).urgency
+    flags = verify_red_flags(out.red_flags, transcript).flags
+    scam = score_transcript(
+        transcript, document_type=out.document_type, sender_kind=out.sender_kind,
+        sender_as_written=out.sender_as_written, model_flags=flags,
+        model_signals=out.scam_signals, demands=demands,
+    )  # fmt: skip
     exp = fx.expected
     assert urgency.level in exp["urgency_level"], urgency
     if "nearest_date_iso" in exp:

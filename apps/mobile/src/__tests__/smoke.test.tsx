@@ -1,9 +1,10 @@
 // Shell smoke test (BUILD_PLAN §5.5 template table, day 2): the provider stack renders a real WP4
 // screen (Settings tab) in English with no network, and the S0 redirect lands on the `(tabs)`
 // Home route with the JS tab bar. Home itself (`(tabs)/index.tsx`) is WP6's screen, so the router
-// test mounts a placeholder for it.
+// test mounts a placeholder for it. The S17 → S1 → S17 round trip must leave one tabs navigator.
 
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+import { Stack } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
@@ -13,6 +14,7 @@ import { ApiError } from '@/api/errors';
 import TabsLayout from '@/app/(tabs)/_layout';
 import SettingsScreen from '@/app/(tabs)/settings';
 import Index from '@/app/index';
+import LanguageRoute from '@/app/onboarding/language';
 import { AppProviders } from '@/design/components/Providers';
 import { resetConsentState } from '@/features/onboarding/consentState';
 import { consentStore } from '@/storage/consent';
@@ -44,6 +46,25 @@ function offlineClient(): ApiClient {
   };
 }
 
+function placeholder(label: string) {
+  function Placeholder() {
+    return <Text>{label}</Text>;
+  }
+  return Placeholder;
+}
+
+function RootStackLayout() {
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return (
+    <AppProviders client={offlineClient()} staticMetrics>
+      {children}
+    </AppProviders>
+  );
+}
+
 describe('mobile shell smoke', () => {
   it('renders the Settings tab inside the provider stack, offline, in English', async () => {
     const { getByText, getByTestId } = await render(
@@ -65,12 +86,6 @@ describe('S0 redirect into the tabs group', () => {
     useSettings.setState({ hydrated: true, languageDecided: true, languageTag: 'en' });
     resetConsentState();
     await consentStore.setNotNow();
-    const placeholder = (label: string) => {
-      function Placeholder() {
-        return <Text>{label}</Text>;
-      }
-      return Placeholder;
-    };
     const screen = await renderRouter(
       {
         index: Index,
@@ -118,5 +133,50 @@ describe('S0 redirect into the tabs group', () => {
     );
     expect(await screen.findByText('Language screen')).toBeTruthy();
     expect(screen.queryByText('Settings screen')).toBeNull();
+  });
+});
+
+describe('S17 → S1 → S17 language change', () => {
+  it('returns to the same Settings screen instead of stacking a second (tabs) navigator', async () => {
+    useSettings.setState({ hydrated: true, languageDecided: true, languageTag: 'en' });
+    resetConsentState();
+    await consentStore.setNotNow();
+    // With RNTL v14 `renderRouter` returns the render promise with the router accessors attached
+    // to the promise itself, so keep both.
+    const rendered = renderRouter(
+      {
+        _layout: RootStackLayout,
+        '(tabs)/_layout': TabsLayout,
+        '(tabs)/index': placeholder('Home screen'),
+        '(tabs)/papers': placeholder('Papers screen'),
+        '(tabs)/help': placeholder('Help screen'),
+        '(tabs)/settings': SettingsScreen,
+        'onboarding/language': LanguageRoute,
+      },
+      { initialUrl: '/settings', wrapper },
+    );
+    const screen = await rendered;
+    expect(await screen.findByTestId('settings-screen')).toBeTruthy();
+    const rootRoutes = () => {
+      const state = rendered.getRouterState();
+      const root = state?.routes[0]?.state ?? state;
+      return (root?.routes ?? []).map((r) => ({ name: r.name, key: r.key }));
+    };
+    const before = rootRoutes();
+    expect(before.map((r) => r.name)).toEqual(['(tabs)']);
+
+    await fireEvent.press(screen.getByTestId('settings-language-row'));
+    expect(await screen.findByTestId('language-screen')).toBeTruthy();
+    expect(rendered.getPathname()).toBe('/onboarding/language');
+    expect(rootRoutes().map((r) => r.name)).toEqual(['(tabs)', 'onboarding/language']);
+
+    await fireEvent.press(screen.getByTestId('lang-chip-en'));
+    await fireEvent.press(screen.getByTestId('lang-continue'));
+    await screen.findByTestId('settings-screen');
+    expect(rendered.getPathname()).toBe('/settings');
+    // The original (tabs) route is reused (same key): no hidden second tabs navigator underneath.
+    expect(rootRoutes()).toEqual(before);
+    expect(screen.getAllByTestId('tab-settings', { includeHiddenElements: true })).toHaveLength(1);
+    expect(screen.queryByTestId('language-screen', { includeHiddenElements: true })).toBeNull();
   });
 });

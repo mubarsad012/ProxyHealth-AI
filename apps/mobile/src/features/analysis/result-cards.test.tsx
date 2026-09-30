@@ -16,6 +16,7 @@ import medicaidPrs from '../../../assets/fixtures/medicaid_address_confirmation.
 import rfeEn from '../../../assets/fixtures/uscis_rfe_87d.result.en.json';
 import rfePrs from '../../../assets/fixtures/uscis_rfe_87d.result.prs.json';
 import { ResultView } from './ResultView';
+import { drivingDemand } from './urgencyCopy';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -154,6 +155,18 @@ describe.each(CASES)('ResultView renders the %s golden', (_name, raw, lang) => {
     expect(queryByTestId('remind-u1')).toBeNull();
     expect(queryByTestId('demand-u1')).toBeNull();
     expect(within(getByTestId('card-asking-for')).queryByText('Pay a fee')).toBeNull();
+  });
+});
+
+describe('drivingDemand', () => {
+  it('returns the driving demand only when it is verified', () => {
+    const a = asResult(medicaidEn);
+    const id = a.demands[0].id;
+    a.urgency = { ...a.urgency, driving_demand_id: id };
+    a.demands[0] = { ...a.demands[0], verified: true };
+    expect(drivingDemand(a)?.id).toBe(id);
+    a.demands[0] = { ...a.demands[0], verified: false };
+    expect(drivingDemand(a)).toBeNull();
   });
 });
 

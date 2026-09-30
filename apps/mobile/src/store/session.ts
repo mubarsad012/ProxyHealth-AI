@@ -56,6 +56,9 @@ export interface SessionState {
   tier: UiTier;
   clerkMode: boolean;
   offlineQueue: QueuedScan[];
+  /** ISO time until which the helper is out of quota (now + `retry_after_seconds` after a
+   *  `quota_exhausted` error; set by `api/client.ts`, read by S3 `home.busy_until` — CL-039). */
+  quotaCoolingUntil: string | null;
 }
 
 export interface SessionActions {
@@ -72,6 +75,7 @@ export interface SessionActions {
   setClerkMode(on: boolean): void;
   enqueueOfflineScan(scan: QueuedScan): void;
   dequeueOfflineScan(id: string): void;
+  setQuotaCoolingUntil(iso: string | null): void;
   reset(): void;
 }
 
@@ -86,6 +90,7 @@ export const initialSessionState: SessionState = {
   tier: 'unknown',
   clerkMode: false,
   offlineQueue: [],
+  quotaCoolingUntil: null,
 };
 
 export const useSession = create<SessionStore>()((set) => ({
@@ -106,6 +111,7 @@ export const useSession = create<SessionStore>()((set) => ({
   enqueueOfflineScan: (scan) => set((s) => ({ offlineQueue: [...s.offlineQueue, scan] })),
   dequeueOfflineScan: (id) =>
     set((s) => ({ offlineQueue: s.offlineQueue.filter((q) => q.id !== id) })),
+  setQuotaCoolingUntil: (quotaCoolingUntil) => set({ quotaCoolingUntil }),
   reset: () => set({ ...initialSessionState }),
 }));
 

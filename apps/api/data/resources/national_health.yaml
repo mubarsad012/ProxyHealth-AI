@@ -8,12 +8,12 @@
    verified_on: 2026-09-23, verification_method: browser, link_health: js_rendered,
    x_meta: {source: "resources.md §1C (browser 2026-09-23); fetch 2026-09-27 → HTTP 200 shell, title 'Find a Health Center'", notes: "Well-known id: fallback_health."}}
 - {id: healthcare_gov, name: "HealthCare.gov (Health Insurance Marketplace)", org_type: government, cost: free, priority: 55,
-   url: "https://www.healthcare.gov/", alt_urls: ["https://www.healthcare.gov/medicaid-chip/"], phone: "+18003185596", hours: "24/7", languages: [en, es, interpreters_200+],
+   url: "https://www.healthcare.gov/", alt_urls: ["https://www.healthcare.gov/medicaid-chip/"], phone: "+18003182596", tty: "+18558894325", hours: "24/7", languages: [en, es, interpreters_200+],
    serves: {scope: national}, tags: [medicaid_renewal, insurance_denial, benefits_navigation], warnings: [hr1_coverage_changes],
    what_it_does: {en: "Apply for health coverage, find local help (navigators), and apply for Medicaid or CHIP any time of year. Call center 1-800-318-2596."},
    eligibility_plain: {en: "Anyone. Coverage rules for many immigrants changed in 2026 and 2027; a navigator can say what applies."},
    verified_on: 2026-09-27, verification_method: fetched, link_health: ok,
-   x_meta: {source: "resources.md §1C; both URLs fetched 2026-09-27 (phone confirmed)", notes: "Hours 24/7 and interpreter line are HealthCare.gov's long-standing call-center facts; confirm on re-verification. Do NOT link the lawfully-present-immigrants page (stale for H.R.1).", expect_text: ["1-800-318-2596"]}}
+   x_meta: {source: "resources.md §1C; both URLs fetched 2026-09-27; phone+TTY re-confirmed on healthcare.gov/contact-us 2026-09-29 (phone field had a 5596 typo)", notes: "Hours 24/7 and interpreter line are HealthCare.gov's long-standing call-center facts; confirm on re-verification. Do NOT link the lawfully-present-immigrants page (stale for H.R.1).", expect_text: ["1-800-318-2596"]}}
 - {id: medicaid_state, name: "Medicaid.gov: Where Can People Get Help With Medicaid & CHIP", org_type: directory, cost: free, priority: 85,
    url: "https://www.medicaid.gov/about-us/where-can-people-get-help-medicaid-chip", languages: [en, es],
    serves: {scope: national}, tags: [medicaid_renewal, benefits_navigation], status_note_key: hhs_funded_health,

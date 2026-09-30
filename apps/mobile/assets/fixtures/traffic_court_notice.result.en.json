@@ -3,9 +3,9 @@
   "category": "court",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a traffic or court notice - the court date or payment date on it",
+    "english": "Hello. I speak English. I am here about: a traffic court notice from General District Court of Sample County. I need help with: a traffic or court notice - the court date or payment date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a traffic or court notice - the court date or payment date on it"
+    "translated": "Hello. I speak English. I am here about: a traffic court notice from General District Court of Sample County. I need help with: a traffic or court notice - the court date or payment date on it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 13, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": "9:00 AM",
-        "value_iso": null
+        "value_iso": "2026-10-13"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "hearing_date",
       "source_quote": "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "The court date is October 13, 2026 at 9:00 AM, in Courtroom 2B.",
       "value_verbatim": "October 13, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -60,7 +60,7 @@
       ],
       "text": "The paper says you may prepay $156.00.",
       "value_verbatim": "$156.00",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -71,19 +71,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 9, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-09"
       },
       "documents": [],
       "id": "d3",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "payment_due",
       "source_quote": "This is a prepayable offense. You may prepay $156.00 by October 9, 2026 instead of coming to court.",
       "span_ids": [
@@ -91,7 +91,7 @@
       ],
       "text": "The paper gives October 9, 2026 as the last day to prepay.",
       "value_verbatim": "October 9, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -111,15 +111,15 @@
       ],
       "text": "Clerk's Office phone, from your paper: (703) 555-0137.",
       "value_verbatim": "(703) 555-0137",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "legal_information_only",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "traffic_court",
@@ -132,7 +132,7 @@
       "state": "VA",
       "zip3": null
     },
-    "has_case_number": false,
+    "has_case_number": true,
     "has_receipt_number": false,
     "institutions_as_written": [
       "General District Court of Sample County"
@@ -311,9 +311,9 @@
           "text": "Clerk's Office: (703) 555-0137"
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -366,9 +366,265 @@
     "Is an interpreter available in Courtroom 2B?",
     "How can I prepay the $156.00?"
   ],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": "fixed.traffic_court_immigration",
+      "kind": "other",
+      "page": null,
+      "severity": "high",
+      "source_quote": null,
+      "span_ids": [],
+      "text": "If you are not a U.S. citizen, talk to an immigration lawyer before you pay or plead guilty. Some tickets and court cases can affect an immigration case.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-traffic_court_notice-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": "lsc_restricted",
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Low-income people. Many listed offices get federal legal-aid funding and can only help certain immigrants."
+        },
+        "hours": null,
+        "id": "lawhelp",
+        "languages": [
+          "en",
+          "es"
+        ],
+        "link_health": "ok",
+        "name": "LawHelp.org",
+        "name_note": "Pro Bono Net",
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_proof_income"
+        ],
+        "priority": 60,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": "lsc_restricted",
+        "tags": [
+          "eviction",
+          "benefits_navigation",
+          "workers_rights",
+          "traffic_court"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.lawhelp.org/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Find free legal aid in your state and read self-help guides about housing, benefits and more."
+        }
+      },
+      "score": 3.8,
+      "why": [
+        "Made for this kind of paper",
+        "For court notices",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_traffic_court",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_a_number",
+          "text_en": "Your A-number (Alien Registration Number, 8 or 9 digits)"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Low-income immigrants. Each office sets its own rules."
+        },
+        "hours": null,
+        "id": "immlawhelp",
+        "languages": [
+          "en",
+          "es",
+          "ar",
+          "my",
+          "zh",
+          "fa",
+          "fr",
+          "ht",
+          "hmn",
+          "km",
+          "ko",
+          "ru",
+          "vi"
+        ],
+        "link_health": "ok",
+        "name": "ImmigrationLawHelp.org",
+        "name_note": "a Justicia Lab project, powered by probono.net (formerly Immigration Advocates Network)",
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_a_number",
+          "bring_proof_income"
+        ],
+        "priority": 90,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "immigration_legal_help",
+          "asylum",
+          "daca_tps",
+          "removal_proceedings",
+          "work_permit",
+          "green_card"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.immigrationlawhelp.org/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Finds free or low-cost nonprofit immigration legal help near you. Search by state, county, ZIP code or detention center, and by case type."
+        }
+      },
+      "score": 3.19,
+      "why": [
+        "Made for this kind of paper",
+        "For immigration legal help",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_immigration_legal_help",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_a_number",
+          "text_en": "Your A-number (Alien Registration Number, 8 or 9 digits)"
+        },
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Low-income immigrants in DC, Maryland and Virginia."
+        },
+        "hours": null,
+        "id": "ayuda",
+        "languages": [
+          "en",
+          "es",
+          "interpreters_200+"
+        ],
+        "link_health": "ok",
+        "name": "Ayuda",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "nonprofit",
+        "phone": "+17034447009",
+        "prepare_checklist_keys": [
+          "bring_notice",
+          "bring_a_number",
+          "bring_proof_income"
+        ],
+        "priority": 80,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "state",
+          "states": [
+            "VA",
+            "DC",
+            "MD"
+          ],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "immigration_legal_help",
+          "domestic_violence",
+          "language_access"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.ayuda.com/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Immigration and family/domestic-violence legal help, social services and interpreter help for low-income immigrants in DC, Maryland and Virginia. Virginia (Fairfax) 703-444-7009; DC 202-387-4848; Maryland 240-594-0600."
+        }
+      },
+      "score": 3.0,
+      "why": [
+        "For immigration legal help",
+        "Serves Virginia",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_immigration_legal_help",
+        "why.serves_your_state",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "traffic_court",
     "immigration_legal_help"
@@ -403,13 +659,16 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 7,
+    "driving_demand_id": "d3",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.high.date_soon",
+    "headline_params": {
+      "date": "October 9, 2026",
+      "date_iso": "2026-10-09"
+    },
+    "level": "high",
+    "nearest_date_iso": "2026-10-09",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -419,7 +678,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

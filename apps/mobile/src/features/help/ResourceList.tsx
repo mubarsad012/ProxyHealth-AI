@@ -11,7 +11,7 @@ import { space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 
-import { isVisible } from './format';
+import { disclaimerKey, isVisible } from './format';
 import { ResourceCard } from './ResourceCard';
 
 export interface ResourceListProps {
@@ -114,7 +114,7 @@ export function ResourceList({
       {(data.notes_keys ?? []).map((k) => (
         <InfoLine key={k} text={t(k)} />
       ))}
-      <InfoLine text={t(`disclaimer.${data.disclaimer_kind ?? 'general_information'}`)} />
+      <InfoLine text={t(disclaimerKey(data.disclaimer_kind))} />
     </View>
   );
 }

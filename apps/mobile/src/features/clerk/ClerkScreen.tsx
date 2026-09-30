@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AnalysisResult } from '@/api/types';
 import { BigButton } from '@/design/components/BigButton';
-import { Collapsible } from '@/design/components/Collapsible';
+import { Icon } from '@/design/components/Icon';
 import { AppText } from '@/design/components/Text';
 import { palette, radius, size, space } from '@/design/tokens';
 import { hasEnglishVoice } from '@/features/speech/fallback';
@@ -52,6 +52,38 @@ function CardText({ children, greeting }: { children: string; greeting?: boolean
       ]}>
       {children}
     </Text>
+  );
+}
+
+/** "What this card says" disclosure. WP4's `Collapsible` follows the app theme (light text in dark
+ *  mode), which vanishes on this forced white page, so the clerk screen draws its own with the
+ *  high-contrast palette in every colour scheme (S10, 7:1+). Same a11y contract as `Collapsible`. */
+function ClerkDisclosure({ title, children }: { title: string; children: string }) {
+  const [open, setOpen] = useState(false);
+  const dir = useDirection();
+  return (
+    <View testID="clerk-what-it-says">
+      <Pressable
+        role="button"
+        aria-expanded={open}
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={title}
+        hitSlop={size.hitSlop}
+        onPress={() => setOpen((v) => !v)}
+        style={({ pressed }) => [styles.disclosure, { flexDirection: dir.row, opacity: pressed ? 0.7 : 1 }]}>
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} color={HC.text} size={20} />
+        <View style={styles.flex}>
+          <AppText weight="bold" colorValue={HC.text}>
+            {title}
+          </AppText>
+        </View>
+      </Pressable>
+      {open ? (
+        <View style={styles.disclosureBody}>
+          <AppText colorValue={HC.text}>{children}</AppText>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -172,9 +204,7 @@ export function ClerkScreen({ analysis }: ClerkScreenProps) {
               void Clipboard.setStringAsync(clerkCopyText(card));
             }}
           />
-          <Collapsible title={t('clerk.what_it_says')}>
-            <AppText>{card.translated}</AppText>
-          </Collapsible>
+          <ClerkDisclosure title={t('clerk.what_it_says')}>{card.translated}</ClerkDisclosure>
           <LongPressExit onExit={exit} />
         </View>
       </ScrollView>
@@ -191,5 +221,8 @@ const styles = StyleSheet.create({
   presets: { gap: space.sm },
   chips: { flexWrap: 'wrap', gap: space.sm },
   chip: { minHeight: size.minTouch, justifyContent: 'center', borderWidth: 2, borderColor: HC.border, borderRadius: radius.pill, paddingHorizontal: space.md },
+  disclosure: { minHeight: size.minTouch, alignItems: 'center', gap: space.sm },
+  flex: { flex: 1 },
+  disclosureBody: { marginTop: space.sm, padding: space.lg, borderWidth: 2, borderColor: HC.border, borderRadius: radius.md, backgroundColor: HC.background },
   input: { minHeight: size.button, borderWidth: 2, borderColor: HC.border, borderRadius: radius.md, padding: space.md, fontSize: 18, color: HC.text },
 });

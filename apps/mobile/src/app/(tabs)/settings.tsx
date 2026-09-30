@@ -221,7 +221,7 @@ function DataSection() {
 
 export default function SettingsScreen() {
   const t = useT();
-  const { config } = useServerConfig();
+  const { config, cached } = useServerConfig();
   return (
     <Screen title={t('tabs.settings')} testID="settings-screen">
       <LanguageSection />
@@ -230,7 +230,7 @@ export default function SettingsScreen() {
       <ToneSection />
       <DataSection />
       <VaultAndDataSettings />
-      <AboutSection config={config} />
+      <AboutSection config={config} cached={cached} />
       {isProduction ? null : (
         <DeveloperSection
           apiUrl={env.apiUrl}

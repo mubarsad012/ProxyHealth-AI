@@ -3,9 +3,12 @@
 // `assets/fixtures` (synced by WP7). Real scans are NEVER faked: anything that is not a bundled
 // sample resolves to `null` and the caller shows the offline state.
 
-import { fixtureAssets, fixtureManifest } from '@/assets/fixtures';
 import type { ApiClient } from '@/api/client';
 import type { AnalysisResult, DemoFixture, TroubleshootResult } from '@/api/types';
+
+// Relative on purpose (CL-033): jest maps only `^@/(.*)$` → `src/$1`, and the fixtures live in
+// `apps/mobile/assets/fixtures`, outside `src/`.
+import { fixtureAssets, fixtureManifest } from '../../assets/fixtures';
 
 export type SampleResult = AnalysisResult | TroubleshootResult;
 

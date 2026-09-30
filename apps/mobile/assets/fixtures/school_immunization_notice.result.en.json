@@ -3,9 +3,9 @@
   "category": "school",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a school vaccine notice - which vaccines it lists and the date",
+    "english": "Hello. I speak English. I am here about: a school vaccine notice from Maple Grove Elementary School. I need help with: a school vaccine notice - which vaccines it lists and the date. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "a school vaccine notice - which vaccines it lists and the date"
+    "translated": "Hello. I speak English. I am here about: a school vaccine notice from Maple Grove Elementary School. I need help with: a school vaccine notice - which vaccines it lists and the date. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 23, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-23"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "response_due",
       "source_quote": "Please give the school a record of these vaccines by October 23, 2026.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "Give the school a record of the vaccines by October 23, 2026.",
       "value_verbatim": "October 23, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -61,7 +61,7 @@
       ],
       "text": "The school lists 2 vaccines: a Tdap booster and MMR dose 2.",
       "value_verbatim": "Tdap (tetanus, diphtheria, pertussis) booster",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -81,15 +81,15 @@
       ],
       "text": "School nurse phone, from your paper: (703) 555-0118.",
       "value_verbatim": "(703) 555-0118",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "general_information",
   "disclaimers": [
-    "general_information",
     "ai_generated",
+    "verify_with_sender",
     "demo_sample"
   ],
   "document_type": "immunization_notice",
@@ -299,9 +299,9 @@
           "text": "Questions? Call the school nurse at (703) 555-0118."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -358,7 +358,247 @@
   ],
   "red_flags": [],
   "request_id": "offline-school_immunization_notice-en",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_photo_id",
+          "text_en": "A photo ID (passport, driver's license, or Green Card)"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_vaccine_record",
+          "text_en": "Your child's vaccine record, if you have it"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone who got vaccines in that state."
+        },
+        "hours": null,
+        "id": "cdc_iis",
+        "languages": [
+          "en"
+        ],
+        "link_health": "ok",
+        "name": "CDC: Contacts for Immunization Records (state registries)",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "directory",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_photo_id"
+        ],
+        "priority": 75,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "vaccine_records",
+          "school_enrollment"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.cdc.gov/iis/contacts-locate-records/index.html",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Phone numbers and websites for each state's vaccine registry, where you can ask for a copy of your or your child's shot record."
+        }
+      },
+      "score": 5.75,
+      "why": [
+        "Made for this kind of paper",
+        "For vaccine records",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_vaccine_records",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_vaccine_record",
+          "text_en": "Your child's vaccine record, if you have it"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [
+          "https://www.immunize.org/official-guidance/state-policies/"
+        ],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Families enrolling a child."
+        },
+        "hours": null,
+        "id": "school_vaccine_requirements",
+        "languages": [
+          "en"
+        ],
+        "link_health": "ok",
+        "name": "CDC: State Vaccination Requirements for school and child care",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "government",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_vaccine_record"
+        ],
+        "priority": 55,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "vaccine_records",
+          "school_enrollment"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.cdc.gov/vaccines/php/requirements-laws/state-vaccination-requirements.html",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Which vaccines each state requires for school and child care, and the exemption rules (Immunize.org tables)."
+        }
+      },
+      "score": 5.55,
+      "why": [
+        "Made for this kind of paper",
+        "For vaccine records",
+        "Anywhere in the U.S.",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_vaccine_records",
+        "why.anywhere_in_us",
+        "why.speaks_your_language"
+      ]
+    },
+    {
+      "checklist": [
+        {
+          "key": "bring_proof_income",
+          "text_en": "Proof of income (pay stubs or last tax return)"
+        },
+        {
+          "key": "bring_photo_id",
+          "text_en": "A photo ID (passport, driver's license, or Green Card)"
+        },
+        {
+          "key": "bring_proof_address",
+          "text_en": "Proof of where you live (a bill or lease with your name)"
+        },
+        {
+          "key": "bring_notice",
+          "text_en": "This letter or notice"
+        },
+        {
+          "key": "bring_vaccine_record",
+          "text_en": "Your child's vaccine record, if you have it"
+        }
+      ],
+      "eligibility_note_key": "hhs_funded_health",
+      "resource": {
+        "alt_urls": [],
+        "cost": "sliding",
+        "eligibility_plain": {
+          "en": "Anyone living in the service area. Fees depend on family income."
+        },
+        "hours": null,
+        "id": "neighborhood_health",
+        "languages": [
+          "en",
+          "es",
+          "interpreters_200+"
+        ],
+        "link_health": "ok",
+        "name": "Neighborhood Health",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "fqhc",
+        "phone": "+17035355568",
+        "prepare_checklist_keys": [
+          "bring_proof_income",
+          "bring_photo_id",
+          "bring_proof_address"
+        ],
+        "priority": 80,
+        "serves": {
+          "cities": [],
+          "counties": [
+            "Alexandria City",
+            "Arlington",
+            "Fairfax"
+          ],
+          "scope": "county",
+          "states": [
+            "VA"
+          ],
+          "zip3": [
+            "222",
+            "223",
+            "220",
+            "221"
+          ]
+        },
+        "status_note_key": "hhs_funded_health",
+        "tags": [
+          "primary_care_uninsured",
+          "prescription_help",
+          "vaccine_records"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.neighborhoodhealthva.org/",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [],
+        "what_it_does": {
+          "en": "Community health center in Alexandria, Arlington and Fairfax: family medicine, children, pregnancy care, dental, mental health and pharmacy. Fees slide with income; no one is turned away for lack of insurance."
+        }
+      },
+      "score": 4.2,
+      "why": [
+        "For vaccine records",
+        "Check that they serve your area",
+        "Help in your language"
+      ],
+      "why_keys": [
+        "why.for_vaccine_records",
+        "why.check_service_area",
+        "why.speaks_your_language"
+      ]
+    }
+  ],
   "resource_tags": [
     "vaccine_records",
     "school_enrollment"
@@ -393,13 +633,16 @@
   "translation_confidence": "high",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 21,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.medium.date_soon",
+    "headline_params": {
+      "date": "October 23, 2026",
+      "date_iso": "2026-10-23"
+    },
+    "level": "medium",
+    "nearest_date_iso": "2026-10-23",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -409,7 +652,7 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
     "demo_sample"

@@ -14,3 +14,5 @@ export {
   type TranslateFn,
 } from './build';
 export { buildQuickSheetHtml, type QuickSheetFontFace, type QuickSheetHtmlOptions } from './html';
+export { downloadServerPdf, QUICKSHEET_PDF_FILENAME } from './serverPdf';
+export { canShareFiles, copyQuickSheetText, printHtmlInFrame, printQuickSheet, shareQuickSheetPdf } from './share';

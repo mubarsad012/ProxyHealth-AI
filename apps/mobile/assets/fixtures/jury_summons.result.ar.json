@@ -3,9 +3,9 @@
   "category": "civic",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a jury summons - answering the form before its due date",
+    "english": "Hello. I speak Arabic. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦ar⟧ a jury summons - answering the form before its due date"
+    "translated": "⟦ar⟧ Hello. I speak Arabic. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 23, 2026",
+        "kind": "stated",
+        "localized_line": "٢٠٢٦-١٠-٢٣",
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-23"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "response_due",
       "source_quote": "Please complete the Juror Qualification Questionnaire and return it by October 23, 2026.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "أجب على الاستبيان وأرسله قبل ٢٣ أكتوبر ٢٠٢٦.",
       "value_verbatim": "October 23, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -48,19 +48,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "November 16, 2026",
+        "kind": "stated",
+        "localized_line": "٢٠٢٦-١١-١٦",
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": "8:00 AM",
-        "value_iso": null
+        "value_iso": "2026-11-16"
       },
       "documents": [],
       "id": "d2",
       "kind": "appointment",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "appointment",
       "source_quote": "Report date: November 16, 2026 at 8:00 AM, Jury Assembly Room, Sample County Courthouse.",
       "span_ids": [
@@ -68,7 +68,7 @@
       ],
       "text": "يذكر الاستدعاء موعد الحضور في ١٦ نوفمبر ٢٠٢٦ الساعة ٨:٠٠ صباحًا.",
       "value_verbatim": "November 16, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -88,15 +88,15 @@
       ],
       "text": "هاتف مكتب المحلفين، من ورقتك: (703) 555-0181.",
       "value_verbatim": "(703) 555-0181",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
-  "disclaimer_kind": "general_information",
+  "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "general_information",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -276,9 +276,9 @@
           "text": "To ask for a new date or an excuse, call the Jury Office at (703) 555-0181."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -317,7 +317,7 @@
       "span_ids": [
         "p1b8"
       ],
-      "text": "إذا لم تكن متأكدًا من سؤال الجنسية، اسأل محاميًا مرخّصًا أو ممثلًا معتمدًا من وزارة العدل."
+      "text": "إذا لم تكن متأكدًا من سؤال الجنسية، اسأل محاميًا مرخّصًا أو ممثلًا معتمدًا من وزارة العدل. يمكن لمحامٍ مرخّص أو ممثل معتمد من DOJ أن ينصحك بشأن قضيتك. ابحث عن واحد في «مساعدة قريبة»."
     }
   ],
   "quality": {
@@ -332,9 +332,86 @@
     "كيف أعيد الاستبيان؟",
     "هل يوجد مترجم في المحكمة؟"
   ],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": "fixed.jury_summons",
+      "kind": "jury_citizenship_warning",
+      "page": null,
+      "severity": "high",
+      "source_quote": null,
+      "span_ids": [],
+      "text": "يجب أن ترد على هذه الاستمارة. إذا لم تكن مواطناً أمريكياً، ضع علامة على 'not a citizen' (لست مواطناً) وأعدها. لا تختر أبداً 'citizen' ولا تسجّل أبداً للتصويت — قد يضر ذلك بقضية الهجرة الخاصة بك بشكل دائم.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-jury_summons-ar",
-  "resource_preview": [],
+  "resource_preview": [
+    {
+      "checklist": [
+        {
+          "key": "bring_the_summons",
+          "text_en": "The summons or court paper"
+        }
+      ],
+      "eligibility_note_key": null,
+      "resource": {
+        "alt_urls": [],
+        "cost": "free",
+        "eligibility_plain": {
+          "en": "Anyone who received a jury summons."
+        },
+        "hours": null,
+        "id": "uscourts_jury",
+        "languages": [
+          "en"
+        ],
+        "link_health": "ok",
+        "name": "U.S. Courts: Juror Qualifications, Exemptions and Excuses",
+        "name_note": null,
+        "never_show_with_tags": [],
+        "org_type": "court",
+        "phone": null,
+        "prepare_checklist_keys": [
+          "bring_the_summons"
+        ],
+        "priority": 90,
+        "serves": {
+          "cities": [],
+          "counties": [],
+          "scope": "national",
+          "states": [],
+          "zip3": []
+        },
+        "status_note_key": null,
+        "tags": [
+          "jury_summons"
+        ],
+        "text_line": null,
+        "tty": null,
+        "url": "https://www.uscourts.gov/court-programs/jury-service/juror-qualifications-exemptions-and-excuses",
+        "verification_method": "fetched",
+        "verified_on": "2026-09-27",
+        "warnings": [
+          "warn.jury_never_check_citizen",
+          "warn.jury_never_register_to_vote"
+        ],
+        "what_it_does": {
+          "en": "Federal jurors must be U.S. citizens. If you are not a citizen, answer the form, mark that you are not a citizen, and send it back. Never ignore it and never check 'citizen'."
+        }
+      },
+      "score": 5.7,
+      "why": [
+        "Made for this kind of paper",
+        "For jury summons questions",
+        "Anywhere in the U.S."
+      ],
+      "why_keys": [
+        "why.for_this_paper",
+        "why.for_jury_summons",
+        "why.anywhere_in_us"
+      ]
+    }
+  ],
   "resource_tags": [
     "jury_summons"
   ],
@@ -368,13 +445,16 @@
   "translation_confidence": "medium",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 21,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.medium.date_soon",
+    "headline_params": {
+      "date": "October 23, 2026",
+      "date_iso": "2026-10-23"
+    },
+    "level": "medium",
+    "nearest_date_iso": "2026-10-23",
     "past_date": false,
     "verify_resource_id": null
   },
@@ -384,9 +464,10 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

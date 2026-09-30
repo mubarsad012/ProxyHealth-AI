@@ -34,7 +34,7 @@ export function useOnline(): OnlineState {
     isOnline().then((online) => {
       if (!cancelled) setState({ online, known: true });
     });
-    let sub: { remove(): void } | null = null;
+    let sub: { remove?: () => void } | null = null;
     try {
       sub = Network.addNetworkStateListener((e) => {
         setState({ online: toOnline(e), known: true });
@@ -44,7 +44,8 @@ export function useOnline(): OnlineState {
     }
     return () => {
       cancelled = true;
-      sub?.remove();
+      // CL-034: the jest-expo expo-network mock returns a listener without `remove`.
+      if (typeof sub?.remove === 'function') sub.remove();
     };
   }, []);
   return state;

@@ -7,11 +7,13 @@
 // addNotificationResponseReceivedListener, getLastNotificationResponseAsync. The module is loaded
 // lazily (like storage/vault.native.ts) so importing this file at app start registers nothing.
 // Notification text is always supplied by the caller: generic unless the user opted into detail.
-// The .ics "Add to calendar" path uses expo-file-system (File in Paths.cache) + expo-sharing.
+// The .ics "Add to calendar" path uses expo-file-system (File in Paths.cache/ics-share) +
+// expo-sharing; the file is deleted once the share sheet closes and on "Delete everything".
 
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import type { IcsOfferResult, NotificationPermission, NotificationsApi, ScheduleRequest } from '@/lib/notifications';
+import { registerWipeHook } from '@/storage/wipe';
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -126,15 +128,20 @@ export const notifications: NotificationsApi = {
     if (!N) return () => undefined;
     ensureHandler(N);
     let active = true;
-    void N.getLastNotificationResponseAsync()
-      .then((last) => {
-        const url = urlFrom(last?.notification.request.content.data);
-        if (active && url) {
-          onUrl(url);
-          void N.clearLastNotificationResponseAsync().catch(() => undefined);
-        }
-      })
-      .catch(() => undefined);
+    try {
+      // Cold start: the tap that launched the app.
+      void N.getLastNotificationResponseAsync()
+        .then((last) => {
+          const url = urlFrom(last?.notification.request.content.data);
+          if (active && url) {
+            onUrl(url);
+            void Promise.resolve(N.clearLastNotificationResponseAsync()).catch(() => undefined);
+          }
+        })
+        .catch(() => undefined);
+    } catch {
+      // module present but not functional (Expo Go / tests); live taps below still work
+    }
     let sub: { remove(): void } | null = null;
     try {
       sub = N.addNotificationResponseReceivedListener((response) => {
@@ -146,7 +153,7 @@ export const notifications: NotificationsApi = {
     }
     return () => {
       active = false;
-      sub?.remove();
+      if (typeof sub?.remove === 'function') sub.remove();
     };
   },
   async openSettings() {
@@ -158,19 +165,66 @@ export const notifications: NotificationsApi = {
   },
 };
 
-/** Native "Add to calendar": write the .ics to the cache directory and open the share sheet. */
+type FileSystemModule = typeof import('expo-file-system');
+
+function loadFileSystem(): FileSystemModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-file-system') as FileSystemModule;
+  } catch {
+    return null;
+  }
+}
+
+/** The shared .ics lives in its own cache folder so it can be removed as a whole. */
+const ICS_DIR = 'ics-share';
+/** iOS resolves `shareAsync` when the sheet closes (the target already copied the file). Android
+ *  resolves as soon as the chooser closes, while the chosen app may still be reading the file, so
+ *  the delete waits a minute there. */
+const DELETE_AFTER_SHARE_MS = Platform.OS === 'android' ? 60_000 : 0;
+/** Bumped per share so a delayed delete never removes a newer share's file. */
+let shareGeneration = 0;
+
+/** Remove every .ics this app wrote for the share sheet (it can hold paper titles when detail is on). */
+export function deleteSharedIcs(): void {
+  const fs = loadFileSystem();
+  if (!fs) return;
+  try {
+    const dir = new fs.Directory(fs.Paths.cache, ICS_DIR);
+    if (dir.exists) dir.delete();
+  } catch {
+    // nothing left to remove, or the OS already cleared the cache
+  }
+}
+
+// "Delete everything" (PRODUCT_SPEC §9.3) also removes a leftover shared .ics — e.g. one from a
+// session that ended while the share sheet was open.
+registerWipeHook(deleteSharedIcs);
+
+/** Native "Add to calendar": write the .ics to the cache, open the share sheet, then delete it. */
 export async function offerIcs(fileName: string, ics: string): Promise<IcsOfferResult> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Sharing = require('expo-sharing') as typeof import('expo-sharing');
     if (!(await Sharing.isAvailableAsync())) return 'unavailable';
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { File, Paths } = require('expo-file-system') as typeof import('expo-file-system');
-    const file = new File(Paths.cache, fileName);
-    if (file.exists) file.delete();
+    const fs = loadFileSystem();
+    if (!fs) return 'unavailable';
+    deleteSharedIcs();
+    const generation = ++shareGeneration;
+    const cleanUp = () => {
+      if (generation === shareGeneration) deleteSharedIcs();
+    };
+    const dir = new fs.Directory(fs.Paths.cache, ICS_DIR);
+    dir.create({ intermediates: true, idempotent: true });
+    const file = new fs.File(dir, fileName);
     file.create({ overwrite: true });
     file.write(ics);
-    await Sharing.shareAsync(file.uri, { mimeType: 'text/calendar', UTI: 'public.calendar-event' });
+    try {
+      await Sharing.shareAsync(file.uri, { mimeType: 'text/calendar', UTI: 'public.calendar-event' });
+    } finally {
+      if (DELETE_AFTER_SHARE_MS > 0) setTimeout(cleanUp, DELETE_AFTER_SHARE_MS);
+      else cleanUp();
+    }
     return 'shared';
   } catch {
     return 'unavailable';

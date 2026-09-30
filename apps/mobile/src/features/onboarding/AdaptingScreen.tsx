@@ -20,17 +20,25 @@ import { useT } from '@/i18n/useT';
 import { isOnline } from '@/lib/network';
 
 import { useConsentDecision } from './consentState';
-import { afterLanguageHref } from './LanguageScreen';
+import { afterLanguageHref, leaveLanguageFlow } from './LanguageScreen';
 
 export const STEP_TIMERS_MS = [0, 3000, 15000] as const;
 
 export interface AdaptingScreenProps {
   query: string;
   from?: 'onboarding' | 'settings';
+  /** Moves inside the flow (cancel → S1). */
   navigate?(href: Href): void;
+  /** Leaves the flow (to S17, S2 or the tabs); defaults to `leaveLanguageFlow`. */
+  finish?(href: Href): void;
 }
 
-export function AdaptingScreen({ query, from = 'onboarding', navigate = (h) => router.replace(h) }: AdaptingScreenProps) {
+export function AdaptingScreen({
+  query,
+  from = 'onboarding',
+  navigate = (h) => router.replace(h),
+  finish = (h) => leaveLanguageFlow(from, h),
+}: AdaptingScreenProps) {
   const t = useT();
   const decision = useConsentDecision((s) => s.decision);
   const [step, setStep] = useState(0);
@@ -88,7 +96,7 @@ export function AdaptingScreen({ query, from = 'onboarding', navigate = (h) => r
     controller.current?.abort();
     navigate(`/onboarding/language${from === 'settings' ? '?from=settings' : ''}` as Href);
   };
-  const next = () => navigate(afterLanguageHref(from, decision));
+  const next = () => finish(afterLanguageHref(from, decision));
 
   const steps = [t('langpack.step_find'), t('langpack.step_translate'), t('langpack.step_check')];
 

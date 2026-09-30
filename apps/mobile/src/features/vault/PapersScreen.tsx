@@ -13,8 +13,8 @@ import { LinkRow } from '@/design/components/SettingsRows';
 import { Screen } from '@/design/components/Screen';
 import { EmptyState } from '@/design/components/States';
 import { AppText, Heading } from '@/design/components/Text';
-import { useTheme } from '@/design/theme';
-import { radius, size, space } from '@/design/tokens';
+import { useScaled, useTheme } from '@/design/theme';
+import { radius, size, space, type as typeScale } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import { useVault } from '@/storage/StorageProvider';
@@ -23,7 +23,7 @@ import { useSettings } from '@/store/settings';
 import { DocumentList } from './DocumentList';
 import { useDocuments, useMembers } from './hooks';
 import { MemberChip, MemberForm } from './MemberParts';
-import { memberName, nextColor } from './members';
+import { emptyVaultText, memberName, nextColor } from './members';
 import { Sheet } from './Sheet';
 import { bumpVault } from './store';
 
@@ -56,6 +56,7 @@ export function StorageNotice() {
 export function PapersScreen() {
   const t = useT();
   const { colors } = useTheme();
+  const scaled = useScaled();
   const dir = useDirection();
   const vault = useVault();
   const [query, setQuery] = useState('');
@@ -90,7 +91,7 @@ export function PapersScreen() {
       {empty ? (
         <EmptyState
           icon="papers"
-          text={t('vault.empty')}
+          text={emptyVaultText(t)}
           actionLabel={t('btn.scan')}
           onAction={() => router.push('/' as Href)}
         />
@@ -105,7 +106,7 @@ export function PapersScreen() {
               placeholder={t('vault.search')}
               placeholderTextColor={colors.textMuted}
               accessibilityLabel={t('vault.search')}
-              style={[styles.input, { color: colors.text, textAlign: dir.textAlign }]}
+              style={[styles.input, { color: colors.text, textAlign: dir.textAlign, fontSize: scaled(typeScale.size.body) }]}
             />
           </View>
           {rows.length === 0 && !loading ? <AppText color="textMuted">{t('vault.no_results')}</AppText> : null}
@@ -160,7 +161,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: size.button,
-    fontSize: 18,
   },
   group: {
     gap: space.md,

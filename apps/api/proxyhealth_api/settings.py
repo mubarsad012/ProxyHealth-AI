@@ -1,7 +1,14 @@
 """Runtime settings (ARCHITECTURE §6.1; D-01; D-03; D-04). Read from the environment and ``.env``.
 
 Field names are the lower-case form of the env variable names (pydantic-settings matches them
-case-insensitively). Secrets never appear in ``repr`` or logs (``SecretStr``).
+case-insensitively). Secrets never appear in ``repr`` or logs (``SecretStr``), and validation
+errors never echo their input (``hide_input_in_errors``) — a malformed ``GEMINI_KEYS`` entry
+must not print a key into the boot traceback.
+
+``.env`` is read from the current directory and, as a fallback, from ``apps/api/.env`` (anchored
+on this file), so repo-root commands (``uvicorn --app-dir apps/api``, ``scripts/gen_packs.py``)
+see the same file; the current directory's ``.env`` wins on conflicts. An empty ``GEMINI_KEYS``
+means no slots.
 
 Boot-time rules (WP1):
 
@@ -17,19 +24,30 @@ The EEA/Switzerland/UK rule (D-03: every key ``billing:true``) is documentation 
 server does not geolocate users; see ``.env.example``.
 """
 
+import json
 import re
 import secrets
 from pathlib import Path
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from proxyhealth_api.contracts.config import FeatureFlags
 from proxyhealth_api.contracts.enums import DataUseTier, ModelTier, Provider, ThinkingLevel
 
 # apps/api/data — bundled packs, languages.yaml, fonts, resources, rules, fixtures.
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+# apps/api/.env — read after (so overridden by) the current directory's ``.env``.
+API_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 CONTRACT_VERSION = 1
 
@@ -45,17 +63,25 @@ _LOG_LEVELS = frozenset({"debug", "info", "warning", "error", "critical"})
 class KeySlotConfig(BaseModel):
     """One ``GEMINI_KEYS`` entry; ``billing`` is an operator attestation (D-01)."""
 
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     key: SecretStr
     project: str = Field(min_length=1)
     billing: bool
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="forbid", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=(API_ENV_FILE, ".env"),  # later files win: cwd .env overrides apps/api/.env
+        extra="forbid",
+        case_sensitive=False,
+        hide_input_in_errors=True,  # never echo GEMINI_KEYS (or any secret) in errors
+    )
 
     env: Literal["development", "staging", "production"] = "development"
     ai_provider: Literal["mock", "gemini", "gemini_interactions"] = "mock"
-    gemini_keys: list[KeySlotConfig] = Field(default_factory=list)
+    # NoDecode: parsed by _parse_gemini_keys so "" means [] and JSON errors never echo keys.
+    gemini_keys: Annotated[list[KeySlotConfig], NoDecode] = Field(default_factory=list)
     allow_unpaid_keys: bool = False
     allow_unpaid_real_documents: bool = False
     model_pro: str = "gemini-3.8-flash"
@@ -115,6 +141,24 @@ class Settings(BaseSettings):
         if level not in _LOG_LEVELS:
             raise ValueError(f"LOG_LEVEL must be one of {sorted(_LOG_LEVELS)}, got {value!r}")
         return level
+
+    @field_validator("gemini_keys", mode="before")
+    @classmethod
+    def _parse_gemini_keys(cls, value: object) -> object:
+        """``GEMINI_KEYS`` from the environment is a JSON list; empty/blank means no slots."""
+        if isinstance(value, bytes):
+            value = value.decode("utf-8")
+        if not isinstance(value, str):
+            return value
+        if not value.strip():
+            return []
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:  # message carries only the position, never the text
+            raise ValueError(
+                f"GEMINI_KEYS must be a JSON list of {{key, project, billing}} objects "
+                f"({exc.msg}, char {exc.pos})"
+            ) from None
 
     @field_validator("gemini_keys")
     @classmethod

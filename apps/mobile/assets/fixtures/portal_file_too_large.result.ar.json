@@ -68,6 +68,7 @@
     }
   ],
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

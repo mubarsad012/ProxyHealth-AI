@@ -13,7 +13,7 @@ export { showEnglishBody, SummaryCard } from './cards/SummaryCard';
 export { disclaimerKey, resultBanners, WARNING_CHIP_KEYS, warningChipKeys } from './disclaimers';
 export { hearItItems } from './hearItMode';
 export { allBlocks, blockById, pageImageFor, pageOfSpans, unionBbox, type PageImage } from './pageImages';
-export { ResultView, type ResultViewHandlers, type ResultViewProps } from './ResultView';
+export { askPrompts, ResultView, type ResultViewHandlers, type ResultViewProps } from './ResultView';
 export { isAnalysisResult, runAnalysis, type RunAnalysisInput, type RunAnalysisOutput } from './runAnalysis';
 export { UnverifiedSection } from './unverifiedSection';
 export {

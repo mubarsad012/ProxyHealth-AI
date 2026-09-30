@@ -1,6 +1,6 @@
 // Chat feature (ARCHITECTURE §3 features/chat; PRODUCT_SPEC S9; API_CONTRACT §3.7).
 
-export { assistantLines, ChatScreen } from './ChatScreen';
+export { assistantLines, ChatScreen, type ChatScreenProps } from './ChatScreen';
 export {
   analysisContext,
   buildChatRequest,

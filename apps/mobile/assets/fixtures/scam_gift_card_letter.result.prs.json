@@ -3,9 +3,9 @@
   "category": "immigration",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "understanding a paper I received",
+    "english": "Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦prs⟧ understanding a paper I received"
+    "translated": "⟦prs⟧ Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -29,15 +29,15 @@
       ],
       "text": "نامه $950 می‌خواهد.",
       "value_verbatim": "$950",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "legal_information_only",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -213,9 +213,9 @@
           "text": "Do not tell anyone about this letter. Keep this matter confidential."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -242,7 +242,7 @@
       "span_ids": [
         "p1b1"
       ],
-      "text": "یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه می‌تواند بگوید اداره واقعی چه می‌خواهد."
+      "text": "یک وکیل دارای جواز یا یک نماینده تأییدشده وزارت عدلیه می‌تواند بگوید اداره واقعی چه می‌خواهد. یک وکیل جوازدار یا نماینده تأییدشده DOJ می‌تواند درباره قضیه شما مشوره بدهد. در «کمک نزدیک» یکی را پیدا کنید."
     },
     {
       "demand_id": null,
@@ -265,7 +265,68 @@
     "reason": null
   },
   "questions_to_ask": [],
-  "red_flags": [],
+  "red_flags": [
+    {
+      "fixed_copy_key": null,
+      "kind": "impersonation",
+      "page": 1,
+      "severity": "high",
+      "source_quote": "USCIS payment portal: www.uscis-fee-payment.example.com",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "ویب‌سایت .gov نیست",
+      "verified": true
+    },
+    {
+      "fixed_copy_key": null,
+      "kind": "urgency_pressure",
+      "page": 1,
+      "severity": "high",
+      "source_quote": "You must pay today with Google Play gift cards or you will be deported unless payment is received within 48 hours.",
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "به دیپورت تهدید می‌کند",
+      "verified": true
+    },
+    {
+      "fixed_copy_key": null,
+      "kind": "scam_payment_method",
+      "page": 1,
+      "severity": "high",
+      "source_quote": "You must pay today with Google Play gift cards",
+      "span_ids": [
+        "p1b7"
+      ],
+      "text": "نامه پرداخت با کارت تحفه می‌خواهد.",
+      "verified": true
+    },
+    {
+      "fixed_copy_key": null,
+      "kind": "impersonation",
+      "page": 1,
+      "severity": "high",
+      "source_quote": "USCIS payment portal: www.uscis-fee-payment.example.com",
+      "span_ids": [
+        "p1b9"
+      ],
+      "text": "نامه نام اداره‌ای را به کار می‌برد که با اداره واقعی مهاجرت مطابقت ندارد، و ویب‌سایت آن به .gov ختم نمی‌شود.",
+      "verified": true
+    },
+    {
+      "fixed_copy_key": null,
+      "kind": "urgency_pressure",
+      "page": 1,
+      "severity": "medium",
+      "source_quote": "Do not tell anyone about this letter.",
+      "span_ids": [
+        "p1b10"
+      ],
+      "text": "نامه می‌گوید آن را مخفی نگه دارید و زود پول بدهید.",
+      "verified": true
+    }
+  ],
   "request_id": "offline-scam_gift_card_letter-prs",
   "resource_preview": [],
   "resource_tags": [
@@ -278,10 +339,11 @@
     "emergency_kinds": []
   },
   "scam_reasons": [
-    "gift_card",
-    "deportation_threat",
-    "non_gov_domain",
-    "urgency_pressure"
+    "scam.gift_card",
+    "scam.non_gov_domain",
+    "scam.deportation_threat",
+    "scam.urgency_pressure",
+    "scam.impersonation"
   ],
   "scam_risk": "likely",
   "schema_version": 1,
@@ -319,13 +381,14 @@
   },
   "verification": {
     "contacts_stripped": 0,
-    "facts_checked": 1,
+    "facts_checked": 4,
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

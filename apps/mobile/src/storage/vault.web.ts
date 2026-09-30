@@ -196,6 +196,13 @@ export const vault: Vault = {
       mem.members.set(id, next);
       await put('members', next);
     },
+    async recolor(id, color) {
+      const m = mem.members.get(id);
+      if (!m) return;
+      const next = { ...m, color };
+      mem.members.set(id, next);
+      await put('members', next);
+    },
     async remove(id, wipeDocuments) {
       if (id === ME_MEMBER_ID) return;
       const docs = [...mem.documents.values()].filter((d) => d.memberId === id);

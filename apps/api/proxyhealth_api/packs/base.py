@@ -48,10 +48,10 @@ class BasePack:
         return cls(strings, hashlib.sha256(raw).hexdigest(), contexts)
 
     def chunks(self, size: int = 60) -> list[list[str]]:
-        """Sorted keys in batches of ``size`` (D-25: 60-key language-pack chunks)."""
+        """Keys in file order, ``size`` per batch (D-25; AI_PROMPTS §7.1: stable across runs)."""
         if size < 1:
             raise ValueError("chunk size must be >= 1")
-        keys = sorted(self.strings)
+        keys = list(self.strings)
         return [keys[i : i + size] for i in range(0, len(keys), size)]
 
     def context(self, key: str) -> str:

@@ -34,6 +34,26 @@ interface BrowseState {
   error: ApiError | null;
 }
 
+/** `GET /v1/resources` caps `limit` at 200 (routers/resources.py); page with `offset` until
+ *  `total` so "See all help" really lists the whole DB for the region (bounded to 5 pages). */
+const BROWSE_PAGE = 200;
+const BROWSE_MAX_PAGES = 5;
+
+async function listAll(client: ReturnType<typeof useApi>, state: string | null, language: string): Promise<Resource[]> {
+  const items: Resource[] = [];
+  for (let page = 0; page < BROWSE_MAX_PAGES; page += 1) {
+    const res = await client.listResources({
+      state: state ?? undefined,
+      language,
+      limit: BROWSE_PAGE,
+      offset: page * BROWSE_PAGE,
+    });
+    items.push(...res.items);
+    if (res.items.length === 0 || items.length >= res.total) break;
+  }
+  return items;
+}
+
 function useBrowse(enabled: boolean, state: string | null, language: string) {
   const client = useApi();
   const key = enabled ? `${state ?? ''}|${language}` : '';
@@ -41,10 +61,9 @@ function useBrowse(enabled: boolean, state: string | null, language: string) {
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
-    client
-      .listResources({ state: state ?? undefined, language, limit: 50 })
-      .then((res) => {
-        if (!cancelled) setResult({ key, items: res.items, error: null });
+    listAll(client, state, language)
+      .then((items) => {
+        if (!cancelled) setResult({ key, items, error: null });
       })
       .catch((e: unknown) => {
         if (!cancelled) setResult({ key, items: bundledResources(), error: toApiError(e) });

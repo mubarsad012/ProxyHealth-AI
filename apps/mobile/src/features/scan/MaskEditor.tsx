@@ -5,7 +5,16 @@
 
 import { Image } from 'expo-image';
 import { useRef, useState } from 'react';
-import { type GestureResponderEvent, type LayoutChangeEvent, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import type { MaskRect } from '@/api/types';
 import { BigButton } from '@/design/components/BigButton';
@@ -13,6 +22,7 @@ import { AppText, Heading } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
+import { keyExists, t as tr } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
 import type { CapturedPage } from '@/store/session';
 
@@ -28,8 +38,25 @@ export interface MaskEditorProps {
 
 type Point = { x: number; y: number };
 
+/** "Box {i} added, covering part of page {n}" (PRODUCT_SPEC S5); the key is pending WP0 (CL line),
+ *  so the announcement is skipped rather than reading a raw key. */
+export const MASK_ADDED_KEY = 'a11y.mask_added';
+
+function announceMask(i: number, n: number) {
+  if (!keyExists(MASK_ADDED_KEY)) return;
+  try {
+    AccessibilityInfo.announceForAccessibility(tr(MASK_ADDED_KEY, { i, n }));
+  } catch {
+    // best-effort
+  }
+}
+
 export function MaskEditor({ page, pageNumber, visible, onChange, onClose }: MaskEditorProps) {
   const t = useT();
+  const add = (m: MaskRect) => {
+    onChange([...page.masks, m]);
+    announceMask(page.masks.length + 1, pageNumber);
+  };
   const { colors } = useTheme();
   const dir = useDirection();
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -68,7 +95,7 @@ export function MaskEditor({ page, pageNumber, visible, onChange, onClose }: Mas
       const dragged = moved ? maskFromDrag(s.local, end, box) : null;
       const next =
         dragged ?? (box.width > 0 && box.height > 0 ? maskAround({ x: s.local.x / box.width, y: s.local.y / box.height }) : null);
-      if (next) onChange([...page.masks, next]);
+      if (next) add(next);
     },
     onResponderTerminate: () => {
       start.current = null;
@@ -130,7 +157,7 @@ export function MaskEditor({ page, pageNumber, visible, onChange, onClose }: Mas
           icon="lock"
           variant="secondary"
           size={56}
-          onPress={() => onChange([...page.masks, maskAround({ x: 0.5, y: 0.5 })])}
+          onPress={() => add(maskAround({ x: 0.5, y: 0.5 }))}
         />
         <BigButton label={t('capture.done')} icon="check" variant="primary" size={72} onPress={onClose} />
       </ScrollView>

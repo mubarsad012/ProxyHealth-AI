@@ -1,9 +1,13 @@
 // API client (BUILD_PLAN §5.5 step 4): headers, 428/403/429/422 → ApiError fields and
 // user_message_key, the 304 pack path, timeout abort, network failure, envelope-less errors.
 
+import { renderHook } from '@testing-library/react-native';
+
 import { createClient, TIMEOUT_MS } from '@/api/client';
 import { ApiError, errorMessageVars, retryMinutes } from '@/api/errors';
 import type { ErrorResponse } from '@/api/types';
+import { useOnline } from '@/lib/network';
+import { useSession } from '@/store/session';
 
 type FetchArgs = [string, RequestInit];
 
@@ -120,6 +124,19 @@ describe('error mapping', () => {
     expect(errorMessageVars(err, { max_pdf_bytes: 12582912 })).toMatchObject({ minutes: 4, max_pdf_mb: 12, tier: 'pro' });
   });
 
+  it('429 quota_exhausted sets session.quotaCoolingUntil ≈ now + retry_after (CL-039); reset clears it', async () => {
+    useSession.getState().reset();
+    const before = Date.now();
+    const body = envelope('quota_exhausted', { key_exhausted: true, retry_after_seconds: 240 });
+    const { client } = setup(jsonResponse(429, body, { 'Retry-After': '240' }));
+    await client.analyze(analyzeReq).catch(() => undefined);
+    const until = Date.parse(useSession.getState().quotaCoolingUntil ?? '');
+    expect(until).toBeGreaterThanOrEqual(before + 240_000);
+    expect(until).toBeLessThanOrEqual(Date.now() + 240_000);
+    useSession.getState().reset();
+    expect(useSession.getState().quotaCoolingUntil).toBeNull();
+  });
+
   it('429 rate_limited uses the Retry-After header when the body has no seconds', async () => {
     const { client } = setup(jsonResponse(429, envelope('rate_limited'), { 'Retry-After': '30' }));
     const err = (await client.chat({} as never).catch((x: unknown) => x)) as ApiError;
@@ -203,5 +220,18 @@ describe('timeouts', () => {
     expect(err.code).toBe('timeout');
     expect(err.userMessageKey).toBe('err.timeout');
     expect(TIMEOUT_MS).toEqual({ analyze: 120000, troubleshoot: 60000, postPack: 60000, default: 30000 });
+  });
+});
+
+describe('module seams used by WP5/WP6 tests', () => {
+  it('api/offline resolves the bundled fixtures under jest (CL-033)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const offline = require('@/api/offline') as typeof import('@/api/offline');
+    expect(offline.bundledFixtures().length).toBeGreaterThan(0);
+  });
+
+  it('useOnline unmounts cleanly when the network listener has no remove() (CL-034)', async () => {
+    const { unmount } = await renderHook(() => useOnline());
+    await expect(unmount()).resolves.toBeUndefined();
   });
 });

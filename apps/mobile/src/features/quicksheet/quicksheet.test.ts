@@ -2,12 +2,27 @@
 // never adds anything that is not in the analysis or the resource DB; the expo-print HTML carries
 // `dir="rtl"` and an embedded `@font-face`.
 
+import { render } from '@testing-library/react-native';
+import { type ComponentType, createElement, type ReactNode } from 'react';
+
+import type { ApiClient } from '@/api/client';
+import { ApiError } from '@/api/errors';
 import type { AnalysisResult, Resource } from '@/api/types';
+import { AppProviders } from '@/design/components/Providers';
+import { clearMatchCache } from '@/features/help/request';
 import { BASE_STRINGS, translate } from '@/i18n/store';
 
 import { buildQuickSheetText, quickSheetPlainText, toQuickSheetRequest } from './build';
 import { buildAllowList, formatPhone, scrubLine } from './contacts';
 import { buildQuickSheetHtml, isolateLtrRuns } from './html';
+import { QuickSheetScreen } from './QuickSheetScreen';
+import { printHtmlInFrame } from './share';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+// The expo-network jest mock's listener has no `remove()`; reachability is not under test here.
+jest.mock('@/lib/network', () => ({ useOnline: () => ({ online: true, known: true }), isOnline: async () => true }));
 
 const medicaid = require('../../../assets/fixtures/medicaid_address_confirmation.result.en.json') as AnalysisResult;
 const fallbacks = require('../../../assets/resources/national_fallbacks.json') as Resource[];
@@ -131,5 +146,47 @@ describe('buildQuickSheetHtml', () => {
   it('escapes markup in lines', () => {
     expect(isolateLtrRuns('<b>x</b> & "y"', 'rtl')).not.toContain('<b>');
     expect(isolateLtrRuns('a & b', 'ltr')).toBe('a &amp; b');
+  });
+});
+
+function offlineClient(): ApiClient {
+  const fail = () => Promise.reject(new ApiError({ code: 'network', status: 0 }));
+  return {
+    baseUrl: 'http://127.0.0.1:8029',
+    health: fail,
+    getConfig: fail,
+    getPack: fail,
+    postPack: fail,
+    analyze: fail,
+    troubleshoot: fail,
+    chat: fail,
+    matchResources: fail,
+    listResources: fail,
+    getResource: fail,
+    getRules: fail,
+    quicksheetPdf: fail,
+    feedback: fail,
+    listFixtures: fail,
+    fixturePageUrl: (id, n) => `http://127.0.0.1:8029/v1/demo/fixtures/${id}/pages/${n}`,
+  };
+}
+
+// `.ts` file (no JSX): children go in createElement's third argument, so relax the props type.
+const Providers = AppProviders as ComponentType<{ client: ApiClient; staticMetrics?: boolean; children?: ReactNode }>;
+
+describe('QuickSheetScreen', () => {
+  beforeEach(() => clearMatchCache());
+
+  it('offline with no list for this paper uses the bundled DB subset for "Who can help"', async () => {
+    const { findByText, getByTestId } = await render(
+      createElement(Providers, { client: offlineClient(), staticMetrics: true }, createElement(QuickSheetScreen, { analysis: medicaid })),
+    );
+    expect(await findByText('Who can help', {}, { timeout: 4000 })).toBeTruthy();
+    expect(await findByText(`211 — ${formatPhone('211')}`)).toBeTruthy();
+    expect(getByTestId('quicksheet-copy')).toBeTruthy();
+  });
+
+  it('web print helper is a no-op off the web (native uses expo-print)', () => {
+    expect(printHtmlInFrame('<html></html>', null)).toBe(false);
   });
 });

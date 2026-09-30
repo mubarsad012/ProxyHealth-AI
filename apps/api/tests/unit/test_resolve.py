@@ -1,25 +1,29 @@
 """``packs/resolve.py``: table → model → ``x-<slug>`` (D-25; AI_PROMPTS §4.8)."""
 
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from proxyhealth_api.ai.failover import GenerateOutcome
+from proxyhealth_api.ai.failover import AIService, GenerateOutcome
 from proxyhealth_api.ai.provider import Part, StructuredResult, Task, Usage
 from proxyhealth_api.ai.routing import RouteConfig
 from proxyhealth_api.contracts.enums import (
     Confidence,
     DigitSystem,
     Direction,
+    ErrorCode,
     ModelQuality,
     ModelTier,
+    Provider,
 )
 from proxyhealth_api.contracts.model_out import LanguageResolveOut
 from proxyhealth_api.errors import ApiError
 from proxyhealth_api.packs.base import LanguageTable
 from proxyhealth_api.packs.resolve import fold, resolve_in_table, resolve_language, slugify
 from proxyhealth_api.settings import DATA_DIR
+from tests.conftest import make_settings
 
 
 @pytest.fixture(scope="module")
@@ -153,3 +157,50 @@ async def test_typed_private_tag_resolves_to_itself(languages: LanguageTable) ->
     ai = FakeAI(model_out("cnh"))
     res = await resolve_language("x-foo", languages, ai, request_id="r")  # type: ignore[arg-type]
     assert res.tag == "x-foo" and res.source == "private" and ai.calls == []
+
+
+class _BadOutputProvider:
+    """An ``AIProvider`` whose answer ``AIService`` rejects (unparsed, or blocked by safety)."""
+
+    name = Provider.mock
+
+    def __init__(self, *, blocked: bool) -> None:
+        self.blocked = blocked
+        self.calls = 0
+
+    async def generate_structured(self, **_: Any) -> StructuredResult:
+        self.calls += 1
+        return StructuredResult(
+            parsed=None, raw_text="not json", model_id="gemini-3.5-flash-lite", usage=Usage(),
+            blocked_reason="SAFETY" if self.blocked else None,
+        )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("blocked", "code"), [(False, "model_output_invalid"), (True, "content_blocked")]
+)
+async def test_unusable_or_blocked_model_answer_falls_back_to_private_tag(
+    languages: LanguageTable, tmp_path: Path, blocked: bool, code: str
+) -> None:
+    provider = _BadOutputProvider(blocked=blocked)
+    ai = AIService(provider, None, make_settings(tmp_path))
+    with pytest.raises(ApiError) as raw:  # the real service raises for this output ...
+        await ai.generate(
+            task=Task.resolve_language, parts=[Part.of_text("q")], system="s",
+            schema=LanguageResolveOut, request_id="r",
+        )  # fmt: skip
+    assert raw.value.code == code
+    res = await resolve_language("Hakha Chin", languages, ai, request_id="r")  # ... never escapes
+    assert res.tag == "x-hakha-chin" and res.source == "private" and provider.calls == 2
+    assert res.direction is None and res.script is None  # nothing known: generator decides
+
+
+class _QuotaAI:
+    async def generate(self, **_: Any) -> GenerateOutcome:
+        raise ApiError(ErrorCode.quota_exhausted, 429, "quota", retry_after=60, key_exhausted=True)
+
+
+async def test_quota_error_still_propagates(languages: LanguageTable) -> None:
+    with pytest.raises(ApiError) as exc:
+        await resolve_language("Hakha Chin", languages, _QuotaAI(), request_id="r")  # type: ignore[arg-type]
+    assert exc.value.status == 429

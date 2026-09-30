@@ -11,7 +11,7 @@ import { useT } from '@/i18n/useT';
 export default function SourceRoute() {
   const t = useT();
   const params = useLocalSearchParams<{ id: string; block?: string; page?: string }>();
-  const { analysis, pages, loading, documentId } = useAnalysisFor(String(params.id ?? ''));
+  const { analysis, pages, loading, keepPages } = useAnalysisFor(String(params.id ?? ''));
   if (!analysis) {
     return (
       <Screen back>
@@ -27,7 +27,8 @@ export default function SourceRoute() {
       pages={pages}
       block={params.block ?? null}
       page={params.page ?? null}
-      imagesKept={!documentId || pages.length > 0 || Boolean(analysis.page_thumbnails?.length)}
+      // S8 'States': source.no_image only when images kept is OFF in the vault (session: always on).
+      imagesKept={keepPages || Boolean(analysis.page_thumbnails?.length)}
     />
   );
 }

@@ -1,9 +1,12 @@
 # data/safety/phrasing.yaml — WP2 (D-17; DOCUMENT_TAXONOMY §8). Schema: §8.6.
 #
 # Every model-authored sentence is linted per language (`en` always; a target language only when
-# it has a section here). A hit triggers one `phrasing_rewrite` call; a second hit substitutes the
-# family's fixed hedge (`hedge_key_by_family`, existing `chat.refusal.*` keys). Fixed copy never
-# passes through the linter. Regexes are case-insensitive; `\b` boundaries are written explicitly.
+# its section here is reviewed — `reviewed_by` set; otherwise English only plus the warning
+# `phrasing_lint_unavailable`, §8.1). A section may carry its own `attribution_regex` (the §8.3
+# exemption in that language), used on top of the English one. A hit triggers one
+# `phrasing_rewrite` call; a second hit substitutes the family's fixed hedge
+# (`hedge_key_by_family`, existing `chat.refusal.*` keys). Fixed copy never passes through the
+# linter. Regexes are case-insensitive; `\b` boundaries are written explicitly.
 version: "2026-09-27"
 attribution_regex: "\\b(the|this|your|it) ?(paper|letter|notice|form|bill|summons|order|lease|label|court|judge|office|school|landlord|insurer|plan|irs|uscis|ice|social security)? ?(says|asks|lists|states|tells you|orders|warns)\\b"
 professional_by_category:
@@ -163,6 +166,9 @@ languages:
           - "\\bthe school (must|cannot|can't|has to) (enroll|exclude|test|evaluate)\\b"
   es:
     reviewed_by: null
+    # "La carta dice …", "Su arrendador, Oak Hollow LLC, dice que …" (an appositive may sit
+    # between the noun and the verb).
+    attribution_regex: "\\b(el|la|este|esta|su) (papel|carta|aviso|formulario|factura|citaci[oó]n|orden|contrato|etiqueta|corte|juez|oficina|escuela|arrendador|aseguradora|plan)?(, [^,.;]{1,80},)? ?(dice|pide|indica|establece|ordena|advierte)\\b"
     families:
       - id: eligibility
         domains: [all]

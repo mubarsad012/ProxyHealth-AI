@@ -11,6 +11,8 @@ export interface Vault {
     list(): Promise<Member[]>;
     add(input: { name: string; color: string }): Promise<Member>;
     rename(id: string, name: string): Promise<void>;
+    /** S13 "Change color" (CL-036; beyond the §4.2 text). */
+    recolor(id: string, color: string): Promise<void>;
     remove(id: string, wipeDocuments: boolean): Promise<void>;
   };
   documents: {

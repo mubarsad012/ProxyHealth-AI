@@ -11,8 +11,10 @@ out of the card, so both ``english`` and ``translated`` read "a Medicaid letter"
 carrying an invented name or a target-language marker.
 ``clerk.interpreter_hhs`` is appended only for HHS-funded settings (matched resource, a
 hospital/clinic/pharmacy/insurer sender, or a Medicaid renewal) — never on a landlord, court or
-school card. ``translated`` comes from the optional ``clerk_translate`` callable; on failure the
-English card is shown and ``translation_partial`` is warned.
+school card. ``translated`` comes from the optional ``clerk_translate`` callable; on failure it is
+the pack's fixed ``clerk.generic_card`` in the target language (``t``) around the untranslated
+English need line (AI_PROMPTS §5.5.4) — or the English card when no ``t`` is given — and
+``translation_partial`` is warned.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from proxyhealth_api.contracts.enums import DocumentType, SenderKind, WarningCod
 DT = DocumentType
 INTERPRETER_KEY = "clerk.interpreter_hhs"
 GENERIC_NEED_KEY = "clerk.generic_need"
+GENERIC_CARD_KEY = "clerk.generic_card"
 MAX_NEED_CHARS = 200
 MAX_SENDER_CHARS = 80
 HHS_SENDERS = frozenset({SenderKind.hospital_or_clinic, SenderKind.pharmacy, SenderKind.insurer})
@@ -124,7 +127,7 @@ def checked_sender(sender_as_written: str | None, scrubber: ContactScrubber | No
     sender = re.sub(r"\s+", " ", (sender_as_written or "")).strip()
     if not sender:
         return None
-    if scrubber is not None and scrubber.scrub(sender) != sender:
+    if scrubber is not None and scrubber.would_change(sender):
         return None
     return sender
 
@@ -145,10 +148,10 @@ def choose_need_line(
     if hedged or not clerk_need_en or not clerk_need_en.strip():
         return fallback, "template"
     candidate = _clean_need(clerk_need_en)
-    if scrubber is not None:
-        scrubbed = scrubber.scrub(candidate)
-        if scrubbed != candidate or scrubber.marker in scrubbed:
-            return fallback, "template"
+    if scrubber is not None and (
+        scrubber.would_change(candidate) or scrubber.marker in candidate
+    ):
+        return fallback, "template"
     if lint_sentence(candidate) or has_contact(candidate):
         return fallback, "template"
     cut = cut_at_word(candidate)
@@ -194,11 +197,14 @@ async def build_clerk_message(
     hedged: bool = False,
     first_resource_hhs_funded: bool = False,
     translate: ClerkTranslate | None = None,
+    t: Translator | None = None,
 ) -> ClerkOutcome:
     """Compose the clerk card. ``template_line`` = ``template_need_line(rules, type, t)``;
     ``hedged`` = the phrasing step replaced ``clerk_need_en``; ``translate`` = the optional
     ``clerk_translate`` call (its output is contact-scrubbed with ``scrubber``). The sender is
-    dropped from the card when ``scrubber`` would replace any part of it (``checked_sender``)."""
+    dropped from the card when ``scrubber`` would replace any part of it (``checked_sender``).
+    ``t`` = ``t_server`` for the target language: when the translation fails, ``translated`` is
+    ``clerk.generic_card`` in that language with the English need line (AI_PROMPTS §5.5.4)."""
     need, source = choose_need_line(
         clerk_need_en, template_line, scrubber=scrubber, hedged=hedged
     )
@@ -226,6 +232,9 @@ async def build_clerk_message(
         if value and value.strip():
             translated = scrubber.scrub(value.strip()) if scrubber is not None else value.strip()
         else:
+            if t is not None:  # the pack's fixed pieces + the untranslated English need line
+                language = language_name_en.strip() or "English"
+                translated = t(GENERIC_CARD_KEY, language=language, need=need)
             warnings.append(WarningCode.translation_partial)
     message = ClerkMessage(
         english=english, translated=translated, need_line_source=source,
@@ -240,6 +249,7 @@ def generic_card(language_name_en: str, need: str) -> str:
 
 
 __all__ = [
+    "GENERIC_CARD_KEY",
     "GENERIC_NEED_KEY",
     "HHS_SENDERS",
     "INTERPRETER_KEY",

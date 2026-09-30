@@ -1,6 +1,8 @@
 // Family members (PRODUCT_SPEC §9.2–§9.3, D-24): "Me" (id `me`, created on the first save, never
 // deletable, renamable) plus people the user adds with a name (≤ 40 chars), one of 8 colours and
-// auto initials. Pure helpers; the vault stores the rows.
+// auto initials. Helpers only (the two copy helpers read `Platform.OS`); the vault stores the rows.
+
+import { Platform } from 'react-native';
 
 import type { Member } from '@/storage/index';
 import { ME_MEMBER_ID } from '@/storage/rows';
@@ -69,4 +71,17 @@ export function cleanMemberName(name: string): string {
 export function nextColor(members: Pick<Member, 'color'>[]): string {
   const used = new Set(members.map((m) => m.color));
   return MEMBER_COLORS.find((c) => !used.has(c)) ?? MEMBER_COLORS[members.length % MEMBER_COLORS.length];
+}
+
+/** S12/S13 empty-state line that is literally true per platform (§9.5; `vault.empty.web` is
+ *  requested in CL-042 — until then web uses `consent.line3.web`). */
+export function emptyVaultText(t: Translate): string {
+  return Platform.OS === 'web' ? t('consent.line3.web') : t('vault.empty');
+}
+
+/** "Saved…" announcement after a save: `vault.saved` says "on this phone", so web announces only
+ *  `vault.saved_to` (CL-042). */
+export function savedAnnouncement(t: Translate, member: string): string {
+  const to = t('vault.saved_to', { member });
+  return Platform.OS === 'web' ? to : `${t('vault.saved')} ${to}`;
 }

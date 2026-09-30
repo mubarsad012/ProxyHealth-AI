@@ -60,6 +60,38 @@ def test_digit_runs_are_phone_guard() -> None:
     assert checks("a.b", "Page {page} of {n}", "Página {page} de {n}") == set()
 
 
+def test_bare_angle_brackets_count_as_html() -> None:
+    assert checks("a.b", "Next", "Siguiente >") == {"html"}
+    assert checks("a.b", "Age < 18", "Edad < 18") == set()  # the English has one too
+
+
+def test_safety_keys_keep_every_number() -> None:
+    english = "If someone is in danger, call 911."
+    assert checks("emergency.911", english, "Llame a emergencias") == {"safety_digits"}
+    assert checks("emergency.911", english, "Si alguien está en peligro, llame al 911.") == set()
+    assert checks("emergency.911", english, "اتصل بـ ٩١١") == set()  # any digit script
+    card = "A 2-year Green Card cannot be renewed with Form I-90."
+    assert checks("fixed.conditional_card", card, "Una Green Card de dos años, Form I-90.") == {
+        "safety_digits"
+    }
+    assert checks("fixed.conditional_card", card, "Green Card 2 ساله، فورم I-90.") == set()
+    # Only safety prefixes: an ordinary key may spell a small number out.
+    assert checks("home.pages", "2 pages", "dos páginas") == set()
+
+
+def test_adapting_must_be_translated_in_non_english_packs() -> None:
+    base = {"langpack.adapting": "Adapting system environment to your language...", "a": "Hi"}
+    same = {"langpack.adapting": base["langpack.adapting"], "a": "Hola"}
+    report = check_pack(base, same, language_tag="es")
+    assert [(i.key, i.check) for i in report.issues] == [("langpack.adapting", "adapting")]
+    assert check_pack(base, same, language_tag="en-GB").ok  # English variants may keep it
+    assert check_pack(base, same).ok  # no tag: string-level checks only
+    translated = {"langpack.adapting": "Adaptando el sistema a su idioma...", "a": "Hola"}
+    assert check_pack(base, translated, language_tag="es").ok
+    strings, fallback, _ = merge_with_fallback(base, same, language_tag="es")
+    assert fallback == ["langpack.adapting"] and strings == same
+
+
 def test_check_pack_and_merge_fill_english() -> None:
     base = {"a": "Hello", "b": "Due {date}", "c": "Bye"}
     report = check_pack(base, {"a": "Hola", "b": "Vence"})
@@ -83,7 +115,7 @@ def test_bundled_pack_passes_qa(tag: str) -> None:
     pack = LanguagePack.model_validate(raw)
     assert pack.language_tag == tag and pack.source == "bundled"
     assert pack.machine_translated is True and pack.reviewed_by is None
-    report = check_pack(base.strings, pack.strings)
+    report = check_pack(base.strings, pack.strings, language_tag=tag)
     assert not report.issues, [f"{i.key}: {i.check} ({i.detail})" for i in report.issues[:20]]
     # en.json may grow while packs are authored; the server fills new keys with English
     # (PackCache rebases), and `scripts/gen_packs.py --rebase` records them as fallback_keys.

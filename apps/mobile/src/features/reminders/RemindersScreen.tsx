@@ -180,7 +180,7 @@ export function RemindersScreen({ focusDocumentId }: { focusDocumentId?: string 
         </View>
       ) : null}
       {clockWrong ? <Notice tone="warning" text={t('reminders.clock_warning')} /> : null}
-      {isWeb && (prepared.all ?? []).length > 1 ? (
+      {isWeb && groups.length > 1 && (prepared.all ?? []).length > 0 ? (
         <BigButton
           testID="reminders-ics-all"
           label={t('btn.download_all_ics')}

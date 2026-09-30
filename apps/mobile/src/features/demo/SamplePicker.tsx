@@ -34,9 +34,14 @@ export function SamplePicker({ onPick }: SamplePickerProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadSamples(client).then((l) => {
-      if (!cancelled) setListing(l);
-    });
+    loadSamples(client)
+      .then((l) => {
+        if (!cancelled) setListing(l);
+      })
+      .catch(() => {
+        // `listFixturesWithFallback` already falls back to the bundled manifest; never spin forever.
+        if (!cancelled) setListing({ fixtures: [], source: 'bundled' });
+      });
     return () => {
       cancelled = true;
     };

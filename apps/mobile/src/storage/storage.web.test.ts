@@ -51,6 +51,8 @@ describe('web vault (memory)', () => {
     const list = await vault.members.list();
     expect(list.map((x) => x.id).sort()).toEqual([ME_MEMBER_ID, m.id].sort());
     expect(list.find((x) => x.id === m.id)?.name).toBe('Mariam K');
+    await vault.members.recolor(m.id, '#A33A06');
+    expect((await vault.members.list()).find((x) => x.id === m.id)?.color).toBe('#A33A06');
     await vault.members.remove(ME_MEMBER_ID, true);
     expect((await vault.members.list()).some((x) => x.id === ME_MEMBER_ID)).toBe(true);
   });

@@ -3,6 +3,7 @@
 // voice on this phone. Hear it in {fallback} or English?") and never claims a voice that is not
 // there. Language names come from the synced seed (`i18n/languages.ts`), in the UI pack's names.
 
+import type { LanguageInfo } from '@/api/types';
 import { LANGUAGES } from '@/i18n/languages';
 import type { TFunction } from '@/i18n/useT';
 import type { ResolvedVoice } from '@/lib/tts';
@@ -11,25 +12,50 @@ function baseTag(tag: string): string {
   return tag.toLowerCase().split(/[-_]/)[0];
 }
 
-/** Display name for a BCP-47 tag using the seed (native name first), else the tag itself. */
-export function languageName(tag: string | null | undefined): string {
-  if (!tag) return '';
-  const exact = LANGUAGES[tag];
-  if (exact) return exact.name_native;
-  const base = baseTag(tag);
-  const match = Object.values(LANGUAGES).find((l) => baseTag(l.tag) === base || baseTag(l.tts_tag ?? '') === base);
-  return match?.name_native ?? tag;
+function same(a: string | null | undefined, b: string | null | undefined): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
 }
 
-/** The honest line, or null when the pack's own voice was used. */
+/**
+ * The seed entry a BCP-47 tag belongs to: exact pack tag → exact `tts_tag` (so `fa-IR` is Persian
+ * and `fa-AF` is Dari, not whichever `fa-*` comes first) → same base pack tag → same base `tts_tag`.
+ */
+export function languageEntryFor(tag: string | null | undefined): LanguageInfo | null {
+  if (!tag) return null;
+  const all = Object.values(LANGUAGES);
+  return (
+    LANGUAGES[tag] ??
+    all.find((l) => same(l.tag, tag)) ??
+    all.find((l) => same(l.tts_tag, tag)) ??
+    all.find((l) => baseTag(l.tag) === baseTag(tag)) ??
+    all.find((l) => baseTag(l.tts_tag ?? '') === baseTag(tag)) ??
+    null
+  );
+}
+
+/** Display name for a BCP-47 tag using the seed (native name), else the tag itself. */
+export function languageName(tag: string | null | undefined): string {
+  if (!tag) return '';
+  return languageEntryFor(tag)?.name_native ?? tag;
+}
+
+/** The honest line, or null when the pack's own voice (or a regional voice of the same language)
+ *  was used. Dari read with a Farsi (`fa-IR`) voice → "No دری voice on this phone. Hear it in
+ *  فارسی or English?" (PRODUCT_SPEC J-A step 9). */
 export function fallbackNotice(resolved: ResolvedVoice | null, packTag: string, t: TFunction): string | null {
-  if (!resolved || !resolved.usedFallbackTag) return null;
-  const own = LANGUAGES[packTag];
-  const fallback = resolved.usedFallbackTag;
-  if (baseTag(fallback) === baseTag(own?.tts_tag ?? packTag)) return null;
+  if (!resolved) return null;
+  // `lib/tts` picks a same-base-language voice as the pack's "own" voice (a `fa-IR` voice for Dari's
+  // `fa-AF`) without setting `usedFallbackTag` (CL-053 → WP4), so the voice's own language is checked
+  // too: the line appears only when the seed maps that voice to a different pack language.
+  const usedTag = resolved.usedFallbackTag ?? resolved.voice?.language.replace('_', '-') ?? null;
+  if (!usedTag) return null;
+  const own = LANGUAGES[packTag] ?? languageEntryFor(packTag);
+  const used = languageEntryFor(usedTag);
+  if (own && used && own.tag === used.tag) return null;
+  if (!resolved.usedFallbackTag && (!own || !used)) return null;
   return t('tts.fallback_offer', {
-    language: own?.name_native ?? languageName(packTag),
-    fallback: languageName(fallback),
+    language: own?.name_native ?? packTag,
+    fallback: used?.name_native ?? usedTag,
   });
 }
 

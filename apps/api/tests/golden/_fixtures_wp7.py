@@ -2,15 +2,14 @@
 
 Builds ``PipelineDeps`` around a call-counting ``MockProvider`` with the fixture's frozen
 ``today`` as the clock, and runs ``run_analysis`` / ``run_troubleshoot`` exactly as the router
-does. ``PipelineDeps`` is WP2's dataclass and may gain fields while WP2 builds; unknown required
-fields make the pipeline tests xfail with the field name instead of erroring.
+does. ``PipelineDeps`` is WP2's dataclass; a required field these helpers do not know raises
+``DepsUnavailable`` naming the field, so the golden run fails loudly instead of guessing.
 """
 
 from __future__ import annotations
 
 import base64
 import dataclasses
-import importlib.util
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, time
@@ -39,37 +38,6 @@ RULES = RulesRepo.load(DATA_DIR / "rules")
 PHONE_RE = re.compile(r"(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}")
 URL_RE = re.compile(r"https?://\S+|www\.\S+|\b[\w-]+\.(?:gov|org|com|net|us|edu|info)\b(?:/\S*)?")
 EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]+\b")
-
-
-def has_module(name: str) -> bool:
-    """True when a WP2/WP3 module the assertion depends on exists on disk."""
-    try:
-        return importlib.util.find_spec(name) is not None
-    except ModuleNotFoundError:
-        return False
-
-
-WP2_MODULES = ("urgency", "deadline_rules", "scam", "fixed_notices", "clerk", "contacts_filter")
-
-
-def pipeline_wired() -> bool:
-    """True once ``analysis/pipeline.py`` references every WP2 §11 module (not just on disk)."""
-    import sys
-
-    import proxyhealth_api.analysis.pipeline as pipeline
-
-    wanted = {f"proxyhealth_api.analysis.{m}" for m in WP2_MODULES}
-    if not all(has_module(m) for m in wanted):
-        return False
-    used: set[str] = set()
-    for value in vars(pipeline).values():
-        name = getattr(value, "__module__", None) or getattr(value, "__name__", None)
-        if isinstance(name, str) and name in wanted:
-            used.add(name)
-    return used == wanted and all(m in sys.modules for m in wanted)
-
-
-WP2_PIPELINE = pipeline_wired()
 
 
 def cases() -> list[tuple[str, str]]:
@@ -170,7 +138,6 @@ def digits(text: str) -> str:
 
 __all__ = [
     "STORE",
-    "WP2_PIPELINE",
     "CountingMock",
     "DepsUnavailable",
     "analyze",
@@ -181,7 +148,6 @@ __all__ = [
     "document_cases",
     "fixture",
     "frozen_clock",
-    "has_module",
     "screenshot_cases",
     "troubleshoot",
 ]

@@ -33,3 +33,16 @@ export function formatDay(isoDay: string, languageTag: string): string {
   }
   return isoDay.slice(0, 10);
 }
+
+/** Wall-clock time only (e.g. Home `home.busy_until` "Try again at {time}"). */
+export function formatClock(iso: string, languageTag: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  try {
+    const time = d.toLocaleTimeString(languageTag, { hour: 'numeric', minute: '2-digit' });
+    if (time) return time;
+  } catch {
+    // numeric fallback below
+  }
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

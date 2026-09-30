@@ -4,6 +4,7 @@
 
 export { HelpForDocument, type HelpForDocumentProps, quickSheetHref, ScamNotice } from './HelpForDocument';
 export { HelpTabScreen, type HelpTabScreenProps } from './HelpTabScreen';
+export { disclaimerKey } from './format';
 export { NEED_TILES, needById, type NeedTile } from './needs';
 export { RegionControl, useRegion } from './RegionControl';
 export {

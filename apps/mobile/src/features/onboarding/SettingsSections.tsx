@@ -5,18 +5,21 @@
 import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
-import type { ServerConfig } from '@/api/types';
+import { useApi } from '@/api/config';
+import type { FeedbackKind, ServerConfig } from '@/api/types';
 import { Bidi } from '@/design/components/Bidi';
 import { BigButton } from '@/design/components/BigButton';
 import { Collapsible } from '@/design/components/Collapsible';
+import { ExternalLink } from '@/design/components/ExternalLink';
+import { Interpolated } from '@/design/components/Interpolated';
 import { ChoiceChips, SettingsSection } from '@/design/components/SettingsRows';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
-import { appVersion } from '@/design/components/FeedbackRow';
+import { appVersion, buildFeedbackRequest, NEGATIVE_KINDS } from '@/design/components/FeedbackRow';
 import { useDirection } from '@/i18n/direction';
 import { useI18n } from '@/i18n/store';
-import { useT } from '@/i18n/useT';
+import { usePackMeta, useT } from '@/i18n/useT';
 import { type UiTier, useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
@@ -99,19 +102,73 @@ function VersionLine({ text }: { text: string }) {
   );
 }
 
-export function AboutSection({ config }: { config: ServerConfig | null }) {
+/** A version row: translated label, the version value LTR-isolated (S17 "RTL"). */
+function VersionRow({ labelKey, version }: { labelKey: string; version: string }) {
+  const t = useT();
+  return <Interpolated template={t(labelKey)} vars={{ version }} ltrKeys={['version']} variant="caption" />;
+}
+
+/**
+ * S17 item 9 "Report a problem": the fixed feedback kinds only (no free text, D-31). The surface is
+ * `summary` until `FeedbackSurface` gains an app-level value (CL-028(b)), as on S18.
+ */
+function ReportProblem() {
+  const t = useT();
+  const api = useApi();
+  const meta = usePackMeta();
+  const [sent, setSent] = useState(false);
+  if (sent) {
+    return (
+      <AppText role="status" color="textMuted">
+        {t('feedback.thanks')}
+      </AppText>
+    );
+  }
+  const send = (kind: FeedbackKind) => {
+    setSent(true);
+    api.feedback(buildFeedbackRequest({ surface: 'summary' }, kind, meta.tag)).catch(() => undefined);
+  };
+  return (
+    <Collapsible title={t('btn.report_problem')}>
+      <AppText weight="bold">{t('feedback.what_wrong')}</AppText>
+      {NEGATIVE_KINDS.map((k) => (
+        <BigButton key={k} label={t(`feedback.kind.${k}`)} variant="secondary" size={56} onPress={() => send(k)} />
+      ))}
+    </Collapsible>
+  );
+}
+
+export interface AboutSectionProps {
+  config: ServerConfig | null;
+  /** The config came from the device cache (server unreachable): rows are marked `state.cached`. */
+  cached?: boolean;
+}
+
+export function AboutSection({ config, cached = false }: AboutSectionProps) {
   const t = useT();
   const pack = useI18n((s) => s.pack);
+  const packVersion = (pack.pack_version ?? config?.base_pack_version ?? 'en').slice(0, 8);
   return (
     <SettingsSection title={t('settings.about')} testID="settings-about">
       <AppText weight="bold">{t('app.name')}</AppText>
-      <AppText>{t('settings.version', { version: appVersion() })}</AppText>
-      <VersionLine text={`contract ${config?.contract_version ?? '?'} · pack ${(pack.pack_version ?? config?.base_pack_version ?? 'en').slice(0, 8)}`} />
+      <Interpolated template={t('settings.version')} vars={{ version: appVersion() }} ltrKeys={['version']} />
+      <VersionRow labelKey="settings.pack_version" version={packVersion} />
       {pack.reviewed_by ? <AppText>{t('settings.reviewed_by', { name: pack.reviewed_by })}</AppText> : null}
       {config ? (
         <>
-          <VersionLine text={`resources ${config.resource_db_version} · rules ${config.rules_version}`} />
-          <AppText>{t('settings.models', { pro: config.models.pro, fast: config.models.fast })}</AppText>
+          {cached ? (
+            <AppText variant="caption" color="textMuted" testID="settings-about-cached">
+              {t('state.cached')}
+            </AppText>
+          ) : null}
+          <VersionRow labelKey="settings.contract_version" version={String(config.contract_version)} />
+          <VersionRow labelKey="settings.resources_version" version={config.resource_db_version} />
+          <VersionRow labelKey="settings.rules_version" version={config.rules_version} />
+          <Interpolated
+            template={t('settings.models')}
+            vars={{ pro: config.models.pro, fast: config.models.fast }}
+            ltrKeys={['pro', 'fast']}
+          />
         </>
       ) : null}
       <View role="list" style={styles.list}>
@@ -121,6 +178,8 @@ export function AboutSection({ config }: { config: ServerConfig | null }) {
           </AppText>
         ))}
       </View>
+      <ReportProblem />
+      {config?.privacy_policy_url ? <ExternalLink href={config.privacy_policy_url}>{t('btn.privacy')}</ExternalLink> : null}
     </SettingsSection>
   );
 }

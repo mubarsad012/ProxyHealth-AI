@@ -18,9 +18,22 @@ from proxyhealth_api.contracts.enums import Legibility, WarningCode
 
 BLOCK_ID_RE = re.compile(r"^p\d+b\d+$")
 
-_SSN_DASHED_RE = re.compile(r"\b\d{3}-\d{2}-(\d{4})\b")
-_SSN_BARE_RE = re.compile(r"((?:SSN|Social Security)[^\d\n]{0,40})\b\d{5}(\d{4})\b", re.IGNORECASE)
-_A_NUMBER_RE = re.compile(r"\bA[- ]?\d{4,5}(\d{4})\b")
+# Hyphen-like separators an OCR'd or typed SSN may carry: ASCII hyphen, U+2010–U+2015, minus.
+_DASH = "\\-\u2010-\u2015\u2212"
+# ``123-45-6789`` with any hyphen or dash: SSN-shaped wherever it appears.
+_SSN_DASHED_RE = re.compile(rf"\b\d{{3}}[{_DASH}]\d{{2}}[{_DASH}](\d{{4}})\b")
+# Next to an SSN cue (within ~40 characters, before or after) the groups may also be split by
+# spaces or dots, or not split at all: ``SSN: 123 45 6789``, ``123.45.6789``, ``123456789``.
+_SSN_CUE = r"(?:SSN|S\.S\.N\.?|SS\s?#|Social\s+Security|Seguro\s+Social)"
+_SSN_SEP = rf"(?:[ \t\u00a0]*[.{_DASH}][ \t\u00a0]*|[ \t\u00a0]+)?"
+_SSN_GROUPS = rf"\b\d{{3}}{_SSN_SEP}\d{{2}}{_SSN_SEP}(\d{{4}})\b"
+_SSN_CUED_BEFORE_RE = re.compile(rf"({_SSN_CUE}[^\d\n]{{0,40}}){_SSN_GROUPS}", re.IGNORECASE)
+_SSN_CUED_AFTER_RE = re.compile(rf"{_SSN_GROUPS}(?=[^\d\n]{{0,40}}{_SSN_CUE})", re.IGNORECASE)
+# A-numbers: ``A`` + 8–9 digits, printed solid or grouped (``A 123-456-789``, ``A# 12 345 678``).
+_A_SEP = rf"[ \t\u00a0{_DASH}]?"
+_A_NUMBER_RE = re.compile(
+    rf"\bA{_A_SEP}#?[ \t\u00a0]?(\d{{2,3}}{_A_SEP}\d{{3}}{_A_SEP}\d{{3}})\b"
+)
 _RECEIPT_RE = re.compile(r"\b([A-Z]{3})\d{6}(\d{4})\b")
 _CASE_NUMBER_RE = re.compile(
     r"\bA[- ]?\d{8,9}\b"
@@ -30,15 +43,20 @@ _CASE_NUMBER_RE = re.compile(
 
 
 def mask_ssn(text: str) -> str:
-    """``123-45-6789`` → ``***-**-6789``; a bare 9-digit run only after ``SSN``/``Social Security``.
-    """
+    """``123-45-6789`` (any dash) → ``***-**-6789``; space/dot-separated or unseparated 9-digit
+    runs only within ~40 characters of an SSN cue (``SSN``, ``Social Security``, …)."""
     text = _SSN_DASHED_RE.sub(r"***-**-\1", text)
-    return _SSN_BARE_RE.sub(r"\1***-**-\2", text)
+    text = _SSN_CUED_BEFORE_RE.sub(r"\1***-**-\2", text)
+    return _SSN_CUED_AFTER_RE.sub(r"***-**-\1", text)
+
+
+def _mask_a_number(match: re.Match[str]) -> str:
+    return "A•••••" + re.sub(r"\D", "", match.group(1))[-4:]
 
 
 def mask_id_numbers(text: str) -> str:
     """A-numbers → ``A•••••1234``; receipt numbers → ``IOE••••••1234`` (D-19 opt-in)."""
-    text = _A_NUMBER_RE.sub(r"A•••••\1", text)
+    text = _A_NUMBER_RE.sub(_mask_a_number, text)
     return _RECEIPT_RE.sub(r"\1••••••\2", text)
 
 

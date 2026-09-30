@@ -157,3 +157,75 @@ def test_install_hash_secret_is_random_per_process_when_unset() -> None:
     a = Settings(_env_file=None)
     b = Settings(_env_file=None)
     assert a.install_hash_secret.get_secret_value() != b.install_hash_secret.get_secret_value()
+
+
+LEAKY_KEY = "AIzaSyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUvW"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        [{"key": LEAKY_KEY}],  # missing project/billing
+        [{"key": LEAKY_KEY, "project": "p1", "billing": "maybe"}],
+        [
+            {"key": LEAKY_KEY, "project": "p1", "billing": True},
+            {"key": "AIzaSyOTHER", "project": "p1", "billing": True},  # duplicate project
+        ],
+        {"key": LEAKY_KEY},  # not a list
+    ],
+)
+def test_malformed_gemini_keys_never_echo_the_key(
+    monkeypatch: pytest.MonkeyPatch, raw: object
+) -> None:
+    """ARCHITECTURE §2.1: secrets never appear in logs — including the boot traceback."""
+    monkeypatch.setenv("GEMINI_KEYS", json.dumps(raw))
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    text = str(exc.value) + repr(exc.value)  # what a boot traceback prints
+    assert LEAKY_KEY not in text and LEAKY_KEY[:12] not in text
+
+
+def test_unparseable_gemini_keys_json_never_echoes_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GEMINI_KEYS", '[{"key":"' + LEAKY_KEY)
+    with pytest.raises(ValidationError, match="JSON list") as exc:
+        Settings(_env_file=None)
+    assert LEAKY_KEY[:12] not in str(exc.value) + repr(exc.value)
+    assert exc.value.__cause__ is None and exc.value.__context__ is None
+
+
+def test_invalid_slot_model_hides_input_too() -> None:
+    with pytest.raises(ValidationError) as exc:
+        KeySlotConfig.model_validate({"key": LEAKY_KEY, "project": ""})
+    assert LEAKY_KEY[:12] not in str(exc.value)
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_empty_gemini_keys_means_no_slots(monkeypatch: pytest.MonkeyPatch, blank: str) -> None:
+    """BUILD_PLAN §5.2 step 7: ``GEMINI_KEYS=`` boots (no slots) instead of a JSON error."""
+    monkeypatch.setenv("GEMINI_KEYS", blank)
+    s = Settings(_env_file=None)
+    assert s.gemini_keys == [] and s.data_use_tier is DataUseTier.demo
+
+
+def test_env_file_falls_back_to_apps_api_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repo-root commands read ``apps/api/.env``; the current directory's ``.env`` wins."""
+    from proxyhealth_api import settings as settings_module
+
+    assert settings_module.API_ENV_FILE == Path(settings_module.__file__).parents[1] / ".env"
+    assert Settings.model_config["env_file"] == (settings_module.API_ENV_FILE, ".env")
+    api_env = tmp_path / "api" / ".env"
+    api_env.parent.mkdir()
+    api_env.write_text("ADMIN_TOKEN=from-api-dotenv\nCONSENT_VERSION=2026-01-01\n")
+    elsewhere = tmp_path / "repo-root"
+    elsewhere.mkdir()
+    monkeypatch.delenv("ADMIN_TOKEN", raising=False)
+    monkeypatch.delenv("CONSENT_VERSION", raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", (api_env, ".env"))
+    monkeypatch.chdir(elsewhere)
+    assert Settings().admin_token.get_secret_value() == "from-api-dotenv"
+    (elsewhere / ".env").write_text("ADMIN_TOKEN=from-cwd-dotenv\n")
+    s = Settings()
+    assert s.admin_token.get_secret_value() == "from-cwd-dotenv"
+    assert s.consent_version == "2026-01-01"  # still read from apps/api/.env

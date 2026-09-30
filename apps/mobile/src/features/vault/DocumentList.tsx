@@ -7,17 +7,19 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BigButton } from '@/design/components/BigButton';
-import { Bidi } from '@/design/components/Bidi';
 import { Icon } from '@/design/components/Icon';
 import { Interpolated } from '@/design/components/Interpolated';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
+import { formatDay } from '@/features/reminders/format';
+import { toIsoDay } from '@/features/reminders/schedule';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import type { DocumentRow, Member } from '@/storage/index';
 import { useVault } from '@/storage/StorageProvider';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 import { deleteDocument, moveDocuments, openStoredDocument, readLaterPages } from './actions';
 import { categoryWord, isSampleAnalysis } from './documents';
@@ -25,6 +27,12 @@ import { useDocument } from './hooks';
 import { MemberPickerSheet } from './MemberParts';
 import { memberName } from './members';
 import { ConfirmDialog, Sheet } from './Sheet';
+
+/** `createdAt` is stored as a UTC instant; the row shows the device's LOCAL day it was saved. */
+function savedDay(createdAt: string): string {
+  const d = new Date(createdAt);
+  return Number.isNaN(d.getTime()) ? createdAt.slice(0, 10) : toIsoDay(d);
+}
 
 function Tag({ text }: { text: string }) {
   const { colors } = useTheme();
@@ -49,62 +57,75 @@ function DocumentRowView({ row, member, showMember, onOptions }: RowProps) {
   const { colors } = useTheme();
   const dir = useDirection();
   const vault = useVault();
+  const tag = useSettings((s) => s.languageTag);
   const { doc } = useDocument(row.id);
   const notRead = doc !== null && !doc.analysis;
   const sample = isSampleAnalysis(doc?.analysis);
   const readNow = async () => {
     const pages = await readLaterPages(vault, row.id);
-    useSession.getState().setPages(pages);
+    if (pages.length === 0) return;
+    const session = useSession.getState();
+    session.setDemoSampleId(null);
+    session.setCurrentAnalysis(null);
+    session.setPages(pages);
     router.push('/scan/review' as Href);
   };
+  // A "Not read yet" row with kept pages opens S5 with those pages; everything else opens S7.
+  const openRow = () => (notRead && doc?.keepPages ? void readNow() : openStoredDocument(row.id));
   return (
     <View style={[styles.row, { borderColor: colors.divider, backgroundColor: colors.surface }]}>
       <View style={[styles.rowTop, { flexDirection: dir.row }]}>
-      <Pressable
-        testID={`paper-row-${row.id}`}
-        role="button"
-        accessibilityLabel={row.title}
-        accessibilityActions={[
-          { name: 'activate', label: row.title },
-          { name: 'longpress', label: `${t('btn.move_member')}, ${t('btn.delete_paper')}` },
-        ]}
-        onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'longpress' ? onOptions(row) : openStoredDocument(row.id))}
-        onPress={() => openStoredDocument(row.id)}
-        onLongPress={() => onOptions(row)}
-        style={[styles.rowMain, { flexDirection: dir.row }]}>
-        <Icon name="papers" color={colors.primary} size={size.iconLarge} />
-        <View style={styles.flex}>
-          <AppText weight="bold">{row.title}</AppText>
-          <AppText variant="caption" color="textMuted">
-            {categoryWord(row.category, t)} · <Bidi dir="ltr">{row.createdAt.slice(0, 10)}</Bidi>
-          </AppText>
-          {row.nextDateIso ? (
-            <View style={[styles.inline, { flexDirection: dir.row }]}>
-              <Icon name="calendar" color={colors.text} size={20} />
-              <Interpolated variant="caption" weight="bold" template={t('vault.next_date')} vars={{ date: row.nextDateIso.slice(0, 10) }} />
-            </View>
-          ) : null}
-          <View style={[styles.inline, { flexDirection: dir.row }]}>
-            {showMember && member ? (
+        <Pressable
+          testID={`paper-row-${row.id}`}
+          role="button"
+          accessibilityLabel={row.title}
+          accessibilityActions={[
+            { name: 'activate', label: row.title },
+            { name: 'longpress', label: `${t('btn.move_member')}, ${t('btn.delete_paper')}` },
+          ]}
+          onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'longpress' ? onOptions(row) : openRow())}
+          onPress={openRow}
+          onLongPress={() => onOptions(row)}
+          style={[styles.rowMain, { flexDirection: dir.row }]}>
+          <Icon name="papers" color={colors.primary} size={size.iconLarge} />
+          <View style={styles.flex}>
+            <AppText weight="bold">{row.title}</AppText>
+            <AppText variant="caption" color="textMuted">
+              {categoryWord(row.category, t)} · {formatDay(savedDay(row.createdAt), tag)}
+            </AppText>
+            {row.nextDateIso ? (
               <View style={[styles.inline, { flexDirection: dir.row }]}>
-                <View style={[styles.dot, { backgroundColor: member.color }]} />
-                <AppText variant="caption">{memberName(member, t)}</AppText>
+                <Icon name="calendar" color={colors.text} size={20} />
+                <Interpolated
+                  variant="caption"
+                  weight="bold"
+                  template={t('vault.next_date')}
+                  vars={{ date: formatDay(row.nextDateIso, tag) }}
+                  ltrKeys={[]}
+                />
               </View>
             ) : null}
-            {notRead ? <Tag text={t('vault.not_read_yet')} /> : null}
-            {sample ? <Tag text={t('vault.sample_tag')} /> : null}
+            <View style={[styles.inline, { flexDirection: dir.row }]}>
+              {showMember && member ? (
+                <View style={[styles.inline, { flexDirection: dir.row }]}>
+                  <View style={[styles.dot, { backgroundColor: member.color }]} />
+                  <AppText variant="caption">{memberName(member, t)}</AppText>
+                </View>
+              ) : null}
+              {notRead ? <Tag text={t('vault.not_read_yet')} /> : null}
+              {sample ? <Tag text={t('vault.sample_tag')} /> : null}
+            </View>
           </View>
-        </View>
-      </Pressable>
-      <Pressable
-        testID={`paper-options-${row.id}`}
-        role="button"
-        accessibilityLabel={`${t('btn.move_member')}, ${t('btn.delete_paper')}`}
-        hitSlop={size.hitSlop}
-        onPress={() => onOptions(row)}
-        style={styles.options}>
-        <Icon name="chevron-down" color={colors.textMuted} />
-      </Pressable>
+        </Pressable>
+        <Pressable
+          testID={`paper-options-${row.id}`}
+          role="button"
+          accessibilityLabel={`${t('btn.move_member')}, ${t('btn.delete_paper')}`}
+          hitSlop={size.hitSlop}
+          onPress={() => onOptions(row)}
+          style={styles.options}>
+          <Icon name="chevron-down" color={colors.textMuted} />
+        </Pressable>
       </View>
       {notRead && doc?.keepPages ? (
         <BigButton label={t('btn.read_now')} icon="camera" variant="secondary" size={56} onPress={() => void readNow()} />

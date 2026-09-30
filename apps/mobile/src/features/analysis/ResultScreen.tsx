@@ -17,8 +17,9 @@ import { space } from '@/design/tokens';
 import { emergencyTrigger } from '@/features/emergency';
 import { sendFeedbackOnce } from '@/features/feedback';
 import { useReminders } from '@/features/reminders';
+import { useVoiceNotice } from '@/features/speech';
 import { useSequentialSpeech } from '@/features/speech/sequential';
-import { SaveToVaultSheet, useDocument } from '@/features/vault';
+import { memberName, SaveToVaultSheet, useDocument, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
@@ -28,6 +29,7 @@ import { useSettings } from '@/store/settings';
 import type { ResultViewHandlers } from './ResultView';
 import { ResultView } from './ResultView';
 import { hearItItems } from './hearItMode';
+import { useStoredPages } from './storedPages';
 
 export function resultHref(id: string, sub?: 'source' | 'chat' | 'clerk' | 'quicksheet' | 'help', query?: string): Href {
   const base = `/result/${encodeURIComponent(id)}${sub ? `/${sub}` : ''}`;
@@ -50,14 +52,30 @@ export function remindNotice(outcome: string, d: Demand, t: (k: string, v?: Reco
   }
 }
 
-/** Resolve the analysis for a route id: session first, then the vault. */
-export function useAnalysisFor(id: string): { analysis: AnalysisResult | null; pages: CapturedPage[]; loading: boolean; documentId: string | null } {
+/**
+ * Resolve the analysis for a route id: session first, then the vault. For a vault document,
+ * `pages` are its kept page files (`vault.pages.uri`) and `keepPages` is `doc.keepPages`.
+ */
+export function useAnalysisFor(id: string): {
+  analysis: AnalysisResult | null;
+  pages: CapturedPage[];
+  loading: boolean;
+  documentId: string | null;
+  keepPages: boolean;
+} {
   const current = useSession((s) => s.currentAnalysis);
   const pages = useSession((s) => s.pages);
   const fromSession = current && current.analysis_id === id ? current : null;
   const { doc, loading } = useDocument(fromSession ? '' : id);
-  if (fromSession) return { analysis: fromSession, pages, loading: false, documentId: null };
-  return { analysis: doc?.analysis ?? null, pages: [], loading, documentId: doc ? doc.id : null };
+  const storedPages = useStoredPages(fromSession ? null : (doc?.id ?? null), Boolean(doc?.keepPages));
+  if (fromSession) return { analysis: fromSession, pages, loading: false, documentId: null, keepPages: true };
+  return {
+    analysis: doc?.analysis ?? null,
+    pages: storedPages,
+    loading,
+    documentId: doc ? doc.id : null,
+    keepPages: Boolean(doc?.keepPages),
+  };
 }
 
 export function ResultScreen({ id }: { id: string }) {
@@ -70,10 +88,18 @@ export function ResultScreen({ id }: { id: string }) {
   const reminders = useReminders();
   const speech = useSequentialSpeech();
   const hearIt = useSettings((s) => s.hearItMode);
+  const voiceNotice = useVoiceNotice(meta.tag);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(documentId);
   const [notice, setNotice] = useState<string | null>(null);
   const autoPlayed = useRef(false);
+  // "Saved for {member}" (S7 item 18 chip) is literally true on web and native alike (CL-042);
+  // `vault.saved` ("It stays on this phone") is not true in a browser.
+  const { doc: savedDoc } = useDocument(savedId ?? '');
+  const { members } = useMembers();
+  const savedLabel = t('vault.saved_to', {
+    member: memberName(members.find((m) => m.id === savedDoc?.memberId) ?? null, t),
+  });
 
   const readAll = () => {
     if (!analysis) return;
@@ -113,7 +139,7 @@ export function ResultScreen({ id }: { id: string }) {
         .catch(() => setNotice(null));
     },
     onFindHelp: (tags: ResourceTag[]) => router.push(resultHref(a.analysis_id, 'help', `tags=${tags.join(',')}`)),
-    onAsk: () => router.push(resultHref(a.analysis_id, 'chat')),
+    onAsk: (q?: string) => router.push(resultHref(a.analysis_id, 'chat', q ? `q=${encodeURIComponent(q)}` : undefined)),
     onOpenUrl: (url) => void openExternal(url),
     onCall: (href) => void Linking.openURL(href).catch(() => undefined),
     onEmergencyMoreHelp: () => router.push('/help?emergency=1' as Href),
@@ -131,31 +157,38 @@ export function ResultScreen({ id }: { id: string }) {
   };
 
   const footer = (
-    <View style={[styles.bar, { flexDirection: dir.row }]}>
-      <View style={styles.cell}>
-        <BigButton
-          label={savedId ? t('vault.saved') : t('btn.save')}
-          icon={savedId ? 'check' : 'papers'}
-          variant="primary"
-          size={56}
-          disabled={Boolean(savedId)}
-          onPress={() => setSaving(true)}
-        />
-      </View>
-      <View style={styles.cell}>
-        <BigButton label={t('btn.show_clerk')} icon="people" variant="secondary" size={56} onPress={() => router.push(resultHref(a.analysis_id, 'clerk'))} />
-      </View>
-      <View style={styles.cell}>
-        <BigButton label={t('btn.quick_sheet')} icon="papers" variant="secondary" size={56} onPress={() => router.push(resultHref(a.analysis_id, 'quicksheet'))} />
-      </View>
-      <View style={styles.cell}>
-        <BigButton
-          label={speech.playing ? t('btn.stop') : t('btn.read_all')}
-          icon={speech.playing ? 'stop' : 'speaker'}
-          variant="secondary"
-          size={56}
-          onPress={readAll}
-        />
+    <View style={styles.footer}>
+      {voiceNotice ? (
+        <AppText variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
+          {voiceNotice}
+        </AppText>
+      ) : null}
+      <View style={[styles.bar, { flexDirection: dir.row }]}>
+        <View style={styles.cell}>
+          <BigButton
+            label={savedId ? savedLabel : t('btn.save')}
+            icon={savedId ? 'check' : 'papers'}
+            variant="primary"
+            size={56}
+            disabled={Boolean(savedId)}
+            onPress={() => setSaving(true)}
+          />
+        </View>
+        <View style={styles.cell}>
+          <BigButton label={t('btn.show_clerk')} icon="people" variant="secondary" size={56} onPress={() => router.push(resultHref(a.analysis_id, 'clerk'))} />
+        </View>
+        <View style={styles.cell}>
+          <BigButton label={t('btn.quick_sheet')} icon="papers" variant="secondary" size={56} onPress={() => router.push(resultHref(a.analysis_id, 'quicksheet'))} />
+        </View>
+        <View style={styles.cell}>
+          <BigButton
+            label={speech.playing ? t('btn.stop') : t('btn.read_all')}
+            icon={speech.playing ? 'stop' : 'speaker'}
+            variant="secondary"
+            size={56}
+            onPress={readAll}
+          />
+        </View>
       </View>
     </View>
   );
@@ -184,6 +217,9 @@ export function ResultScreen({ id }: { id: string }) {
 }
 
 const styles = StyleSheet.create({
+  footer: {
+    gap: space.xs,
+  },
   bar: {
     flexWrap: 'wrap',
     gap: space.sm,

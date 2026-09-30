@@ -10,6 +10,7 @@ import { SpeakButton } from '@/design/components/SpeakButton';
 import { AppText, Heading } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
+import { useVoiceNotice } from '@/features/speech';
 import { useDirection } from '@/i18n/direction';
 import { keyExists } from '@/i18n/store';
 import { usePackMeta, useT, type TFunction } from '@/i18n/useT';
@@ -95,6 +96,9 @@ export function EmergencyCard({ kinds, onClose, inline, onMoreHelp, triggered }:
   const words = emergencyKindWords(kinds, t);
   const showContext = (triggered ?? kinds.length > 0) && words.length > 0;
   const contextLine = showContext ? t('emergency.triggered_by', { kinds: words.join(', ') }) : null;
+  // Honest TTS line (D-26), resolved up front so a Dari user learns before tapping that the lines
+  // will be read with a Farsi voice. Inline in S7 the result footer already shows the same line.
+  const voiceNotice = useVoiceNotice(meta.tag);
   return (
     <View
       testID="emergency-card"
@@ -107,6 +111,11 @@ export function EmergencyCard({ kinds, onClose, inline, onMoreHelp, triggered }:
         </View>
         <SpeakButton text={t('emergency.title')} lang={meta.tag} />
       </View>
+      {voiceNotice && !inline ? (
+        <AppText variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
+          {voiceNotice}
+        </AppText>
+      ) : null}
       {contextLine ? (
         <View style={[styles.row, { flexDirection: dir.row }]}>
           <View style={styles.flex}>

@@ -3,8 +3,9 @@
 // paper's language + the translation, a speaker per block. ≥ 900 px: image beside the list.
 
 import { Image } from 'expo-image';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AnalysisResult } from '@/api/types';
 import { Bidi } from '@/design/components/Bidi';
@@ -12,6 +13,7 @@ import { Screen } from '@/design/components/Screen';
 import { SpeakButton } from '@/design/components/SpeakButton';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
+import { useTtsFallbackNotice } from '@/features/speech';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
@@ -33,23 +35,59 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
   const meta = usePackMeta();
   const { colors } = useTheme();
   const dir = useDirection();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // `Screen scroll={false}` does not bound its body's height, so the pane below the toolbars gets
+  // an explicit height (window minus its measured top) — otherwise the inner ScrollView grows to
+  // its content, the page scrolls instead (web) or is clipped (native), and `?block=` cannot scroll.
+  const paneRef = useRef<View | null>(null);
+  const [paneTop, setPaneTop] = useState<number | null>(null);
+  const measurePane = () => paneRef.current?.measureInWindow((_x, y) => setPaneTop(Math.max(0, y)));
+  const paneHeight = paneTop === null ? undefined : Math.max(280, height - paneTop - insets.bottom);
+  // Also measure after mount / window resize (onLayout alone can be late on web).
+  useEffect(() => {
+    const id = setTimeout(() => paneRef.current?.measureInWindow((_x, y) => setPaneTop(Math.max(0, y))), 0);
+    return () => clearTimeout(id);
+  }, [width, height]);
   const [current, setCurrent] = useState(() => initialSourcePage(a, block, page));
   const [selected, setSelected] = useState<string | null>(block ?? null);
   const [mode, setMode] = useState<SourceMode>('both');
   const [box, setBox] = useState(0);
   const scroll = useRef<ScrollView | null>(null);
+  // Block offsets are relative to the list pane; the pane's own offset is added when scrolling
+  // (phone layout puts the page image above the list).
   const offsets = useRef<Record<string, number>>({});
+  const listY = useRef<number | null>(null);
+  const initialScrolled = useRef(!block);
+  // Honest TTS line (D-26) per speaker language: the paper's own words are read in
+  // `detected_language`, translations in the UI pack. Shown above the panes, so it stays visible.
+  const originalVoice = useTtsFallbackNotice(a.detected_language);
+  const translationVoice = useTtsFallbackNotice(meta.tag);
+  const voiceNotices = [originalVoice.notice, translationVoice.notice].filter(
+    (n, i, all): n is string => Boolean(n) && all.indexOf(n) === i,
+  );
   const model = sourcePageModel(a, current);
   const image = pageImageFor(a, pages, current);
   const aspect = image?.width && image?.height ? image.height / image.width : 1.294;
   const wide = width >= 900;
   const selectedRow = model.blocks.find((r) => r.block.id === selected) ?? null;
 
+  const scrollToBlock = (id: string, animated: boolean): boolean => {
+    const y = offsets.current[id];
+    if (y === undefined || listY.current === null) return false;
+    scroll.current?.scrollTo({ y: Math.max(0, listY.current + y - space.md), animated });
+    return true;
+  };
+
+  /** `?block=` opens scrolled to that block once both layouts are known. */
+  const maybeInitialScroll = () => {
+    if (initialScrolled.current || !block) return;
+    if (scrollToBlock(block, false)) initialScrolled.current = true;
+  };
+
   const select = (id: string) => {
     setSelected(id);
-    const y = offsets.current[id];
-    if (y !== undefined) scroll.current?.scrollTo({ y, animated: true });
+    scrollToBlock(id, true);
   };
 
   const imagePane = (
@@ -91,7 +129,12 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
   );
 
   const listPane = (
-    <View style={[styles.list, wide ? styles.half : null]}>
+    <View
+      onLayout={(e: LayoutChangeEvent) => {
+        listY.current = wide ? 0 : e.nativeEvent.layout.y;
+        maybeInitialScroll();
+      }}
+      style={[styles.list, wide ? styles.half : null]}>
       {model.partial ? <AppText color="textMuted">{t('warning.translation_partial')}</AppText> : null}
       {model.pageTranslation && mode !== 'original' ? (
         <View style={[styles.block, { borderColor: colors.divider }]}>
@@ -99,7 +142,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
             <View style={styles.flex}>
               <AppText lang={a.target_language}>{model.pageTranslation}</AppText>
             </View>
-            <SpeakButton text={model.pageTranslation} lang={meta.tag} />
+            <SpeakButton text={model.pageTranslation} lang={meta.tag} onResolved={translationVoice.onResolved} />
           </View>
         </View>
       ) : null}
@@ -109,6 +152,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
           testID={`source-block-${r.block.id}`}
           onLayout={(e) => {
             offsets.current[r.block.id] = e.nativeEvent.layout.y;
+            if (r.block.id === block) maybeInitialScroll();
           }}
           style={[styles.block, { borderColor: r.block.id === selected ? colors.focus : colors.divider }]}>
           {mode !== 'translation' ? (
@@ -118,7 +162,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
                   {r.block.text}
                 </Bidi>
               </Pressable>
-              <SpeakButton text={r.block.text} lang={a.detected_language} />
+              <SpeakButton text={r.block.text} lang={a.detected_language} onResolved={originalVoice.onResolved} />
             </View>
           ) : null}
           {mode !== 'original' && !model.pageTranslation ? (
@@ -128,7 +172,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
                   {r.translation ?? t('source.not_translated')}
                 </AppText>
               </View>
-              {r.translation ? <SpeakButton text={r.translation} lang={meta.tag} /> : null}
+              {r.translation ? <SpeakButton text={r.translation} lang={meta.tag} onResolved={translationVoice.onResolved} /> : null}
             </View>
           ) : null}
           <View style={[styles.badges, { flexDirection: dir.row }]}>
@@ -175,10 +219,17 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
           ))}
         </View>
       ) : null}
-      <ScrollView ref={scroll} contentContainerStyle={[styles.panes, wide ? { flexDirection: dir.row } : null]}>
-        {imagePane}
-        {listPane}
-      </ScrollView>
+      {voiceNotices.map((n) => (
+        <AppText key={n} variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
+          {n}
+        </AppText>
+      ))}
+      <View ref={paneRef} onLayout={measurePane} style={paneHeight ? { height: paneHeight } : null} testID="source-panes">
+        <ScrollView ref={scroll} style={styles.flex} contentContainerStyle={[styles.panes, wide ? { flexDirection: dir.row } : null]}>
+          {imagePane}
+          {listPane}
+        </ScrollView>
+      </View>
     </Screen>
   );
 }

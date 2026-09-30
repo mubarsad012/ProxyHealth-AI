@@ -131,6 +131,29 @@ async def test_translation_and_its_fallback() -> None:
     assert none.warnings == [WarningCode.translation_partial]
 
 
+@pytest.mark.asyncio
+async def test_failed_translation_uses_the_packs_fixed_card() -> None:
+    """AI_PROMPTS §5.5.4: the pack's ``clerk.*`` pieces joined with the English need line."""
+    from proxyhealth_api.analysis.i18n import MappingTranslator
+
+    async def failing(english: str) -> str | None:
+        return None
+
+    dari = MappingTranslator({ck.GENERIC_CARD_KEY: "⟦prs⟧ {language}: {need}."})
+    kwargs = dict(
+        language_name_en="Dari", document_type=DT.lease, sender_as_written="Oak Apartments",
+        sender_kind=SK.landlord, clerk_need_en="the rent amount", template_line="a lease",
+        target_language="prs",
+    )  # fmt: skip
+    for translate in (failing, None):
+        out = await ck.build_clerk_message(translate=translate, t=dari, **kwargs)  # type: ignore[arg-type]
+        assert out.message.translated == "⟦prs⟧ Dari: the rent amount."
+        assert out.message.english.startswith("Hello. I speak Dari. I am here about: a lease")
+        assert out.warnings == [WarningCode.translation_partial]
+    english = await ck.build_clerk_message(t=dari, **{**kwargs, "target_language": "en"})  # type: ignore[arg-type]
+    assert english.message.translated == english.message.english and english.warnings == []
+
+
 def test_document_phrase_and_generic_card() -> None:
     assert ck.document_phrase(DT.nta, None) == "a Notice to Appear"
     assert ck.document_phrase(DT.lease, "  Oak   Apartments ") == "a lease from Oak Apartments"
@@ -171,3 +194,13 @@ def test_checked_sender_keeps_a_sender_printed_on_the_paper() -> None:
     assert ck.checked_sender(f"{name} 703-555-0199", scrubber) is None
     assert ck.checked_sender("Oak Apartments", None) == "Oak Apartments"
     assert ck.checked_sender("   ", scrubber) is None
+
+
+def test_clerk_checks_do_not_count_text_they_drop() -> None:
+    """Sender / need-line checks only decide what the card shows; text they drop is not shown,
+    so it must not inflate ``verification.contacts_stripped``."""
+    scrubber = make_scrubber("Fairfax County Department of Family Services", set(), en_t())
+    assert ck.checked_sender("Acme Legal Services LLC", scrubber) is None
+    need = "Call 703-555-0199 about my letter"
+    assert ck.choose_need_line(need, "template", scrubber=scrubber) == ("template", "template")
+    assert scrubber.total == 0 and scrubber.warnings() == []

@@ -180,3 +180,64 @@ export async function burnMasksOnCanvas(base64: string, masks: MaskRect[]): Prom
   }
   return stripDataUrl(canvas.toDataURL('image/jpeg', 0.8));
 }
+
+// --- blur hint (web only, PRODUCT_SPEC S5 "blurry hint (web only, canvas variance)") -------------
+
+/** Longest edge of the grey copy the sharpness score is measured on. */
+export const SHARPNESS_EDGE = 512;
+/** Below this Laplacian variance a page is called blurry. Deliberately low: it is only a hint. */
+export const BLUR_THRESHOLD = 60;
+
+/** Variance of the 4-neighbour Laplacian over a greyscale image (pure; exported for tests). */
+export function laplacianVariance(gray: ArrayLike<number>, width: number, height: number): number {
+  if (width < 3 || height < 3) return 0;
+  let sum = 0;
+  let sumSq = 0;
+  let n = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const i = y * width + x;
+      const lap = gray[i - width] + gray[i + width] + gray[i - 1] + gray[i + 1] - 4 * gray[i];
+      sum += lap;
+      sumSq += lap * lap;
+      n += 1;
+    }
+  }
+  const mean = sum / n;
+  return sumSq / n - mean * mean;
+}
+
+/** RGBA pixels → luma (Rec. 601), pure. */
+export function rgbaToGray(rgba: ArrayLike<number>, width: number, height: number): Float32Array {
+  const out = new Float32Array(width * height);
+  for (let i = 0; i < out.length; i += 1) {
+    const j = i * 4;
+    out[i] = 0.299 * rgba[j] + 0.587 * rgba[j + 1] + 0.114 * rgba[j + 2];
+  }
+  return out;
+}
+
+/** Web only: sharpness score of a picked page; null on native or when the canvas is unavailable. */
+export async function sharpnessScore(input: ImageInput): Promise<number | null> {
+  if (Platform.OS !== 'web') return null;
+  const { img, revoke } = await webImageFrom(input);
+  try {
+    const target = fitWithin(img.naturalWidth || img.width, img.naturalHeight || img.height, SHARPNESS_EDGE);
+    const canvas = document.createElement('canvas');
+    canvas.width = target.width;
+    canvas.height = target.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !target.width || !target.height) return null;
+    ctx.drawImage(img, 0, 0, target.width, target.height);
+    const { data } = ctx.getImageData(0, 0, target.width, target.height);
+    return laplacianVariance(rgbaToGray(data, target.width, target.height), target.width, target.height);
+  } catch {
+    return null;
+  } finally {
+    revoke();
+  }
+}
+
+export function looksBlurry(score: number | null): boolean {
+  return score !== null && score < BLUR_THRESHOLD;
+}

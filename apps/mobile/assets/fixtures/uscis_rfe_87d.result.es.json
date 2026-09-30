@@ -3,9 +3,9 @@
   "category": "immigration",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "a USCIS request for evidence and what I must send before the date on it",
+    "english": "Hello. I speak Spanish. I am here about: a USCIS request for evidence from U.S. Citizenship and Immigration Services. I need help with: a USCIS request for evidence and what I must send before the date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ a USCIS request for evidence and what I must send before the date on it"
+    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a USCIS request for evidence from U.S. Citizenship and Immigration Services. I need help with: a USCIS request for evidence and what I must send before the date on it. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -17,19 +17,19 @@
         "anchor_demand_id": null,
         "anchor_quote": null,
         "formula": null,
-        "kind": "unresolved",
-        "localized_line": "October 13, 2026",
+        "kind": "stated",
+        "localized_line": null,
         "rule_id": null,
         "rule_source_url": null,
         "rule_verification": null,
         "time_text": null,
-        "value_iso": null
+        "value_iso": "2026-10-13"
       },
       "documents": [],
       "id": "d1",
       "kind": "deadline",
       "page": 1,
-      "reminder_eligible": false,
+      "reminder_eligible": true,
       "role": "response_due",
       "source_quote": "Your response must be received by October 13, 2026.",
       "span_ids": [
@@ -37,7 +37,7 @@
       ],
       "text": "USCIS debe recibir su respuesta antes del 13 de octubre de 2026.",
       "value_verbatim": "October 13, 2026",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -63,7 +63,7 @@
       ],
       "text": "Envíe los tres papeles de la lista: acta de nacimiento con traducción, dos fotos y su declaración de impuestos.",
       "value_verbatim": "birth certificate",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     },
     {
@@ -83,15 +83,15 @@
       ],
       "text": "Ponga este aviso encima de su respuesta.",
       "value_verbatim": "place this notice on top of your response",
-      "verification_note": null,
+      "verification_note": "exact",
       "verified": true
     }
   ],
   "detected_language": "en",
   "disclaimer_kind": "legal_information_only",
   "disclaimers": [
-    "legal_information_only",
     "ai_generated",
+    "verify_with_sender",
     "machine_translation",
     "demo_sample"
   ],
@@ -109,7 +109,7 @@
       "zip3": null
     },
     "has_case_number": false,
-    "has_receipt_number": false,
+    "has_receipt_number": true,
     "institutions_as_written": [
       "U.S. Citizenship and Immigration Services",
       "Department of Homeland Security"
@@ -340,9 +340,9 @@
           "text": "If you do not respond by the date above, we may consider your case abandoned."
         }
       ],
-      "height": null,
+      "height": 2070,
       "page": 1,
-      "width": null
+      "width": 1600
     }
   ],
   "page_thumbnails": null,
@@ -394,7 +394,7 @@
       "span_ids": [
         "p1b7"
       ],
-      "text": "Hable con un abogado con licencia o un representante acreditado por el DOJ antes de enviar su respuesta."
+      "text": "Hable con un abogado con licencia o un representante acreditado por el DOJ antes de enviar su respuesta. Un abogado con licencia o un representante acreditado por el DOJ le puede aconsejar sobre su caso. Busque uno en Buscar ayuda."
     }
   ],
   "quality": {
@@ -446,15 +446,18 @@
   "translation_confidence": "medium",
   "unverified": [],
   "urgency": {
-    "days_until": null,
-    "driving_demand_id": null,
+    "days_until": 11,
+    "driving_demand_id": "d1",
     "floor_applied": false,
-    "headline_key": "urgency.info.no_date",
-    "headline_params": {},
-    "level": "info",
-    "nearest_date_iso": null,
+    "headline_key": "urgency.high.date_soon",
+    "headline_params": {
+      "date": "October 13, 2026",
+      "date_iso": "2026-10-13"
+    },
+    "level": "high",
+    "nearest_date_iso": "2026-10-13",
     "past_date": false,
-    "verify_resource_id": null
+    "verify_resource_id": "uscis_contact"
   },
   "verification": {
     "contacts_stripped": 0,
@@ -462,9 +465,10 @@
     "facts_rejected": 0,
     "injection_masked": false,
     "phrasing_rewrites": 0,
-    "verifier_version": "0"
+    "verifier_version": "2026-09-27"
   },
   "warnings": [
+    "phrasing_lint_unavailable",
     "demo_sample"
   ]
 }

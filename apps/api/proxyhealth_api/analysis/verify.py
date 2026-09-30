@@ -97,22 +97,45 @@ def digit_runs(text: str) -> list[str]:
     return _DIGITS_RE.findall(ascii_digits(unicodedata.normalize("NFKC", text)))
 
 
+_REFINE_MARGIN = 0.1  # coarse windows this close to the threshold (or to the best) are re-scanned
+
+
 def _best_window(needle: str, haystack: str) -> tuple[float, int]:
-    """Best ``SequenceMatcher`` ratio over a sliding window, and the window's start index."""
+    """Best ``SequenceMatcher`` ratio over a sliding window, and the window's start index.
+
+    A coarse pass (step ``n // 8``) finds the promising regions; every coarse start whose ratio is
+    within ``_REFINE_MARGIN`` of the threshold or of the coarse best is then re-scanned with step
+    1 over ``start ± step``, so an off-grid window is never skipped (shifting a window by ``d``
+    characters moves its ratio by about ``d / n`` ≤ 1/16).
+    """
     if not needle or not haystack:
         return 0.0, 0
     n = len(needle)
     if len(haystack) <= n:
         return SequenceMatcher(None, needle, haystack, autojunk=False).ratio(), 0
-    best, best_start = 0.0, 0
-    step = max(1, n // 8)
-    for start in range(0, len(haystack) - n + 1, step):
+    last = len(haystack) - n
+
+    def score(start: int) -> float:
         window = haystack[start : start + n]
-        ratio = SequenceMatcher(None, needle, window, autojunk=False).ratio()
-        if ratio > best:
-            best, best_start = ratio, start
-            if best >= 0.999:
-                break
+        return SequenceMatcher(None, needle, window, autojunk=False).ratio()
+
+    step = max(1, n // 8)
+    coarse = [(score(start), start) for start in range(0, last + 1, step)]
+    best, best_start = max(coarse, key=lambda item: (item[0], -item[1]))
+    if best >= 0.999 or step == 1:
+        return best, best_start
+    floor = min(FUZZY_THRESHOLD, best) - _REFINE_MARGIN
+    seen = {start for _, start in coarse}
+    for ratio, centre in coarse:
+        if ratio < floor:
+            continue
+        for start in range(max(0, centre - step + 1), min(last, centre + step - 1) + 1):
+            if start in seen:
+                continue
+            seen.add(start)
+            refined = score(start)
+            if refined > best or (refined == best and start < best_start):
+                best, best_start = refined, start
     return best, best_start
 
 
