@@ -14,11 +14,11 @@
   "translated_pages": [
     {
       "page": 1,
-      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - الإسكندرية، فرجينيا\nالتاريخ: ٢٤ سبتمبر ٢٠٢٦\nإشعار لمدة ١٤ يومًا بدفع الإيجار أو الإخلاء\nإلى: SAMPLE TENANT، Oak Hollow Apartments، الوحدة ١٢\nعليك إيجار قدره $1,450.00 عن شهر سبتمبر ٢٠٢٦.\nيجب أن تدفع المبلغ كاملًا قبل ٨ أكتوبر ٢٠٢٦، وإلا سينتهي عقد الإيجار.\nإذا لم يُدفع الإيجار خلال ١٤ يومًا من تاريخ هذا الإشعار، قد يرفع المالك قضية إخلاء في المحكمة.\nيُعطى هذا الإشعار بموجب قانون فرجينيا § 55.1-1245.\nادفع في مكتب التأجير أو اتصل على (703) 555-0175 إذا كانت لديك أسئلة.\nالتوقيع: مدير العقار، Oak Hollow Property Management LLC"
+      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - الإسكندرية، فرجينيا\nالتاريخ: September 24, 2026\nإشعار لمدة 14 يومًا بدفع الإيجار أو الإخلاء\nإلى: SAMPLE TENANT، Oak Hollow Apartments، الوحدة 12\nعليك إيجار قدره $1,450.00 عن شهر September 2026.\nيجب أن تدفع المبلغ كاملًا قبل October 8, 2026، وإلا سينتهي عقد الإيجار.\nإذا لم يُدفع الإيجار خلال 14 يومًا من تاريخ هذا الإشعار، قد يرفع المالك قضية إخلاء في المحكمة.\nيُعطى هذا الإشعار بموجب قانون فرجينيا § 55.1-1245.\nادفع في مكتب التأجير أو اتصل على (703) 555-0175 إذا كانت لديك أسئلة.\nالتوقيع: مدير العقار، Oak Hollow Property Management LLC"
     }
   ],
   "summary_title": "إشعار من المالك عن إيجار غير مدفوع",
-  "summary_body": "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل ٨ أكتوبر ٢٠٢٦ أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة.",
+  "summary_body": "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل October 8, 2026 أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة.",
   "summary_body_en": "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order.",
   "summary_span_ids": [
     "p1b1",
@@ -29,7 +29,7 @@
     {
       "id": "d1",
       "kind": "amount",
-      "text": "يقول الإشعار إن عليك $1,450.00 إيجار شهر سبتمبر ٢٠٢٦.",
+      "text": "يقول الإشعار إن عليك $1,450.00 إيجار شهر September 2026.",
       "value_verbatim": "$1,450.00",
       "source_quote": "You owe rent of $1,450.00 for September 2026.",
       "span_ids": [
@@ -50,7 +50,7 @@
     {
       "id": "d2",
       "kind": "deadline",
-      "text": "يذكر الإشعار ٨ أكتوبر ٢٠٢٦ موعدًا لدفع المبلغ كاملًا.",
+      "text": "يذكر الإشعار October 8, 2026 موعدًا لدفع المبلغ كاملًا.",
       "value_verbatim": "October 8, 2026",
       "source_quote": "You must pay the full amount by October 8, 2026, or your lease will be terminated.",
       "span_ids": [
@@ -71,7 +71,7 @@
     {
       "id": "d3",
       "kind": "relative_deadline",
-      "text": "يذكر الإشعار أيضًا ١٤ يومًا من تاريخ الإشعار. اسأل المالك عن التاريخ المقصود.",
+      "text": "يذكر الإشعار أيضًا 14 يومًا من تاريخ الإشعار. اسأل المالك عن التاريخ المقصود.",
       "value_verbatim": "within 14 days of the date of this notice",
       "source_quote": "If the rent is not paid within 14 days of the date of this notice, the landlord may file an eviction case in court.",
       "span_ids": [

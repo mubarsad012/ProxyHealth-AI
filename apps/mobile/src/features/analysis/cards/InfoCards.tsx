@@ -5,7 +5,6 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Bidi } from '@/design/components/Bidi';
 import { Card } from '@/design/components/Card';
 import { Icon } from '@/design/components/Icon';
 import { AppText } from '@/design/components/Text';
@@ -14,7 +13,7 @@ import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
 import { useBidiText, useT } from '@/i18n/useT';
 
-import type { ResultCardProps } from './shared';
+import { type ResultCardProps, SourceText } from './shared';
 
 export function GlossaryCard({ analysis }: ResultCardProps) {
   const bt = useBidiText();
@@ -29,9 +28,9 @@ export function GlossaryCard({ analysis }: ResultCardProps) {
       speakText={terms.map((g) => `${g.term_as_written}: ${g.explanation}`).join('. ')}>
       {terms.map((g, i) => (
         <View key={`g-${i}`} style={[styles.row, { borderTopColor: colors.divider }]}>
-          <Bidi dir="auto" variant="body" weight="bold">
+          <SourceText lang={analysis.detected_language} weight="bold">
             {g.term_as_written}
-          </Bidi>
+          </SourceText>
           <AppText lang={analysis.target_language}>{bt(g.explanation)}</AppText>
         </View>
       ))}

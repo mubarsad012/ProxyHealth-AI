@@ -207,3 +207,45 @@ def test_every_document_type_has_driving_roles() -> None:
     assert set(u.DRIVING_ROLES) == set(DocumentType)
     for roles in u.DRIVING_ROLES.values():
         assert not roles & u.NEVER_DRIVING
+
+
+# --- Phase 2B: unverified dated facts (D-12 "up to medium") ------------------------------------
+
+
+def _unverified(days: int | None, role: str = "response_due") -> Demand:
+    d = dated(days, role, verified=False, demand_id="u1")
+    return d.model_copy(update={"date": None, "reminder_eligible": False})
+
+
+def test_unverified_date_lifts_a_dateless_result_to_medium_never_no_action() -> None:
+    """Every quote failed on a skewed photo: the banner must not say "Nothing to do right now"."""
+    out = u.compute_urgency(
+        DT.uscis_rfe, CAT.immigration, [], emergency=False, today=TODAY, t=en_t(),
+        unverified=[_unverified(None)],
+    )  # fmt: skip
+    urg = out.urgency
+    assert urg.level is UrgencyLevel.medium and urg.headline_key == u.KEY_UNVERIFIED_DATE
+    assert urg.headline_key != u.KEY_INFO_NO_ACTION and urg.driving_demand_id is None
+    assert urg.verify_resource_id == u.VERIFY_USCIS, "the verify CTA still helps"
+
+
+def test_unverified_date_keeps_its_headline_under_a_floor() -> None:
+    out = u.compute_urgency(
+        DT.nta, CAT.court, [], emergency=False, today=TODAY,
+        unverified=[_unverified(None, "hearing_date")],
+    )  # fmt: skip
+    assert out.urgency.level is UrgencyLevel.high and out.urgency.floor_applied
+    assert out.urgency.headline_key == u.KEY_UNVERIFIED_DATE
+
+
+def test_unverified_never_beats_a_verified_date_and_anchor_roles_do_not_count() -> None:
+    out = u.compute_urgency(
+        DT.medical_bill, CAT.medical, [dated(45, "payment_due")], emergency=False, today=TODAY,
+        unverified=[_unverified(None, "payment_due")],
+    )  # fmt: skip
+    assert out.urgency.level is UrgencyLevel.info and out.urgency.headline_key == u.KEY_INFO_LATER
+    notice_only = u.compute_urgency(
+        DT.medical_bill, CAT.medical, [], emergency=False, today=TODAY,
+        unverified=[_unverified(None, "notice_date")],
+    )  # fmt: skip
+    assert notice_only.urgency.headline_key == u.KEY_INFO_NO_DATE, "something was on the page"

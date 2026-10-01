@@ -2,8 +2,10 @@
 // NOTHING is written — not the paper, not a new member — until the user taps Save in this sheet.
 // "Add someone" collects a name + colour locally and creates the member only at Save. Page images
 // follow Settings → "Keep page images" (default on native, off web); "Hide ID numbers" masks
-// A-numbers / receipt numbers in the stored copy. Works for "Save to read later" too (analysis
-// null + an explicit `documentId`).
+// A-numbers / receipt numbers in the stored copy. A page with "Hide parts" boxes keeps its image
+// only on web, where `preparePages` burned the boxes into the display page (D-19; native sends
+// `masks[]` and keeps the original photo in the session, so that page is saved without an image).
+// Works for "Save to read later" too (analysis null + an explicit `documentId`).
 
 import { useState } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native';
@@ -73,6 +75,9 @@ export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
         now: new Date(),
         t,
         documentId: readLaterId,
+        // Web result pages come from `preparePages` (boxes burned on a canvas); "read later" pages
+        // and every native page still hold the original pixels.
+        masksBurnedIn: Platform.OS === 'web' && !readLaterId,
       });
       await vault.documents.save(doc, pageInputs);
       bumpVault();

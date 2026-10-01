@@ -1,13 +1,14 @@
 """``run_troubleshoot`` — screenshot help and scam check (BUILD_PLAN §4.1; AI_PROMPTS §5.3, §11).
 
-Order: upload validation + redaction → one ``troubleshoot`` call (pro, ``medium``) → quote checks
-against the model's own ``screen_text`` (``error_text_quoted``, each step's
-``ui_target_as_written``, red-flag quotes) → contact scrubber → scam scorer (regexes over the
-screen, model hints, credential request) → emergency lexicon (``screen_text`` + ``user_goal``) →
-injection detection (flag + warning; a screenshot has no block boxes to mask, so no re-run) →
-phrasing lint → tags (``scam_report`` / ``crisis`` first) → disclaimers and warnings.
-The deadline, urgency and clerk/resource steps of AI_PROMPTS §11 do not apply to a screen.
-Nothing here writes to disk or logs content (ARCHITECTURE §7).
+Order: upload validation + redaction (in the thread pool) → one ``troubleshoot`` call (pro,
+``medium``) → quote checks against the model's own ``screen_text`` (``error_text_quoted``, each
+step's ``ui_target_as_written``, red-flag quotes) → contact scrubber → scam scorer (regexes over
+the screen, model hints, credential request) → emergency lexicon (``screen_text`` + ``user_goal``,
+plus the model's ``crisis`` tag) → injection detection (flag + warning; a screenshot has no block
+boxes to mask, so no re-run) → phrasing lint (steps, flags, summary, meaning, cautions) → tags
+(``scam_report`` / ``crisis`` first) → disclaimers and warnings. A sample screenshot never sends
+the typed goal to the provider. The deadline, urgency and clerk/resource steps of AI_PROMPTS §11
+do not apply to a screen. Nothing here writes to disk or logs content (ARCHITECTURE §7).
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from proxyhealth_api.analysis.pipeline import (
     hints_for,
     make_rewriter,
     model_meta,
+    offload,
     parsed_as,
     phrase,
     prompt_base_vars,
@@ -53,6 +55,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     ModelQuality,
     RedFlagKind,
+    ResourceTag,
     Severity,
     WarningCode,
 )
@@ -115,6 +118,9 @@ def screen_flags(flags: Sequence[RedFlagOut], corpus: str) -> tuple[list[RedFlag
         if not on_screen(f.source_quote, corpus):
             dropped += 1
             continue
+        if f.kind is RedFlagKind.scam_payment_method and scam.is_anti_fraud_quote(f.source_quote):
+            dropped += 1  # "SSA will never ask you to pay with gift cards" is not a demand
+            continue
         kept.append(
             RedFlag(
                 kind=f.kind, text=f.text, source_quote=f.source_quote, span_ids=[], page=None,
@@ -128,7 +134,7 @@ def screen_flags(flags: Sequence[RedFlagOut], corpus: str) -> tuple[list[RedFlag
 async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> TroubleshootResult:
     started = time.perf_counter()
     deadline_at = deps.ai.request_deadline()
-    media = screen_media(req, deps)
+    media = await offload(screen_media, req, deps)  # decode + redaction off the event loop
     uploads.check_inline_budget([media], deps.settings)
     target = req.target_language
     t = translator(deps, target)
@@ -137,7 +143,9 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
         **prompt_base_vars(deps, target_language=target, today=today),
         "mode": req.mode.value,
         "portal_hint": req.portal_hint.value if req.portal_hint else prompt.NONE_TEXT,
-        "user_goal": prompt.untrusted(req.user_goal, 300),
+        # A sample screenshot skips the consent gate, so nothing the reader typed may reach the
+        # provider with it: the typed goal stays on the server (emergency lexicon only).
+        "user_goal": prompt.untrusted(None if req.demo_sample_id else req.user_goal, 300),
     }
     hints = hints_for(
         demo_sample_id=req.demo_sample_id, target_language=target, mode=req.mode.value
@@ -170,6 +178,7 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     emerg = emergency.detect_emergency(
         screen_text, detected_language=None, target_language=target,
         user_texts=[req.user_goal] if req.user_goal else [],
+        model_flag=ResourceTag.crisis.value in out.resource_tags,
         credential_or_payment_request=asks,
     )  # fmt: skip
     warnings.extend(emerg.warnings)
@@ -210,7 +219,8 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     flags = [f.model_copy(update={"text": await clean(f.text)}) for f in model_flags]
     summary = await clean(out.screen_summary)
     meaning = await clean(out.error_meaning)
-    cautions = [c for c in scrubber.scrub_all(out.cautions[:MAX_CAUTIONS]) if c.strip()]
+    # Cautions are model prose like the steps: contact filter and phrasing lint (TAXONOMY §8).
+    cautions = [c for c in [await clean(c) for c in out.cautions[:MAX_CAUTIONS]] if c.strip()]
     tags = tagging.finalize_tags(
         out.resource_tags, document_type=DocumentType.unknown, readable=True,
         scam_risk=scam_out.scam_risk, emergency=emerg.safety.emergency, red_flags=flags,

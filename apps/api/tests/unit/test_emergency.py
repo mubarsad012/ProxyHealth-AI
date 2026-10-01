@@ -221,3 +221,55 @@ def test_medicine_label_boilerplate_is_still_not_an_emergency() -> None:
     label = "If swallowed, get medical help or contact a Poison Control Center right away."
     out = em.detect_emergency([label], detected_language="en", target_language="es")
     assert out.safety.emergency is False
+
+
+# --- Phase 2B: the most common first-person phrases (D-14: false negatives are not acceptable) ---
+
+FIRST_PERSON = [
+    ("es", "Me quiero suicidar, no puedo más con esto", "self_harm"),
+    ("es", "me quiero suicidar", "self_harm"),
+    ("es", "Tomé muchas pastillas", "overdose"),
+    ("es", "Me duele mucho el pecho", "chest_pain"),
+    ("es", "Mi hijo tomó cloro", "poison"),
+    ("es", "mi hijo tomo cloro", "poison"),  # typed without the accent
+    ("es", "Ya no quiero vivir", "self_harm"),
+    ("ar", "أريد أن أنتحر", "self_harm"),
+    ("ar", "اريد ان انتحر", "self_harm"),  # typed without hamza
+    ("ar", "سأنتحر الليلة", "self_harm"),
+    ("ar", "لا أستطيع أن أتنفس", "breathing"),
+    ("prs", "می‌خواهم خودم را بکشم", "self_harm"),
+    ("prs", "میخواهم خودم را بکشم", "self_harm"),  # no ZWNJ
+    ("ps", "غواړم ځان ووژنم", "self_harm"),
+    ("en", "I took all my pills tonight", "overdose"),
+    ("en", "I don't want to live anymore", "self_harm"),
+    ("en", "I don’t want to live anymore", "self_harm"),
+    ("en", "I can't breath", "breathing"),
+]
+
+
+@pytest.mark.parametrize(("tag", "text", "kind"), FIRST_PERSON)
+def test_first_person_phrases_fire_in_their_language(tag: str, text: str, kind: str) -> None:
+    out = em.detect_emergency([], detected_language=tag, target_language=tag, user_texts=[text])
+    assert out.safety.emergency and kind in out.safety.emergency_kinds, (tag, text)
+
+
+@pytest.mark.parametrize(("tag", "text", "kind"), FIRST_PERSON)
+def test_typed_text_fires_whatever_the_paper_and_target_language(
+    tag: str, text: str, kind: str
+) -> None:
+    """A Dari reader may ask about a Spanish paper with an English UI: typed words run through
+    every language's list."""
+    out = em.detect_emergency([], detected_language="es", target_language="en", user_texts=[text])
+    assert out.safety.emergency and kind in out.safety.emergency_kinds, (tag, text)
+
+
+@pytest.mark.parametrize("tag", BUNDLED)
+def test_neutral_typed_text_in_any_language_is_not_an_emergency(tag: str) -> None:
+    out = em.detect_emergency([], detected_language="en", target_language="en",
+                              user_texts=[NEUTRAL[tag]])  # fmt: skip
+    assert not out.safety.emergency, (tag, out.safety.emergency_kinds)
+
+
+def test_model_flag_alone_is_enough() -> None:
+    out = em.detect_emergency([], detected_language="en", target_language="en", model_flag=True)
+    assert out.safety.emergency and out.model_only

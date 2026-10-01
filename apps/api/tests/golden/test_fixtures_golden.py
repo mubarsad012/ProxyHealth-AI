@@ -9,20 +9,24 @@ expected-failure markers (a mismatch is a real failure); the resource-order chec
 matcher directly.
 """
 
+import re
 from datetime import UTC, datetime, time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from proxyhealth_api.analysis.deadline_rules import apply_deadline_rules, context_for
 from proxyhealth_api.analysis.scam import score_transcript
 from proxyhealth_api.analysis.transcript import assemble_transcript
 from proxyhealth_api.analysis.urgency import compute_urgency
 from proxyhealth_api.analysis.verify import normalize, verify_demands, verify_red_flags
+from proxyhealth_api.contracts.analysis import AnalysisResult
 from proxyhealth_api.contracts.enums import DemandKind, DocumentType, ResourceTag, ScamRisk
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, TroubleshootModelOut
 from proxyhealth_api.contracts.resources import ResourceMatchRequest
 from proxyhealth_api.resources.matcher import match
+from proxyhealth_api.settings import DATA_DIR
 from tests.golden._fixtures_wp7 import (
     RESOURCES,
     RULES,
@@ -84,6 +88,88 @@ def test_no_contact_in_prose_that_is_not_printed(fid: str, lang: str) -> None:
         for hit in contacts_in(text):
             ok = digits(hit) in printed if digits(hit) else hit.casefold() in corpus
             assert ok, (fid, lang, hit)
+
+
+# --- printed dates and numbers stay as printed (AI_PROMPTS §5.0 rule 7, §5.1.1 step 4;
+# PRODUCT_SPEC §7.1 "Numbers"; D-26): Western digits in every language, and in a language written
+# in another script the printed date itself ("October 7, 2026", not "٧ أكتوبر ٢٠٢٦"). The app
+# *adds* a localized line (DateInfo.localized_line); the model's prose never substitutes one.
+
+# Every Unicode decimal digit that is not 0-9: Eastern Arabic, Persian, Devanagari, Bengali, …
+NON_WESTERN_DIGITS = re.compile(r"(?:(?![0-9])\d)+")
+SCRIPTS = {
+    tag: str(row.get("script") or "")
+    for tag, row in yaml.safe_load((DATA_DIR / "languages.yaml").read_text("utf-8")).items()
+}
+
+
+def model_prose(out: AnalysisModelOut | TroubleshootModelOut) -> list[str]:
+    if isinstance(out, TroubleshootModelOut):
+        return [out.screen_summary, out.error_meaning, *out.cautions, *(s.text for s in out.steps)]
+    prose = [out.summary_title, out.summary_body, out.summary_body_en, out.clerk_need_en]
+    prose += [d.text for d in out.demands] + [s.text for s in out.plan_steps]
+    prose += [g.explanation for g in out.glossary] + [r.text for r in out.red_flags]
+    prose += list(out.questions_to_ask) + [p.text for p in out.translated_pages]
+    return prose
+
+
+def result_prose(result: AnalysisResult) -> list[str]:
+    """What S7 / S8 show from the model's prose after the §11 pipeline ran."""
+    prose = [result.summary.title, result.summary.body]
+    prose += [d.text for d in result.demands] + [s.text for s in result.plan_steps]
+    prose += [g.explanation for g in result.glossary] + list(result.questions_to_ask)
+    prose += [p.text for p in result.translated_text]
+    return prose
+
+
+def localized_digit_runs(texts: list[str], transcript: str) -> list[tuple[str, str]]:
+    """(run, sentence) for each non-Western digit run the paper does not print that way."""
+    return [
+        (m.group(0), text)
+        for text in texts
+        for m in NON_WESTERN_DIGITS.finditer(text)
+        if m.group(0) not in transcript
+    ]
+
+
+def non_latin_document_cases() -> list[tuple[str, str]]:
+    return [(f, lang) for f, lang in document_cases() if SCRIPTS.get(lang, "Latn") != "Latn"]
+
+
+def test_digit_checks_cover_the_rtl_demo_languages() -> None:
+    # Guards the parametrisation below: ar and prs are recorded and are not Latin-script.
+    assert {lang for _, lang in non_latin_document_cases()} >= {"ar", "prs"}
+    assert NON_WESTERN_DIGITS.findall("في ٧ أكتوبر ٢٠٢٦ و ۱۴ اکتبر 2026") == ["٧", "٢٠٢٦", "۱۴"]
+
+
+@pytest.mark.parametrize(("fid", "lang"), cases())
+def test_recorded_prose_keeps_western_digits(fid: str, lang: str) -> None:
+    fx = fixture(fid)
+    out = fx.out(lang)
+    assert out is not None
+    assert localized_digit_runs(model_prose(out), fx.transcript) == [], (fid, lang)
+
+
+@pytest.mark.parametrize(("fid", "lang"), non_latin_document_cases())
+def test_non_latin_demand_text_repeats_the_printed_date(fid: str, lang: str) -> None:
+    english = {d.id: d.text for d in analysis_out(fid, "en").demands}
+    for d in analysis_out(fid, lang).demands:
+        for value in (d.date_text, d.time_text):
+            if value and value in english[d.id]:
+                assert value in d.text, (fid, lang, d.id, value, d.text)
+
+
+@pytest.mark.parametrize(("fid", "lang"), non_latin_document_cases())
+async def test_pipeline_result_prose_keeps_printed_dates(
+    fid: str, lang: str, tmp_path: Path
+) -> None:
+    fx = fixture(fid)
+    result, _ = await analyze(fx, lang, tmp_path)
+    assert localized_digit_runs(result_prose(result), fx.transcript) == [], (fid, lang)
+    for d in result.demands:
+        # The localized line is *added* next to the verbatim value (D-26), never put in the text.
+        line = d.date.localized_line if d.date is not None else None
+        assert not line or line not in d.text, (fid, lang, d.id, d.text)
 
 
 def expecting(key: str) -> list[str]:

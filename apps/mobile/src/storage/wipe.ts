@@ -1,5 +1,6 @@
 // "Delete everything" (PRODUCT_SPEC S17 item 8, COMPLIANCE_PRIVACY §9.5 order):
 //   1. cancel every scheduled notification, 2–3. vault files + database (web: memory + IndexedDB),
+//   3b. the native capture cache (camera shots, crops, picked files — storage/cache.native.ts),
 //   4. SecureStore items, 5. every `kv` key (settings, consent, pack cache, config cache, install id),
 //   6. install id forgotten (a new one is generated lazily at the next consent — CL-010),
 //   7. in-memory stores reset; the caller then routes to S1 (`/onboarding/language`).
@@ -10,6 +11,7 @@
 import { clearInstallId } from '@/lib/ids';
 import { resetServerConfigSession } from '@/api/config';
 import { EN_PACK, useI18n } from '@/i18n/store';
+import { purgeCaptureCache } from '@/storage/cache';
 import { kv } from '@/storage/kv';
 import { clearSecure } from '@/storage/secure';
 import { cancelAllNotifications, vault } from '@/storage/vault';
@@ -20,6 +22,7 @@ export type WipeStep =
   | 'notifications'
   | 'hooks'
   | 'vault'
+  | 'cache'
   | 'secure'
   | 'settings'
   | 'kv'
@@ -66,6 +69,7 @@ export async function wipeEverything(): Promise<WipeStep[]> {
   await step('notifications', done, () => cancelAllNotifications());
   await step('hooks', done, () => runHooks('hooks'));
   await step('vault', done, () => vault.wipeAll());
+  await step('cache', done, () => purgeCaptureCache());
   await step('secure', done, () => clearSecure());
   await step('settings', done, () => useSettings.getState().resetSettings());
   await step('kv', done, () => kv.clearAll());

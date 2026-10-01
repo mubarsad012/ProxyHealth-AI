@@ -47,7 +47,7 @@ def test_config_loads_and_every_reason_key_exists() -> None:
     assert cfg.reason_keys <= set(en)
     assert "scam.card.likely" in en and "scam.card.possible" in en
     assert cfg.possible == 2 and cfg.likely == 4
-    assert cfg.reviewed_by == {"en": None, "es": None}
+    assert cfg.reviewed_by == {"en": None, "es": None, "ar": None, "prs": None, "ps": None}
     thirteen = {
         "scam.gift_card", "scam.wire_transfer", "scam.payment_app", "scam.crypto",
         "scam.arrest_threat", "scam.deportation_threat", "scam.guaranteed", "scam.notario",
@@ -257,3 +257,110 @@ def test_pay_or_be_deported_keeps_the_court_notice_guard() -> None:
     line = "Pay the $500 fee today or you will be deported."
     out = sc.score_scam(segs(line), document_type=DT.nta, sender_kind=SK.court)
     assert "scam.deportation_threat" not in out.scam_reasons
+
+
+# --- Phase 2B: agency anti-fraud boilerplate, .gov payment portals, ar/prs/ps, notaría -----------
+
+BOILERPLATE = [
+    (SK.federal_agency, DT.uscis_rfe,
+     "Avoid scams: USCIS will never ask you to pay by Western Union, MoneyGram, PayPal, "
+     "or gift cards."),
+    (SK.federal_agency, DT.ssa_letter,
+     "Social Security will never ask you to pay with gift cards, wire transfers, "
+     "cryptocurrency, or cash."),
+    (SK.federal_agency, DT.irs_notice,
+     "The IRS will never demand immediate payment using gift cards, prepaid debit cards or "
+     "wire transfers."),
+    (SK.state_agency, DT.medicaid_renewal,
+     "Nunca le pediremos pagos con tarjetas de regalo ni por Zelle."),
+    (SK.federal_agency, DT.uscis_receipt,
+     "Scammers may ask you to pay with gift cards. If someone asks for a wire transfer, hang up."),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(("sender", "doc", "line"), BOILERPLATE)
+def test_agency_anti_fraud_boilerplate_is_not_a_scam(
+    sender: SenderKind, doc: DocumentType, line: str
+) -> None:
+    out = sc.score_scam(segs("Official notice", line), document_type=doc, sender_kind=sender,
+                        sender_as_written="Agency")  # fmt: skip
+    assert out.scam_risk is ScamRisk.none and out.fired == [], out.fired
+    assert sc.retype_for_scam(doc, out.scam_risk) is doc, "a real RFE keeps its type and CTA"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "We do not accept cash or checks, pay with gift cards only.",
+        "If you do not pay with iTunes gift cards within 24 hours you will be arrested.",
+        "We never ask twice. Send Google Play gift cards today.",
+    ],
+)
+def test_a_real_demand_near_a_negation_still_scores(line: str) -> None:
+    out = sc.score_scam(segs(line), document_type=DT.other_notice, sender_kind=SK.federal_agency)
+    assert out.scam_risk is ScamRisk.likely and "gift_card" in out.fired
+
+
+def test_gov_payment_portal_is_not_a_payment_app_scam() -> None:
+    court = sc.score_scam(
+        segs("You may prepay the fine online with a credit card or PayPal at vacourts.gov."),
+        document_type=DT.traffic_court, sender_kind=SK.court, sender_as_written="Circuit Court",
+    )  # fmt: skip
+    county = sc.score_scam(
+        segs("Pay your tax online with PayPal or Venmo at samplecountyva.gov/pay."),
+        document_type=DT.other_notice, sender_kind=SK.local_agency, sender_as_written="County",
+    )  # fmt: skip
+    assert court.scam_risk is ScamRisk.none and county.scam_risk is ScamRisk.none
+    zelle = sc.score_scam(
+        segs("Send the fee by Zelle to 703-555-0199. More at uscis.gov."),
+        document_type=DT.other_notice, sender_kind=SK.federal_agency,
+    )  # fmt: skip
+    assert zelle.scam_risk is ScamRisk.likely, "a recipient next to the .gov link is no portal"
+
+
+def test_model_flag_quoting_anti_fraud_boilerplate_is_ignored() -> None:
+    quote = "USCIS will never ask you to pay by Western Union, MoneyGram, PayPal, or gift cards."
+    assert sc.is_anti_fraud_quote(quote)
+    assert not sc.is_anti_fraud_quote("You must pay today with Google Play gift cards")
+    assert not sc.is_anti_fraud_quote(None)
+    out = sc.score_scam(
+        segs(quote), document_type=DT.uscis_rfe, sender_kind=SK.federal_agency,
+        model_flags=[model_flag(RedFlagKind.scam_payment_method, quote)],
+    )  # fmt: skip
+    assert out.scam_risk is ScamRisk.none
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        [
+            "دائرة الهجرة الأمريكية",
+            "يجب عليك دفع 900 دولار عبر ويسترن يونيون خلال 24 ساعة لتجنب الترحيل.",
+        ],
+        [
+            "اداره مهاجرت امریکا",
+            "برای جلوگیری از اخراج، ۵۰۰ دالر کارت هدیه گوگل پلی بخرید و کد آن را بفرستید.",
+        ],
+    ],
+)
+def test_arabic_and_dari_payment_demands_score(lines: list[str]) -> None:
+    for sender in (SK.unknown, SK.federal_agency):
+        out = sc.score_scam(segs(*lines), document_type=None, sender_kind=sender)
+        assert out.scam_risk is ScamRisk.likely, (sender, out.fired)
+
+
+def test_neutral_arabic_script_letters_do_not_score() -> None:
+    lines = [
+        "يرجى إحضار هذه الرسالة إلى موعدك يوم الاثنين.",
+        "لطفاً این نامه را روز دوشنبه با خود بیاورید.",
+    ]
+    out = sc.score_scam(segs(*lines), document_type=DT.other_notice, sender_kind=SK.unknown)
+    assert out.scam_risk is ScamRisk.none
+
+
+def test_notaria_publica_is_a_notario() -> None:
+    out = sc.score_scam(
+        segs("Notaría Pública Hispana — Le arreglamos sus papeles de inmigración."),
+        document_type=DT.other_notice, sender_kind=SK.unknown,
+    )  # fmt: skip
+    assert "notario" in out.fired

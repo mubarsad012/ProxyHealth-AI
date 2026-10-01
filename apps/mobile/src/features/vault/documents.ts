@@ -6,6 +6,10 @@
 //   • "Keep page images" off → no page files AND `page_thumbnails` dropped from the stored JSON;
 //   • "Hide ID numbers" on → A-numbers and USCIS receipt numbers masked in every stored string, and
 //     no page images are kept (an image would still show the number);
+//   • "Hide parts" boxes (D-19: nothing unmasked is ever stored) → a page with boxes keeps its image
+//     only when the boxes are burned into its pixels (`masksBurnedIn`: web canvas after
+//     `preparePages`). On native the boxes travel as `masks[]` and only the server burns them, so the
+//     session page is still the original photo: no image is kept for it;
 //   • nothing is written until the caller passes the result to `vault.documents.save`.
 
 import type { AnalysisResult, DocumentCategory } from '@/api/types';
@@ -80,6 +84,16 @@ export interface BuildDocumentInput {
   t: Translate;
   /** Required when `analysis` is null; otherwise the id is `analysis.analysis_id`. */
   documentId?: string;
+  /**
+   * True only when every page's "Hide parts" boxes are already burned into its `base64` (web, the
+   * display pages `preparePages` returns). Default false: a page with boxes then keeps no image.
+   */
+  masksBurnedIn?: boolean;
+}
+
+/** D-19: may this page's pixels be written to the vault? Not while it has unburned boxes. */
+export function pageImageStorable(page: Pick<CapturedPage, 'masks'>, masksBurnedIn: boolean): boolean {
+  return masksBurnedIn || (page.masks?.length ?? 0) === 0;
 }
 
 function jpegBase64(page: CapturedPage): string | null {
@@ -103,6 +117,7 @@ export function buildStoredDocument(input: BuildDocumentInput): { doc: StoredDoc
   const pageInputs: StoredPageInput[] = [];
   if (keepImages) {
     input.pages.forEach((p, i) => {
+      if (!pageImageStorable(p, input.masksBurnedIn === true)) return;
       const base64 = jpegBase64(p);
       if (base64) pageInputs.push({ page: i + 1, base64Jpeg: base64, thumbBase64: thumbs.get(i + 1) });
     });

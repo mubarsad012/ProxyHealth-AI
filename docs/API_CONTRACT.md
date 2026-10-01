@@ -20,7 +20,7 @@ Revision 2026-09-27 (consistency pass; WP0 implements these in the models before
 |---|---|---|
 | `X-Request-Id` | any (optional) | Client-generated UUID v4; echoed. Server generates one if absent. |
 | `X-Install-Id` | any (optional) | Random UUID generated on device; HMAC-hashed server-side for rate limiting only (D-08). |
-| `X-Consent-Version` | `POST /v1/analyze`, `/v1/troubleshoot`, `/v1/chat` | The `consent_version` the user accepted (from `ServerConfig`). Missing/stale → `428 consent_required`. Exempt when `demo_sample_id` is set. |
+| `X-Consent-Version` | `POST /v1/analyze`, `/v1/troubleshoot`, `/v1/chat` | The `consent_version` the user accepted (from `ServerConfig`). Missing/stale → `428 consent_required`. Exempt only when `demo_sample_id` names a known bundled fixture; an unknown id is gated like no id (`428`, or `403` on `unpaid`/`mixed`; CL-031). On `unpaid`/`mixed` a known-fixture request that still carries typed text (`/v1/chat`, or a troubleshoot `user_goal`) is gated like a real paper too. |
 | `X-App-Token` | any (reserved) | See Authentication. |
 | `If-None-Match` | `GET /v1/language-packs/{tag}` | ETag revalidation → `304`. |
 | `Accept-Language` | any (optional) | Used only to pick `user_message` language for error copy when the client sends no `target_language`. |
@@ -281,7 +281,7 @@ Response `ServerConfig`
   "models": {"fast": "gemini-3.5-flash-lite", "pro": "gemini-3.8-flash", "pro_degraded_thinking": "medium"},
   "features": {"real_documents_allowed": true, "demo_samples": true, "dynamic_language_packs": true, "troubleshoot": true, "chat": true, "quicksheet_pdf": true, "degraded_fallback": true, "hide_parts_server_masking": true},
   "limits": {"max_pages": 12, "max_page_bytes": 4194304, "max_pdf_bytes": 12582912, "max_pdf_pages": 60, "max_request_bytes": 20971520, "max_upstream_inline_bytes": 18874368, "max_chat_history": 8, "max_question_chars": 1000, "max_user_goal_chars": 300, "translate_full_max_pages": 4},
-  "consent_version": "2026-09-24",
+  "consent_version": "2026-10-01",
   "privacy_policy_url": "https://proxyhealth.expo.app/privacy",
   "base_pack_version": "9f2c1e7b4a0d3c5e6f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
   "languages": [
@@ -656,7 +656,7 @@ Response `ChatAnswer`
 | `answer` | `str` | ≤ 4 short sentences unless a list was asked for; contact-filtered and phrasing-linted. |
 | `grounded_span_ids` | `list[str]` | Block ids used. |
 | `grounded_quotes` | `list[Quote { span_id: str, text: str, page: int }]` | Verified quotes for chips. |
-| `not_in_document` | `bool` | "The paper does not say." |
+| `not_in_document` | `bool` | "The paper does not say." When true and `refusal_kind` is `none`, `answer` already carries the target pack's `chat.not_in_document` sentence exactly once (`chat_pipeline.with_not_in_document`); clients add the key only to an empty non-refusal answer. A refusal shows its template instead (CL-072(e)). |
 | `refusal_kind` | `RefusalKind` | `none` when answered. |
 | `refer_to_professional` | `ReferTo` | |
 | `distress_acknowledged` | `bool` | |
@@ -740,7 +740,7 @@ Response `ResourceMatchResponse`
 | `what_it_does` | `dict[str, str]` | i18n; `en` required. |
 | `url` | `str` | |
 | `alt_urls` | `list[str]` | |
-| `phone` | `str \| null` | E.164 (`+15714725880`) **or** a bare N11 / short code (`211`, `311`, `911`, `988`, `711`); regex `^(\+[1-9]\d{6,14}\|211\|311\|911\|988\|711)$`. Same rule for `tty`. |
+| `phone` | `str \| null` | E.164 (`+15714725880`) **or** a bare N11 / short code (`211`, `311`, `911`, `988`, `711`); regex `^(\+[1-9]\d{6,14}\|211\|311\|911\|988\|711)$`. Same rule for `tty`. The wire value is always this stored form; clients and the quick-sheet PDF only *display* US numbers the way US papers print them — toll free `1-800-318-2596`, other US `(410) 983-4000` (no `+1`), N11 codes, extensions and non-US numbers unchanged, every national digit kept (`quicksheet/render.py` `format_phone`, mobile `quicksheet/contacts.ts` `formatPhone`; CL-072(f)) — and `tel:` links use the stored value. |
 | `tty` | `str \| null` | |
 | `text_line` | `str \| null` | |
 | `hours` | `str \| null` | |

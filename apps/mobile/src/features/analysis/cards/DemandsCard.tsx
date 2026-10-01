@@ -21,7 +21,7 @@ import { extraDateLine } from '@/lib/dates';
 import { useSettings } from '@/store/settings';
 
 import { printedPhoneHref } from '../urgencyCopy';
-import { DEMAND_ICONS, FactRow, type ResultCardProps, type ResultHandlers } from './shared';
+import { DEMAND_ICONS, FactRow, type ResultCardProps, type ResultHandlers, SourceText } from './shared';
 
 export function roleWord(role: string | null, t: TFunction): string | null {
   if (!role || role === 'other') return null;
@@ -34,7 +34,7 @@ export function canRemind(d: Demand): boolean {
   return d.verified && d.reminder_eligible;
 }
 
-function DateLines({ d, handlers }: { d: Demand; handlers: ResultHandlers }) {
+function DateLines({ d, handlers, lang }: { d: Demand; handlers: ResultHandlers; lang: string }) {
   const t = useT();
   const meta = usePackMeta();
   const order = useSettings((s) => s.preferences.dateFormat);
@@ -75,9 +75,7 @@ function DateLines({ d, handlers }: { d: Demand; handlers: ResultHandlers }) {
   return (
     <View style={styles.lines}>
       {date.time_text ? (
-        <Bidi dir="auto" variant="body">
-          {date.time_text}
-        </Bidi>
+        <SourceText lang={lang}>{date.time_text}</SourceText>
       ) : null}
       {extra ? <AppText color="textMuted">{extra}</AppText> : null}
     </View>
@@ -108,10 +106,10 @@ export function DemandRow({ analysis, pages, handlers, demand: d }: DemandRowPro
           <AppText lang={analysis.target_language}>{bt(d.text)}</AppText>
         </View>
       </View>
-      <Bidi dir="ltr" variant="bodyLarge" weight="bold">
+      <SourceText lang={analysis.detected_language} dir="ltr" variant="bodyLarge" weight="bold">
         {d.value_verbatim}
-      </Bidi>
-      <DateLines d={d} handlers={handlers} />
+      </SourceText>
+      <DateLines d={d} handlers={handlers} lang={analysis.detected_language} />
       {d.documents.length ? (
         <View style={styles.lines}>
           {d.documents.map((doc, i) => (

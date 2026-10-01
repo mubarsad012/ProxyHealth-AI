@@ -2,7 +2,13 @@
 // pack. Icon + words; the unpaid banner is red with an icon and a word, never colour alone.
 // `text` overrides the default copy (e.g. `banner.demo_sample` on results instead of
 // `banner.sample_mode` on Home).
+//
+// Pack provenance (COMPLIANCE_PRIVACY §5.2, D-25): the `Screen` scaffold shows the
+// machine-translation / partial-pack banner on every screen. A screen that renders the same banner
+// itself (S2, the S7 result banners) registers it with the surrounding `PackBannerScope`, and the
+// scaffold then leaves its own copy out, so the line never appears twice.
 
+import { createContext, useContext, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Icon, type IconName } from '@/design/components/Icon';
@@ -31,6 +37,16 @@ const LOOK: Record<BannerKind, { icon: IconName; color: keyof Palette }> = {
   partial_pack: { icon: 'globe', color: 'warning' },
 };
 
+export type PackBannerKind = 'machine_translation' | 'partial_pack';
+
+export interface PackBannerScopeValue {
+  /** A screen-rendered provenance banner mounted; returns its unregister function. */
+  register(kind: PackBannerKind): () => void;
+}
+
+/** Provided by `Screen`; `null` (e.g. around the scaffold's own banners) means "do not register". */
+export const PackBannerScope = createContext<PackBannerScopeValue | null>(null);
+
 export interface BannerProps {
   kind: BannerKind;
   text?: string;
@@ -40,9 +56,16 @@ export function Banner({ kind, text }: BannerProps) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
+  const scope = useContext(PackBannerScope);
   const look = LOOK[kind];
   const color = colors[look.color];
   const copy = text ?? t(BANNER_KEYS[kind]);
+  const provenance: PackBannerKind | null =
+    (kind === 'machine_translation' || kind === 'partial_pack') && copy === t(BANNER_KEYS[kind]) ? kind : null;
+  useEffect(() => {
+    if (!scope || !provenance) return undefined;
+    return scope.register(provenance);
+  }, [scope, provenance]);
   return (
     <View
       testID={`banner-${kind}`}

@@ -1,6 +1,9 @@
 // Quick-sheet text builder (PRODUCT_SPEC S15, D-10). Pure: everything printed comes from the
 // `AnalysisResult` (server-verified text, the paper's own words) or from vetted resource-DB entries
 // (`Resource`, never model output). Contacts the server's filter stripped are never re-added.
+// The sheet leaves the app (print, PDF, copy, read-aloud), so its header carries the same fixed
+// `disclaimer.<disclaimer_kind>` line as S7 (PRODUCT_SPEC §5.6 "header of S7/S9/S15"), in the
+// sheet's language with the English line under it for the clerk.
 
 import type {
   AnalysisResult,
@@ -10,6 +13,7 @@ import type {
   QuickSheetSection,
   Resource,
 } from '@/api/types';
+import { disclaimerKey } from '@/features/help/format';
 import { stripIsolates } from '@/i18n/bidi';
 import { BASE_STRINGS, translate } from '@/i18n/store';
 
@@ -21,6 +25,10 @@ export type QuickSheetSectionKind = 'what' | 'asking' | 'plan' | 'dates' | 'brin
 
 export interface QuickSheetText {
   title: string;
+  /** Fixed `disclaimer.<kind>` line in the sheet's language (header, under the title). */
+  disclaimer?: string;
+  /** The same line in English (for the clerk); shown only when it differs from `disclaimer`. */
+  disclaimer_en?: string;
   sections: QuickSheetSection[];
   footer: string;
   /** Parallel to `sections` (which card each one came from). */
@@ -186,8 +194,12 @@ export function buildQuickSheetText(
 
   const baseTitle = scrubLine(analysis.summary?.title ?? '', allow, markers) ?? '';
   const title = `${baseTitle} ${t('quicksheet.title_suffix')}`.trim().slice(0, MAX_TITLE);
+  // Banner-only kinds (`demo_sample`, `machine_translation`…) fall back to the general line.
+  const dKey = disclaimerKey(analysis.disclaimer_kind);
   return {
     title,
+    disclaimer: t(dKey),
+    disclaimer_en: tEn(dKey),
     sections: sections.slice(0, MAX_SECTIONS),
     sectionKinds: sectionKinds.slice(0, MAX_SECTIONS),
     footer: t('quicksheet.footer', { date: opts.today ?? todayIso() }),
@@ -199,6 +211,10 @@ export function buildQuickSheetText(
 export function quickSheetPlainText(sheet: QuickSheetText, opts: { includeEnglishHeadings?: boolean } = {}): string {
   const english = opts.includeEnglishHeadings ?? true;
   const parts: string[] = [sheet.title];
+  if (sheet.disclaimer) {
+    const en = english && sheet.disclaimer_en && sheet.disclaimer_en !== sheet.disclaimer ? sheet.disclaimer_en : null;
+    parts.push(['', sheet.disclaimer, ...(en ? [en] : [])].join('\n'));
+  }
   for (const s of sheet.sections) {
     const head = english && s.heading_en && s.heading_en !== s.heading ? `${s.heading} (${s.heading_en})` : s.heading;
     parts.push(['', head, ...s.lines].join('\n'));
@@ -220,12 +236,19 @@ export interface QuickSheetMeta {
  * re-validates each against the DB and renders them itself), so that section is sent as a heading
  * carrier only — its localized `heading` and English `heading_en` with no lines — which the server
  * uses as the resources heading and never draws as a section of its own (`render.help_heading`).
+ * The contract has no disclaimer field, so the header disclaimer travels as the FIRST section with
+ * no lines: the server draws it right under the title, in the sheet's language with the English
+ * line under it (`render._heading`).
  */
 export function toQuickSheetRequest(sheet: QuickSheetText, meta: QuickSheetMeta): QuickSheetRequest {
   const hasResources = Boolean(sheet.resources?.length);
-  const sections = sheet.sections.map((s, i) =>
+  const content = sheet.sections.map((s, i) =>
     sheet.sectionKinds?.[i] === 'help' && hasResources ? { ...s, lines: [] } : s,
   );
+  const header: QuickSheetSection[] = sheet.disclaimer
+    ? [{ heading: sheet.disclaimer, heading_en: sheet.disclaimer_en || sheet.disclaimer, lines: [] }]
+    : [];
+  const sections = [...header, ...content];
   return {
     title: sheet.title.slice(0, MAX_TITLE),
     language_tag: meta.languageTag,

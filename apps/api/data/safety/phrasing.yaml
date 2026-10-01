@@ -7,19 +7,31 @@
 # `phrasing_rewrite` call; a second hit substitutes the family's fixed hedge
 # (`hedge_key_by_family`, existing `chat.refusal.*` keys). Fixed copy never passes through the
 # linter. Regexes are case-insensitive; `\b` boundaries are written explicitly.
-version: "2026-09-27"
+version: "2026-09-30"
 attribution_regex: "\\b(the|this|your|it) ?(paper|letter|notice|form|bill|summons|order|lease|label|court|judge|office|school|landlord|insurer|plan|irs|uscis|ice|social security)? ?(says|asks|lists|states|tells you|orders|warns)\\b"
+# DOJ-accredited representatives practise immigration law only (before DHS/EOIR): the phrase is for
+# immigration papers and immigration-court types; a traffic ticket, jury summons, wage claim or
+# W-2 names a lawyer or a domain helper instead.
 professional_by_category:
   immigration: "a licensed lawyer or a DOJ-accredited representative"
-  court: "a licensed lawyer or a DOJ-accredited representative"
-  civic: "a licensed lawyer or a DOJ-accredited representative"
-  employment: "a licensed lawyer or a DOJ-accredited representative"
+  court: "a licensed lawyer"
+  civic: "a licensed lawyer"
+  employment: "a licensed lawyer or a workers' rights office"
   medical: "your doctor, nurse or pharmacist"
   housing: "a housing lawyer or counselor"
   benefits: "the office that sent this paper"
   school: "the school office or a parent center"
   tax: "the IRS or a free tax helper"
   other: "a professional"
+# Document types whose professional differs from their category's (court → immigration court).
+professional_by_document_type:
+  nta: "a licensed lawyer or a DOJ-accredited representative"
+  hearing_notice: "a licensed lawyer or a DOJ-accredited representative"
+  ij_decision: "a licensed lawyer or a DOJ-accredited representative"
+  bia_notice: "a licensed lawyer or a DOJ-accredited representative"
+  ice_checkin: "a licensed lawyer or a DOJ-accredited representative"
+  w2_1099: "a free tax helper or a tax professional"
+  itin: "the IRS or a free tax helper"
 refer_to_by_category:
   immigration: lawyer_or_accredited_rep
   court: lawyer_or_accredited_rep
@@ -65,6 +77,11 @@ professional_words:
   - agency
   - hotline
   - helpline
+  - professional
+  - preparer
+  - tax help
+  - tax-help
+  - vita
 languages:
   en:
     reviewed_by: null
@@ -73,16 +90,16 @@ languages:
         domains: [all]
         skip_when_attributed: false
         patterns:
-          - "\\byou (are|aren't|are not|'re) (eligible|not eligible|ineligible|entitled)\\b"
-          - "\\byou (do|don't|do not) qualify\\b"
-          - "\\byou qualify\\b"
+          - "\\byou(?:'re| are|'re not| are not| aren't) (probably |likely |definitely |clearly |not )?(eligible|ineligible|entitled)\\b"
+          - "\\byou (do|don't|do not) (probably |likely )?qualify\\b"
+          - "\\byou (probably |likely |should |may |might |will |would |definitely )?qualify\\b"
           - "\\byour (child|children|family|husband|wife|son|daughter) (qualif(y|ies)|is eligible|are eligible|will get|won't get)\\b"
           - "\\byou (will|won't|will not|can|cannot|can't) (get|receive|keep|lose) (your )?(benefits|coverage|medicaid|snap|wic|ssi|asylum|a green card|your permit)\\b"
       - id: outcome
         domains: [all]
         skip_when_attributed: false
         patterns:
-          - "\\byou (will|won't|will not|are going to|are likely to|are unlikely to) (win|lose|be (approved|denied|deported|removed|evicted|arrested|fined))\\b"
+          - "\\byou (will|won't|will not|would|are going to|are likely to|are unlikely to) (probably |likely |definitely |almost certainly )?(win|lose|be (approved|denied|deported|removed|evicted|arrested|fined))\\b"
           - "\\byour (case|appeal|application) (will|is likely to|should) (be )?(approved|denied|succeed|fail|win|lose)\\b"
           - "\\byou have (a strong|a weak|no|a good) (case|chance)\\b"
           - "\\bnothing (will happen|to worry about)\\b"
@@ -97,7 +114,9 @@ languages:
         domains: [all]
         skip_when_attributed: true
         patterns:
-          - "\\byou (do not|don't|do not need to|need not|never) have to\\b"
+          - "\\byou (do not|don't|never|won't|will not) (have|need) to\\b"
+          - "\\byou need not\\b"
+          - "\\b(there is |there's )?no need to (go|attend|appear|answer|respond|reply|pay|show up|come)\\b"
           - "\\b(does not|doesn't) require you to\\b"
           - "\\byou (can|may) (ignore|skip|throw away)\\b"
           - "\\bthis means (that )?you (have|owe|must|are|will|can|cannot)\\b"
@@ -117,11 +136,18 @@ languages:
           # 30 days / to pay / them" nor a sentence-final "the papers you have".
           - "\\byou (have|might have|may have|could have|probably have|likely have)\\s+(?!\\d|(to|got|gotten|been|had|done|made|given|taken|told|received|paid|missed|filed|sent|used|reached|met|signed|submitted|returned|completed|applied|asked|requested|scheduled|chosen|called|moved|changed|already|until|till|through|up to|one|two|three|four|five|six|seven|eight|nine|ten|fourteen|fifteen|twenty|thirty|sixty|ninety|any|some|questions?|concerns?|them|it|this|that|these|those|time|days?|weeks?|months?|years?|insurance|coverage|medicaid|medicare|children|kids|an? (appointment|question|concern|bill|balance|copay|co-pay|payment|hearing|meeting|visit|interview|right|choice|option|account|deadline|refill|prescription|referral|insurance|plan|card|form|letter|few|week|month|day|year|child|doctor|provider)s?|the (right|option|choice|form|letter|paper|card|bill|appointment)s?|your (appointment|card|form|letter|paper|papers|bill|insurance|id))\\b)\\w"
           - "\\byou are (suffering from|diabetic|anemic|pregnant|infected|allergic|contagious)\\b"
-          - "\\b(your|the) (\\w+ )?(results?|levels?|values?|numbers?|readings?) (are|is|show|shows|mean|means|indicate|suggests?) (normal|abnormal|high|low|fine|good|bad|healthy|dangerous|too (high|low)|that)\\b"
+          - "\\b(your|the) (\\w+ ){0,2}(results?|levels?|values?|numbers?|readings?) (are|is|show|shows|mean|means|indicate|suggests?) (normal|abnormal|high|low|fine|good|bad|healthy|dangerous|too (high|low)|that)\\b"
           - "\\b(is a sign of|means you have|points to) \\w+"
           - "\\byou (need|should|must|can|may) (take|stop|skip|double|increase|decrease|reduce|mix) (the|your|this) (dose|medicine|medication|pill|tablet)\\b"
+          - "\\byou (need to|should|must|can|could|may) (stop|quit|skip|double|increase|decrease|reduce|mix)( taking| using)? (the |your |this |that |these )?(\\w+ )?(dose|doses|medicine|medicines|medication|medications|pills?|tablets?|drugs?|insulin|antibiotics?)\\b"
           - "\\bit is (safe|not safe|okay|fine) to (take|stop|mix|drink|drive)\\b"
           - "\\byour (?!balance|bill|amount|payment|copay|deductible|premium|rent|appointment)\\w+ (level |levels |count |reading )?(is|are) (too |very |a little )?(high|low|abnormal|normal|elevated|dangerous|fine|healthy)\\b"
+          # two-word analytes ("your blood sugar is too high") and a value in between ("your
+          # cholesterol is 260, which is high"; "your A1C of 9.1 is above normal")
+          - "\\byour (?!(\\w+ ){0,2}(balance|bill|amount|payment|copay|deductible|premium|rent|appointment|cost|charges?|total|price|fee)\\b)(\\w+ ){1,3}(is|are) (too |very |a little |slightly )?(high|low|abnormal|normal|elevated|dangerous|healthy)\\b"
+          - "\\byour (?!(\\w+ ){0,2}(balance|bill|amount|payment|copay|deductible|premium|rent|cost|charges?|total|price|fee)\\b)(\\w+ ){1,3}(is|are|of|at) [\\d.,]+[^.;]{0,40}\\b(high|low|abnormal|normal|elevated|dangerous|healthy)\\b"
+          - "\\b(is|are|was|were) (above|below|outside|out of) (the )?(normal|healthy|target|reference) ?(range|limits?|levels?)?\\b"
+          - "\\b(of|at) [\\d.,]+ (means|shows|indicates|suggests|is a sign of)\\b"
           - "\\b(which |that |this )?(can|could|may|might) be (dangerous|serious|life-threatening)\\b"
         medical_words: "\\b(dose|medicine|medication|pill|tablet|test|results?|levels?|mg|ml|diagnos\\w*|prescription|lab)\\b"
       - id: legal_status

@@ -6,6 +6,16 @@
 :root {
   --font-body: 'NotoSans-Regular', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  /* Focus ring colour = the active palette's `focus` token (tokens.ts). ThemeProvider sets
+   * --ph-focus on <html> from the palette in use (light / dark / high contrast); these are the
+   * values before the app has started. ≥ 3:1 against every background of its palette (WCAG 1.4.11). */
+  --ph-focus: #0b4f8a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ph-focus: #9cc4f5;
+  }
 }
 
 html,
@@ -26,7 +36,7 @@ body {
 
 /* Visible focus ring for keyboard users (WCAG 2.4.7); never removed. */
 :focus-visible {
-  outline: 3px solid #0b4f8a;
+  outline: 3px solid var(--ph-focus, #0b4f8a);
   outline-offset: 2px;
 }
 

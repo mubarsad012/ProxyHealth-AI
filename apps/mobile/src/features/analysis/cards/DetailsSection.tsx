@@ -3,14 +3,13 @@
 
 import { StyleSheet, View } from 'react-native';
 
-import { Bidi } from '@/design/components/Bidi';
 import { Collapsible } from '@/design/components/Collapsible';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { space } from '@/design/tokens';
 import { useBidiText, useT } from '@/i18n/useT';
 
-import { FactRow, type ResultCardProps } from './shared';
+import { FactRow, type ResultCardProps, SourceText } from './shared';
 
 export function DetailsSection(props: ResultCardProps) {
   const t = useT();
@@ -26,9 +25,9 @@ export function DetailsSection(props: ResultCardProps) {
             <AppText lang={props.analysis.target_language} style={d.verified ? undefined : styles.struck}>
               {bt(d.text)}
             </AppText>
-            <Bidi dir="ltr" variant="body" weight="bold">
+            <SourceText lang={props.analysis.detected_language} dir="ltr" weight="bold">
               {d.value_verbatim}
-            </Bidi>
+            </SourceText>
             <FactRow
               analysis={props.analysis}
               pages={props.pages}

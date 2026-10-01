@@ -7,6 +7,8 @@ import { Platform } from 'react-native';
 import type { Member } from '@/storage/index';
 import { ME_MEMBER_ID } from '@/storage/rows';
 
+import { nativeOnlyClaimUnsafe } from './platformCopy';
+
 export { ME_MEMBER_ID };
 
 export const MEMBER_NAME_MAX = 40;
@@ -73,10 +75,13 @@ export function nextColor(members: Pick<Member, 'color'>[]): string {
   return MEMBER_COLORS.find((c) => !used.has(c)) ?? MEMBER_COLORS[members.length % MEMBER_COLORS.length];
 }
 
-/** S12/S13 empty-state line that is literally true per platform (§9.5; `vault.empty.web` is
- *  requested in CL-042 — until then web uses `consent.line3.web`). */
-export function emptyVaultText(t: Translate): string {
-  return Platform.OS === 'web' ? t('consent.line3.web') : t('vault.empty');
+/** S12/S13 empty-state line that is literally true per platform (§9.5): web `vault.empty.web`
+ *  (CL-042); iOS the D-22 interim line until the vault is excluded from iCloud Backup
+ *  (COMPLIANCE_PRIVACY §10.2 — `vault.empty` says "stay only on this phone"); Android `vault.empty`. */
+export function emptyVaultText(t: Translate, os: string = Platform.OS): string {
+  if (os === 'web') return t('vault.empty.web');
+  if (nativeOnlyClaimUnsafe(os)) return t('vault.privacy_native');
+  return t('vault.empty');
 }
 
 /** "Saved…" announcement after a save: `vault.saved` says "on this phone", so web announces only

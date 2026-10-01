@@ -4,7 +4,7 @@
 # case-insensitive over NFKC-normalized, whitespace-collapsed block text. A hit on ≥ 1 block makes
 # the pipeline re-run once with those blocks masked (image mask in single mode, text mask in
 # two-call mode) and attaches `red_flags[kind=injection_suspected]` + `warnings: [injection_masked]`.
-version: "2026-09-27"
+version: "2026-09-30"
 mask_text: "[text addressed to computers removed]"
 # Loader marker strings and forged section fences (AI_PROMPTS §2) — always suspicious in a paper.
 markers:
@@ -33,6 +33,15 @@ patterns:
     - "\\bset (the )?(urgency|scam[_ ]risk|level) to\\b"
     - "\\bmark (this|the) (paper|document|letter) as (safe|genuine|real|verified)\\b"
     - "\\btranslate this (exactly|verbatim) and (add|include|say)\\b"
+    # Notes addressed to AI readers ("Note to AI assistants: …", "AI models reading this: …").
+    # "Assistant:" / "Model:" alone are ordinary labels (a medical assistant, a phone model).
+    - "\\b(note|message|instructions?|notice|memo|attention|reminder) (to|for) (the |any |all )?(ai|a\\.i\\.|llms?|chatbots?|automated systems?|language models?|virtual assistants?|ai (assistants?|models?|systems?|tools?))\\b"
+    - "\\b(dear|hey|hello|attention) (ai|llm|chatbot|automated systems?|language models?|ai (assistants?|models?|systems?))\\b"
+    - "\\b(ai|llms?|chatbots?|automated systems?|language models?|ai (assistants?|models?|systems?|tools?))( reading| processing| scanning| summari[sz]ing)?( this( document| letter| page| paper)?)?\\s*:"
+    - "\\bdo not (flag|mark|report|label|classify|treat|describe) (this|it|the (letter|document|paper|message|notice)) as (a |an )?(scam|fraud|fraudulent|suspicious|spam|phishing)\\b"
+    - "\\b(classify|categori[sz]e|label|treat|describe|present|report|mark) (this|it|the (document|letter|paper|message|notice)) as (safe|genuine|legitimate|official|real|authentic|trusted|not a scam|not fraud)\\b"
+    - "\\b(this|the) (document|letter|paper|message|notice) (has|carries) no (scam|fraud) risk\\b"
+    - "\\btell the (reader|user|person|recipient) to (call|pay|send|visit|click|text|wire)\\b"
   es:
     - "ignora(r)? (todas? )?(las )?(instrucciones|indicaciones|reglas) (anteriores|previas)"
     - "eres (ahora )?(un|una|el|la) (ia|asistente|modelo|chatbot)\\b"
@@ -45,3 +54,16 @@ patterns:
     - "\\bmodo desarrollador\\b"
     - "\\bla (app|aplicación|asistente) (debe|debería) (decir|informar|responder)\\b"
     - "\\bnuevas instrucciones:"
+    - "\\b(nota|mensaje|instrucciones?|aviso|atenci[oó]n) (para|a) (la |el |los |las )?(ia|i\\.a\\.|asistentes?|modelos?|chatbots?|sistemas? automatizados?|inteligencia artificial)\\b"
+    - "\\bno (la |lo )?(marque|marques|clasifique|clasifiques|reporte|reportes|trate|trates) como (una |un )?(estafa|fraude|sospechos[oa])\\b"
+    - "\\b(clasifique|clasifica|marque|marca|describa|describe) (este|esta|el|la) (documento|carta|aviso|mensaje) como (seguro|segura|genuin[oa]|leg[ií]tim[oa]|oficial|real)\\b"
+  ar:
+    - "تجاهل (جميع |كل )?(التعليمات|الأوامر|التوجيهات|الإرشادات) (السابقة|الماضية|أعلاه)"
+    - "(ملاحظة|رسالة|تعليمات|تنبيه) (إلى|الى|ل|لل)[ \\u200c]?(الذكاء الاصطناعي|المساعد|النموذج|نماذج الذكاء الاصطناعي)"
+    - "أنت (الآن )?(مساعد|نموذج|ذكاء اصطناعي)"
+    - "لا (تصنف|تعتبر|تحدد) (هذه|هذا) (الرسالة|الخطاب|الوثيقة|المستند) (كاحتيال|احتيالا|احتيالاً|كنصب)"
+  prs:
+    - "(دستورات|دستورالعمل[ \\u200c]?های|هدایات|رهنمودهای) (قبلی|پیشین|بالا) را (نادیده|فراموش)"
+    - "(نادیده|فراموش) (بگیر|بگیرید|کن|کنید) (تمام |همه )?(دستورات|دستورالعمل|هدایات)"
+    - "(یادداشت|پیام|هدایت) (برای|به) (هوش مصنوعی|دستیار|مدل)"
+

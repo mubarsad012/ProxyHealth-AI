@@ -26,6 +26,10 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: () => false },
 }));
 
+// jest-expo runs as iOS: until the vault is excluded from iCloud Backup (COMPLIANCE_PRIVACY §10.2)
+// the empty state shows the D-22 interim line, never "stay only on this phone" (platformCopy.ts).
+const EMPTY_LINE_IOS = "Papers you save stay on this phone, protected by your phone's own encryption. Turn on a phone passcode.";
+
 const BUNDLED: DemoFixture[] = [
   {
     id: 'portal_file_too_large',
@@ -126,7 +130,7 @@ describe('S12 My papers', () => {
         <PapersScreen />
       </AppProviders>,
     );
-    expect(await findByText('Papers you save stay only on this phone. Nothing is saved until you tap Save.')).toBeTruthy();
+    expect(await findByText(EMPTY_LINE_IOS)).toBeTruthy();
     expect(getByText('Me')).toBeTruthy();
   });
 
@@ -159,7 +163,7 @@ describe('S13 member detail', () => {
         <MemberScreen memberId="me" />
       </AppProviders>,
     );
-    expect(await findByText('Papers you save stay only on this phone. Nothing is saved until you tap Save.')).toBeTruthy();
+    expect(await findByText(EMPTY_LINE_IOS)).toBeTruthy();
     expect(queryByTestId('member-delete')).toBeNull();
   });
 
@@ -194,7 +198,7 @@ describe('S13 member detail', () => {
         <MemberScreen memberId="me" />
       </AppProviders>,
     );
-    expect(await findByText('Papers you save stay only on this phone. Nothing is saved until you tap Save.')).toBeTruthy();
+    expect(await findByText(EMPTY_LINE_IOS)).toBeTruthy();
     expect(queryByTestId('member-recolor')).toBeNull();
     expect(vault.members.recolor).not.toHaveBeenCalled();
   });

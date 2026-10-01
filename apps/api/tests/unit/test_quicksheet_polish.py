@@ -187,8 +187,9 @@ def test_pdf_footer_date_reads_left_to_right() -> None:
 
 
 # The real Dari demand sentence of the Inova sample (mobile assets/fixtures
-# inova_final_notice.result.prs.json): the "$" must stay on the left of the amount.
-INOVA_PRS = "می\u200cگوید مبلغ قابل پرداخت $1,240.00 تا ۲۸ اکتبر ۲۰۲۶ است."
+# inova_final_notice.result.prs.json): the "$" must stay on the left of the amount. The date is
+# kept as printed, in Latin letters and Western digits (AI_PROMPTS §5.0 rule 7).
+INOVA_PRS = "می\u200cگوید مبلغ قابل پرداخت $1,240.00 تا October 28, 2026 است."
 MOBILE_FIXTURES = DATA_DIR.parents[1] / "mobile" / "assets" / "fixtures"
 
 

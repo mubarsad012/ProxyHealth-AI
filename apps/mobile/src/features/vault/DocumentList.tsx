@@ -14,6 +14,7 @@ import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { formatDay } from '@/features/reminders/format';
 import { toIsoDay } from '@/features/reminders/schedule';
+import { isolate } from '@/i18n/bidi';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import type { DocumentRow, Member } from '@/storage/index';
@@ -26,6 +27,7 @@ import { categoryWord, isSampleAnalysis } from './documents';
 import { useDocument } from './hooks';
 import { MemberPickerSheet } from './MemberParts';
 import { memberName } from './members';
+import { platformKey } from './platformCopy';
 import { ConfirmDialog, Sheet } from './Sheet';
 
 /** `createdAt` is stored as a UTC instant; the row shows the device's LOCAL day it was saved. */
@@ -100,7 +102,7 @@ function DocumentRowView({ row, member, showMember, onOptions }: RowProps) {
                   variant="caption"
                   weight="bold"
                   template={t('vault.next_date')}
-                  vars={{ date: formatDay(row.nextDateIso, tag) }}
+                  vars={{ date: isolate(formatDay(row.nextDateIso, tag), 'auto') }}
                   ltrKeys={[]}
                 />
               </View>
@@ -189,7 +191,7 @@ export function DocumentList({ rows, members, showMember }: DocumentListProps) {
       <ConfirmDialog
         testID="paper-delete-confirm"
         visible={mode === 'delete' && target !== null}
-        title={t('vault.delete_confirm')}
+        title={t(platformKey('vault.delete_confirm'))}
         confirmLabel={t('btn.delete_paper')}
         cancelLabel={t('btn.cancel')}
         danger

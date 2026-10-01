@@ -27,6 +27,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('@/lib/network', () => ({ useOnline: () => ({ online: true, known: true }), isOnline: async () => true }));
 
 const medicaid = require('../../../assets/fixtures/medicaid_address_confirmation.result.en.json') as AnalysisResult;
+const nta = require('../../../assets/fixtures/nta_hearing_date.result.en.json') as AnalysisResult;
 const fallbacks = require('../../../assets/resources/national_fallbacks.json') as Resource[];
 
 const t = (key: string, vars?: Record<string, string | number>) => translate(BASE_STRINGS, key, vars);
@@ -115,6 +116,49 @@ describe('buildQuickSheetText', () => {
     expect(carrier).toEqual({ heading: prs.strings['quicksheet.help'], heading_en: 'Who can help', lines: [] });
     const all = [req.title, req.footer, ...req.sections.flatMap((s) => [s.heading, s.heading_en, ...s.lines])];
     expect(all.some((x) => /[\u2066-\u2069]/.test(x))).toBe(false);
+  });
+
+  it('puts the fixed disclaimer in the header of every form: preview text, copy/read-aloud, PDF body, HTML (§5.6)', () => {
+    const legal = BASE_STRINGS['disclaimer.legal_information_only'];
+    const sheet = buildQuickSheetText(JSON.parse(JSON.stringify(nta)), [r211], t, { today: '2026-09-27' });
+    expect(sheet.disclaimer).toBe(legal);
+    expect(legal).toContain('not legal advice');
+    // Copy text / read aloud: right under the title, before the first card.
+    const text = quickSheetPlainText(sheet);
+    expect(text.indexOf(legal)).toBeGreaterThan(text.indexOf(sheet.title));
+    expect(text.indexOf(legal)).toBeLessThan(text.indexOf('What is this?'));
+    // Server PDF: the contract has no disclaimer field → first section, heading only, no lines.
+    const req = toQuickSheetRequest(sheet, { languageTag: 'en', direction: 'ltr', fontHint: 'NotoSans', generatedOn: '2026-09-27' });
+    expect(req.sections[0]).toEqual({ heading: legal, heading_en: legal, lines: [] });
+    expect(req.sections.length).toBeLessThanOrEqual(8);
+    expect(req.sections.find((s) => s.heading_en === 'Who can help')).toBeTruthy();
+    // Native print / web print HTML: under the <h1>.
+    const html = buildQuickSheetHtml(sheet, { dir: 'ltr', lang: 'en' });
+    expect(html.indexOf(legal)).toBeGreaterThan(html.indexOf('<h1>'));
+    expect(html.indexOf(legal)).toBeLessThan(html.indexOf('<section>'));
+    // Each paper gets its own kind; banner-only kinds fall back to the general line.
+    expect(buildQuickSheetText(JSON.parse(JSON.stringify(medicaid)), [], t).disclaimer).toBe(
+      BASE_STRINGS['disclaimer.benefits_information_only'],
+    );
+    const demo = { ...JSON.parse(JSON.stringify(medicaid)), disclaimer_kind: 'demo_sample' } as AnalysisResult;
+    expect(buildQuickSheetText(demo, [], t).disclaimer).toBe(BASE_STRINGS['disclaimer.general_information']);
+  });
+
+  it('Dari sheet: the disclaimer in Dari with the English line under it for the clerk', () => {
+    const prs = bundledPackFor('prs')!;
+    const tPrs = (key: string, vars?: Record<string, string | number>) => translateForLayout(prs.strings, 'rtl', key, vars);
+    const sheet = buildQuickSheetText(JSON.parse(JSON.stringify(nta)), [], tPrs, { today: '2026-09-27' });
+    expect(sheet.disclaimer).toBe(prs.strings['disclaimer.legal_information_only']);
+    expect(sheet.disclaimer_en).toBe(BASE_STRINGS['disclaimer.legal_information_only']);
+    const req = toQuickSheetRequest(sheet, { languageTag: 'prs', direction: 'rtl', fontHint: 'NotoNaskhArabic' });
+    expect(req.sections[0]).toEqual({
+      heading: prs.strings['disclaimer.legal_information_only'],
+      heading_en: BASE_STRINGS['disclaimer.legal_information_only'],
+      lines: [],
+    });
+    expect(quickSheetPlainText(sheet)).toContain(BASE_STRINGS['disclaimer.legal_information_only']);
+    const html = buildQuickSheetHtml(sheet, { dir: 'rtl', lang: 'prs' });
+    expect(html).toContain(`<p class="en" dir="ltr" lang="en">${BASE_STRINGS['disclaimer.legal_information_only']}</p>`);
   });
 
   it('with no resources there is no carrier', () => {

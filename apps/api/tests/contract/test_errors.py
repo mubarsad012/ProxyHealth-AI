@@ -19,8 +19,10 @@ from proxyhealth_api.errors import ApiError
 from proxyhealth_api.middleware import consent_is_current
 from tests.conftest import make_settings
 from tests.contract._fixtures_wp1 import demo_body, gemini, page_body, running
+from tests.contract.test_analyze import install
+from tests.contract.test_chat import context_for
 
-CONSENT = {"X-Consent-Version": "2026-09-24"}
+CONSENT = {"X-Consent-Version": "2026-10-01"}
 
 
 def envelope(r: httpx.Response, status: int, code: str) -> ErrorResponse:
@@ -186,7 +188,7 @@ async def test_500_is_content_free(raising: httpx.AsyncClient) -> None:
 async def test_428_without_consent(client: httpx.AsyncClient, tiny_png_base64: str) -> None:
     r = await client.post("/v1/analyze", json=page_body(tiny_png_base64))
     body = envelope(r, 428, "consent_required")
-    assert body.error.details == {"consent_version": "2026-09-24"}
+    assert body.error.details == {"consent_version": "2026-10-01"}
 
 
 @pytest.mark.parametrize("given", ["2026-01-01", "not-a-date", "zzzz", ""])
@@ -263,6 +265,84 @@ async def test_unpaid_tier_demo_sample_passes_the_gate(tmp_path: Path) -> None:
         assert r.headers["X-Data-Use-Tier"] == "unpaid"
 
 
+MEDICAID = "medicaid_address_confirmation"
+SCREEN = "portal_file_too_large"
+PII = "MARIA GONZALEZ SSN 123-45-6789 DOB 1980-01-01"
+
+
+async def _tainted_sample_chat(client: httpx.AsyncClient) -> dict[str, object]:
+    """A chat naming a known sample whose context, history and question carry the user's words."""
+    ctx = await context_for(client, MEDICAID)  # the sample analysis itself is exempt everywhere
+    ctx["original_text"][0]["blocks"][0]["text"] = PII
+    return {
+        "analysis": ctx, "messages": [{"role": "user", "text": "my A-number is A123456789"}],
+        "question": "I live at 5 Elm St, is that ok?", "target_language": "en",
+        "demo_sample_id": MEDICAID,
+    }  # fmt: skip
+
+
+def _sample_screen(**extra: object) -> dict[str, object]:
+    shot = {"mime_type": "image/png", "data_base64": "iVBORw0KGgo="}  # ignored: fixture from disk
+    return {"screenshot": shot, "target_language": "en", "client_platform": "android",
+            "demo_sample_id": SCREEN, **extra}  # fmt: skip
+
+
+@pytest.mark.parametrize("billing", [(False,), (True, False)], ids=["unpaid", "mixed"])
+async def test_sample_chat_on_unpaid_or_mixed_is_gated_like_a_real_paper(
+    tmp_path: Path, billing: tuple[bool, ...]
+) -> None:
+    """Regression (D-01/D-02): demo_sample_id used to exempt /v1/chat from the gate although the
+    client's own analysis context, history and question go into the prompt unchanged."""
+    async with running(gemini(tmp_path, *billing)) as (app, client):
+        spy = install(app, app.state.settings)
+        chat = await _tainted_sample_chat(client)
+        spy.calls.clear()
+        envelope(await client.post("/v1/chat", json=chat), 428, "consent_required")
+        r = await client.post("/v1/chat", json=chat, headers=CONSENT)
+        envelope(r, 403, "unpaid_tier_real_documents_disabled")
+        assert spy.calls == [], "nothing may reach an unpaid/mixed key"
+
+
+async def test_sample_chat_unpaid_dev_flag_still_needs_consent(tmp_path: Path) -> None:
+    settings = gemini(tmp_path, False, allow_unpaid_real_documents=True)
+    async with running(settings) as (app, client):
+        install(app, app.state.settings)
+        chat = await _tainted_sample_chat(client)
+        envelope(await client.post("/v1/chat", json=chat), 428, "consent_required")
+        ok = await client.post("/v1/chat", json=chat, headers=CONSENT)
+        assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.parametrize("billing", [(True,), None], ids=["paid", "demo"])
+async def test_sample_chat_before_consent_stays_open_on_paid_and_demo(
+    tmp_path: Path, billing: tuple[bool, ...] | None
+) -> None:
+    """CL-069: questions about a sample go to /v1/chat before consent on the paid/demo tiers."""
+    settings = gemini(tmp_path, *billing) if billing else make_settings(tmp_path)
+    async with running(settings) as (app, client):
+        if billing:
+            install(app, app.state.settings)
+        r = await client.post("/v1/chat", json=await _tainted_sample_chat(client))
+        assert r.status_code == 200, r.text
+
+
+async def test_sample_troubleshoot_with_a_typed_goal_is_gated_on_unpaid(tmp_path: Path) -> None:
+    async with running(gemini(tmp_path, False)) as (app, client):
+        spy = install(app, app.state.settings)
+        goal = _sample_screen(user_goal="Upload the letter for Maria Gonzalez, case 123456")
+        envelope(await client.post("/v1/troubleshoot", json=goal), 428, "consent_required")
+        r = await client.post("/v1/troubleshoot", json=goal, headers=CONSENT)
+        envelope(r, 403, "unpaid_tier_real_documents_disabled")
+        assert spy.calls == []
+        for untyped in (_sample_screen(), _sample_screen(user_goal="   ")):
+            ok = await client.post("/v1/troubleshoot", json=untyped)  # no client text: exempt
+            assert ok.status_code == 200, ok.text
+    async with running(gemini(tmp_path, True)) as (app, client):
+        install(app, app.state.settings)
+        ok = await client.post("/v1/troubleshoot", json=goal)  # paid: sample path stays open
+        assert ok.status_code == 200, ok.text
+
+
 async def test_unpaid_dev_bypass_flag(tmp_path: Path, tiny_png_base64: str) -> None:
     settings = gemini(tmp_path, False, allow_unpaid_real_documents=True)
     async with running(settings) as (app, client):
@@ -294,6 +374,37 @@ async def test_429_rate_limited_per_install(tmp_path: Path) -> None:
         other = {"X-Install-Id": "4f7c2c1e-0000-4000-8000-000000000002"}
         again = await client.post("/v1/analyze", json=demo_body(), headers=other)
         assert again.status_code == 200
+
+
+async def test_rotating_install_ids_hit_the_ip_class_bucket(tmp_path: Path) -> None:
+    """Regression (D-08 "also"): a fresh random X-Install-Id per request bypassed every bucket."""
+    settings = make_settings(tmp_path, rate_limit_ip_per_minute=3)
+    async with running(settings) as (_app, client):
+        for i in range(3):
+            rotated = {"X-Install-Id": f"r{i}"}
+            ok = await client.post("/v1/analyze", json=demo_body(), headers=rotated)
+            assert ok.status_code == 200, ok.text
+        r = await client.post("/v1/analyze", json=demo_body(), headers={"X-Install-Id": "r-new"})
+        body = envelope(r, 429, "rate_limited")
+        assert body.error.details == {"window": "minute", "limit": 3, "bucket": "ip_class"}
+        assert body.error.key_exhausted is False and int(r.headers["Retry-After"]) >= 1
+        for path in ("/v1/chat", "/v1/troubleshoot"):  # every model-calling route shares it
+            chat = await client.post(path, json={}, headers={"X-Install-Id": "r-other"})
+            assert chat.status_code in (400, 428, 429)
+
+
+async def test_forwarded_for_uses_the_proxy_appended_entry(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path, rate_limit_ip_per_minute=1, trusted_proxy_hops=1)
+    async with running(settings) as (_app, client):
+        first = {"X-Forwarded-For": "9.9.9.9, 203.0.113.5", "X-Install-Id": "a"}
+        ok = await client.post("/v1/analyze", json=demo_body(), headers=first)
+        assert ok.status_code == 200, ok.text
+        spoofed = {"X-Forwarded-For": "8.8.8.8, 203.0.113.77", "X-Install-Id": "b"}  # same /24
+        r = await client.post("/v1/analyze", json=demo_body(), headers=spoofed)
+        envelope(r, 429, "rate_limited")
+        other = {"X-Forwarded-For": "203.0.114.1", "X-Install-Id": "c"}
+        again = await client.post("/v1/analyze", json=demo_body(), headers=other)
+        assert again.status_code == 200, again.text
 
 
 async def test_request_id_is_echoed(client: httpx.AsyncClient) -> None:

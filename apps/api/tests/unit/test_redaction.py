@@ -202,3 +202,15 @@ def test_fractional_mask_edges_are_burned_not_floored() -> None:
     # pixel 5 is half covered by the mask (0.55 × 10 = 5.5): it must be black
     assert im.getpixel((5, 5)) == (0, 0, 0) and im.getpixel((5, 0)) == (0, 0, 0)
     assert im.getpixel((6, 6)) == (255, 255, 255) and im.getpixel((6, 0)) == (255, 255, 255)
+
+
+def test_pixel_cap_is_close_to_the_client_cap() -> None:
+    """D-21 clients send ≤ 1600 px edges; a flat 40 MP PNG (~116 KB) must not reach the decoder
+    (seconds of CPU and ~0.5 GB per page)."""
+    assert redaction.MAX_PIXELS <= 16_000_000
+    over = _encoded(Image.new("1", (6324, 6324)), "PNG")  # 40 MP, a few KB compressed
+    with pytest.raises(ApiError) as exc:
+        redaction.redact_image(over, "image/png", [], 0)
+    assert exc.value.status == 413
+    ok = redaction.redact_image(_encoded(Image.new("L", (1600, 1200)), "PNG"), "image/png", [], 0)
+    assert (ok.width, ok.height) == (1600, 1200)

@@ -150,7 +150,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
   }, [scheme, highContrast, reduceMotion, textSize]);
 
+  const focus = value.colors.focus;
+  useEffect(() => {
+    applyWebFocusColor(focus);
+  }, [focus]);
+
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+/** Web: the `:focus-visible` ring in global.css reads `--ph-focus`; keep it on the palette in use
+ *  (the fixed light-palette blue was ~2:1 on the dark backgrounds). No-op on native. */
+export function applyWebFocusColor(color: string, doc: { documentElement?: { style?: { setProperty?(k: string, v: string): void } } } | undefined = webDocument()): void {
+  try {
+    doc?.documentElement?.style?.setProperty?.('--ph-focus', color);
+  } catch {
+    // no DOM (static export / tests)
+  }
+}
+
+function webDocument(): Document | undefined {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+  return document;
 }
 
 export function useTheme(): Theme {

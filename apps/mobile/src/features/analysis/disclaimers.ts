@@ -30,9 +30,18 @@ export const WARNING_CHIP_KEYS: Partial<Record<WarningCode, string>> = {
   contacts_stripped: 'warning.contacts_stripped',
 };
 
-export function warningChipKeys(warnings: readonly WarningCode[]): string[] {
+/**
+ * Chip keys for a result's warnings. `phrasing_lint_unavailable` shows only for a Tier 3 pack
+ * (PRODUCT_SPEC §5.6 "chip (Tier 3 only)"): since CL-050(c) the server warns it for every
+ * non-English target whose phrasing list is not reviewed yet (es, prs, ar… included), which would
+ * put the chip on every result in the bundled languages. `emergency_lexicon_unavailable` (no
+ * emergency list at all for the language) always shows — missing emergency detection is not a
+ * notice to hide. Without `packTier` every mapped warning shows.
+ */
+export function warningChipKeys(warnings: readonly WarningCode[], opts: { packTier?: number } = {}): string[] {
   const out: string[] = [];
   for (const w of warnings) {
+    if (w === 'phrasing_lint_unavailable' && opts.packTier !== undefined && opts.packTier < 3) continue;
     const key = WARNING_CHIP_KEYS[w];
     if (key && !out.includes(key)) out.push(key);
   }
@@ -82,7 +91,7 @@ export function sampleAsOfNoteKey(a: AnalysisResult): string | null {
 }
 
 /** A sample paper (or any mock-mode result): `model_meta.demo` / the `demo_sample` warning. */
-export function isSampleResult(a: AnalysisResult): boolean {
+export function isSampleResult(a: Pick<AnalysisResult, 'warnings' | 'model_meta'>): boolean {
   return a.warnings.includes('demo_sample') || a.model_meta.demo;
 }
 

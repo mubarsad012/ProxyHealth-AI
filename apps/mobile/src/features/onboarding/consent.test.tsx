@@ -15,6 +15,7 @@ import { useSession } from '@/store/session';
 
 import { consentView, startRoute } from './consentModel';
 import { ConsentScreen } from './ConsentScreen';
+import { privacyNoticeKeys } from './PrivacyNotice';
 import { declineConsent, loadConsent, resetConsentState, useConsentDecision, withdrawConsent } from './consentState';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -76,9 +77,24 @@ describe('consentView per tier', () => {
   });
 });
 
+describe('privacy notice lines per tier (COMPLIANCE_PRIVACY §4.5)', () => {
+  it('demo: no "goes to Google\'s AI (Gemini)" line next to "No AI service is contacted"', () => {
+    const keys = privacyNoticeKeys('demo', 'ios');
+    expect(keys).not.toContain('privacy.notice.sent');
+    expect(keys[0]).toBe('consent.line2.demo');
+  });
+
+  it('paid, unpaid and unknown keep line 1 before their tier line', () => {
+    expect(privacyNoticeKeys('paid', 'android').slice(0, 2)).toEqual(['privacy.notice.sent', 'consent.line2.paid']);
+    expect(privacyNoticeKeys('unpaid', 'ios').slice(0, 2)).toEqual(['privacy.notice.sent', 'consent.line2.unpaid']);
+    expect(privacyNoticeKeys('unknown', 'web').slice(0, 2)).toEqual(['privacy.notice.sent', 'consent.line2.unknown']);
+    expect(privacyNoticeKeys('paid', 'web')).toContain('privacy.notice.device_web');
+  });
+});
+
 describe('startRoute (S0)', () => {
-  const record = { consent_version: '2026-09-24', accepted_at: 'x', tier_seen: 'paid' as const, platform: 'ios' as const };
-  const base = { languageDecided: true, decision: 'accepted' as const, record, serverConsentVersion: '2026-09-24', tier: 'paid' as const };
+  const record = { consent_version: '2026-10-01', accepted_at: 'x', tier_seen: 'paid' as const, platform: 'ios' as const };
+  const base = { languageDecided: true, decision: 'accepted' as const, record, serverConsentVersion: '2026-10-01', tier: 'paid' as const };
   it('routes language → consent → tabs', () => {
     expect(startRoute({ ...base, languageDecided: false })).toBe('/onboarding/language');
     expect(startRoute({ ...base, decision: 'none', record: null })).toBe('/onboarding/consent');
@@ -86,7 +102,7 @@ describe('startRoute (S0)', () => {
     expect(startRoute({ ...base, decision: 'not_now', record: null })).toBe('/(tabs)');
   });
   it('re-shows consent on a new consent version or tier, not while offline', () => {
-    expect(startRoute({ ...base, serverConsentVersion: '2026-10-01' })).toBe('/onboarding/consent');
+    expect(startRoute({ ...base, serverConsentVersion: '2026-10-15' })).toBe('/onboarding/consent');
     expect(startRoute({ ...base, tier: 'demo' })).toBe('/onboarding/consent');
     expect(startRoute({ ...base, tier: 'unknown', serverConsentVersion: null })).toBe('/(tabs)');
   });
@@ -159,7 +175,7 @@ function demoConfig(): ServerConfig {
       hide_parts_server_masking: true,
     },
     limits: {} as ServerConfig['limits'],
-    consent_version: '2026-09-24',
+    consent_version: '2026-10-01',
     privacy_policy_url: 'https://proxyhealth.expo.app/privacy',
     base_pack_version: 'base',
     languages: [],
@@ -194,12 +210,12 @@ describe('<ConsentScreen>', () => {
     await new Promise((r) => setTimeout(r, 10));
     const record = await consentStore.get();
     expect(record).toEqual({
-      consent_version: '2026-09-24',
+      consent_version: '2026-10-01',
       accepted_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       tier_seen: 'demo',
       platform: 'ios',
     });
-    expect(useSession.getState().consent?.consent_version).toBe('2026-09-24');
+    expect(useSession.getState().consent?.consent_version).toBe('2026-10-01');
     expect(navigate).toHaveBeenCalledWith('/(tabs)');
   });
 

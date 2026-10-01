@@ -1,6 +1,8 @@
 // S5 — Review pages (`/scan/review`, `?sample=<fixture_id>` from the sample picker). Fix pages
 // (take again / turn / remove), hide parts, then "Read this paper" → S6. PDFs show a file card.
-// Offline: the primary becomes "Save to read later" and the scan is queued in the session.
+// Offline: "Save to read later" saves the pages to My papers as "Not read yet" (when they can be
+// kept, `readLater.tsx`), and "I will read it when internet is back" waits on this screen and
+// starts reading as soon as the connection returns. A sample can be read offline (bundled result).
 
 import { Image } from 'expo-image';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
@@ -18,9 +20,8 @@ import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { useDirection } from '@/i18n/direction';
-import { keyExists, useI18n } from '@/i18n/store';
+import { keyExists } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
-import { newId } from '@/lib/ids';
 import { useOnline } from '@/lib/network';
 import { pdfSizeMb } from '@/lib/pdf';
 import { type CapturedPage, useSession } from '@/store/session';
@@ -31,6 +32,7 @@ import { usePickImage } from './index';
 import { MaskEditor } from './MaskEditor';
 import { movePage, pagesAfterPick, type PickOutcome } from './pageQueue';
 import { forgetWebFile } from './pick';
+import { readLaterBlockKey, useReadLater } from './readLater';
 import { samplePages } from './samples';
 
 /** Reorder copy is pending WP0 (CL line in DECISIONS §14); the controls appear once both keys
@@ -142,6 +144,7 @@ export function ReviewScreen() {
   const pick = usePickImage();
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState(false);
   const limits = config?.limits ?? null;
   const hydrated = useHydrated();
   const sampleParam = typeof params.sample === 'string' && params.sample ? params.sample : null;
@@ -157,6 +160,17 @@ export function ReviewScreen() {
   const sample = Boolean(demoSampleId);
   const isPdf = pages.length === 1 && pages[0].mimeType === 'application/pdf';
   const blurry = useBlurHints(pages, !sample && !isPdf);
+  const readLater = useReadLater(pages, sample, () => setMessage(t('review.read_later_saved')));
+
+  // "I will read it when internet is back": start S6 once the connection returns.
+  useEffect(() => {
+    if (!waiting || !online) return;
+    const id = setTimeout(() => {
+      setWaiting(false);
+      router.push('/scan/reading' as Href);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [waiting, online]);
 
   const applyOutcome = (o: PickOutcome) => {
     useSession.getState().setPages(o.pages);
@@ -199,10 +213,9 @@ export function ReviewScreen() {
     useSession.getState().removePage(page.id);
   };
 
-  const readLater = () => {
-    const s = useSession.getState();
-    s.enqueueOfflineScan({ id: newId(), pages: s.pages, targetLanguage: useI18n.getState().tag, memberId: null, queuedAt: new Date().toISOString() });
-    setMessage(t('capture.offline_queue'));
+  const waitForInternet = () => {
+    setMessage(null);
+    setWaiting(true);
   };
 
   // Web static HTML has no query, so a deep link / reload must first render the empty state.
@@ -215,7 +228,10 @@ export function ReviewScreen() {
   }
 
   const editingPage = pages.find((p) => p.id === editing) ?? null;
-  const footer = online ? (
+  const canSaveLater = readLater.block === 'none';
+  const blockKey = readLaterBlockKey(readLater.block);
+  // A sample reads offline too (the bundled recorded result, D-29).
+  const footer = online || sample ? (
     <BigButton
       testID="review-read"
       label={t('review.read_cta')}
@@ -228,8 +244,31 @@ export function ReviewScreen() {
     />
   ) : (
     <View style={styles.footer}>
-      <BigButton label={t('review.read_later_cta')} icon="offline" variant="primary" size={72} onPress={readLater} />
-      <BigButton label={t('review.wait_for_internet')} variant="secondary" size={56} onPress={readLater} />
+      {canSaveLater ? (
+        <BigButton
+          testID="review-read-later"
+          label={t('review.read_later_cta')}
+          icon="offline"
+          variant="primary"
+          size={72}
+          disabled={readLater.preparing}
+          onPress={() => void readLater.start()}
+        />
+      ) : null}
+      <BigButton
+        testID="review-wait"
+        label={t('review.wait_for_internet')}
+        icon="refresh"
+        variant={canSaveLater ? 'secondary' : 'primary'}
+        size={canSaveLater ? 56 : 72}
+        disabled={waiting}
+        onPress={waitForInternet}
+      />
+      {blockKey ? (
+        <AppText variant="caption" color="textMuted" testID="review-read-later-note">
+          {t(blockKey)}
+        </AppText>
+      ) : null}
     </View>
   );
 
@@ -237,8 +276,18 @@ export function ReviewScreen() {
     <Screen back footer={footer} testID="review-screen">
       {sample ? <Banner kind="demo" text={t('banner.demo_sample')} /> : null}
       {message ? (
-        <AppText role="status" weight="bold">
+        <AppText role="status" weight="bold" testID="review-message">
           {message}
+        </AppText>
+      ) : null}
+      {waiting && !online ? (
+        <AppText role="status" weight="bold" testID="review-waiting">
+          {t('review.waiting_for_internet')}
+        </AppText>
+      ) : null}
+      {readLater.failed ? (
+        <AppText role="alert" color="danger">
+          {t('err.internal')}
         </AppText>
       ) : null}
       {blurry.map((n) => (
@@ -285,6 +334,7 @@ export function ReviewScreen() {
           onClose={() => setEditing(null)}
         />
       ) : null}
+      {readLater.sheet}
     </Screen>
   );
 }

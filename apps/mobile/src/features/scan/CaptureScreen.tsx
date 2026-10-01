@@ -10,11 +10,12 @@ import { Image } from 'expo-image';
 import { type Href, router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { AccessibilityInfo, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { useServerConfig } from '@/api/config';
 import { Bidi } from '@/design/components/Bidi';
-import { BigButton } from '@/design/components/BigButton';
 import { Icon } from '@/design/components/Icon';
+import { BigButton } from '@/design/components/BigButton';
 import { Screen } from '@/design/components/Screen';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
@@ -34,6 +35,22 @@ function announce(key: string, vars?: Record<string, string | number>) {
   } catch {
     // best-effort
   }
+}
+
+/** The torch switch's name ("Light"): the "Too dark. Tap the light." guide line points at it. */
+export const TORCH_LABEL_KEY = 'capture.torch';
+
+/** A flashlight (the design icon set has no torch glyph; drawn in the same 24-unit, 2-px style).
+ *  Rays show while it is on. Decorative: the switch carries the name and the on/off state. */
+function TorchGlyph({ color, on }: { color: string; on: boolean }) {
+  const s = { stroke: color, strokeWidth: 2, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" accessible={false} aria-hidden importantForAccessibility="no-hide-descendants">
+      <Path d="M8 9h8l-1.5 4v7a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-7L8 9z" {...s} />
+      <Path d="M8 9V7h8v2M12 15v2" {...s} />
+      {on ? <Path d="M12 1v2M6.5 3l1.2 1.6M17.5 3l-1.2 1.6" {...s} /> : null}
+    </Svg>
+  );
 }
 
 export function CaptureScreen() {
@@ -174,15 +191,17 @@ export function CaptureScreen() {
       </View>
       <View style={styles.controls}>
         <Pressable
-          role="button"
-          accessibilityLabel={t('capture.guide_dark')}
+          role="switch"
+          testID="capture-torch"
+          accessibilityLabel={t(TORCH_LABEL_KEY)}
           accessibilityState={{ checked: torch }}
+          aria-checked={torch}
           onPress={() => {
             if (torch) setTorchOffAgain(true);
             setTorch(!torch);
           }}
           style={[styles.torch, { borderColor: colors.border, backgroundColor: torch ? colors.secondary : colors.surface }]}>
-          <Icon name="info" color={colors.text} />
+          <TorchGlyph color={colors.text} on={torch} />
         </Pressable>
         <Pressable
           role="button"

@@ -24,14 +24,22 @@ Interpretations recorded here because the spec examples and rules disagree in pl
   state — not merely that ``limit`` cut the local ones (RESOURCE_DB §6.10 wording, §6.11-B intent).
 * ``why.serves_your_county`` is used when the user's county matched; a zip3-only match renders
   ``why.serves_your_area`` even if a (non-matching) county was supplied.
+* A forced key already says what its shared tag would say (``why.report_scam`` ≡
+  ``why.for_scam_report``, ``why.crisis_line`` ≡ ``why.for_crisis`` — same copy in every pack), so
+  that tag key is skipped and the next shared tag, if any, is named instead (§6.6 + §6.8); any two
+  keys that still render the same English text are collapsed, so a card never shows a chip twice.
+* ``institutions_as_written`` is untrusted input with no length bound in the contract: each item is
+  cut to ``MAX_INSTITUTION_CHARS`` and normalised **once per request** before it is compared with
+  the DB names, so one request costs the same bounded work however large its strings are.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
+from functools import lru_cache
 
 from proxyhealth_api.contracts.enums import (
     DisclaimerKind,
@@ -96,6 +104,11 @@ PENALTY_STALE = 0.3
 FUZZY_RATIO = 0.85
 MAX_PER_ORG_TYPE = 2
 MAX_WHY_KEYS = 4
+# Longest printed institution name worth comparing (real names are < 100 chars); longer input is
+# cut here before normalisation so the matcher's cost per request stays bounded.
+MAX_INSTITUTION_CHARS = 200
+MAX_INSTITUTIONS = 10  # the contract's list bound, re-applied for direct (non-HTTP) callers
+MIN_INSTITUTION_CHARS = 3
 
 FORCED_NONE = 0
 FORCED_SCAM = 1
@@ -176,18 +189,60 @@ def language_credit(req_language: str, languages: list[str], meta: Meta) -> floa
     return LANG_OTHER
 
 
-def institution_match(institutions: list[str], res: Resource) -> str | None:
-    """RESOURCE_DB §6.3 fuzzy institution match; returns the institution as written."""
-    candidates = [normalize_org_name(t) for t in (res.name, res.name_note or "") if t]
-    candidates = [c for c in candidates if c]
-    for written in institutions:
-        a = normalize_org_name(written)
-        if len(a) < 3:
+@dataclass(frozen=True)
+class Institution:
+    """One ``institutions_as_written`` item, bounded and normalised once per request."""
+
+    written: str  # as printed (trimmed, at most MAX_INSTITUTION_CHARS) — echoed in ``why``
+    normalized: str
+
+
+def prepare_institutions(institutions: Sequence[str]) -> list[Institution]:
+    """Bound, normalise and de-duplicate the request's institutions (see module docstring)."""
+    out: list[Institution] = []
+    seen: set[str] = set()
+    for raw in institutions[:MAX_INSTITUTIONS]:
+        written = raw.lstrip()[:MAX_INSTITUTION_CHARS].rstrip()
+        normalized = normalize_org_name(written)
+        if len(normalized) < MIN_INSTITUTION_CHARS or normalized in seen:
             continue
+        seen.add(normalized)
+        out.append(Institution(written=written, normalized=normalized))
+    return out
+
+
+@lru_cache(maxsize=1024)
+def _name_forms(name: str, name_note: str | None) -> tuple[str, ...]:
+    """Normalised DB-side names (the repo is immutable, so these are computed once per entry)."""
+    forms = (normalize_org_name(t) for t in (name, name_note or "") if t)
+    return tuple(f for f in forms if f)
+
+
+def _fuzzy_equal(a: str, b: str) -> bool:
+    if a in b or b in a:
+        return True
+    sm = SequenceMatcher(None, a, b)
+    # real_quick_ratio/quick_ratio are upper bounds of ratio(): same verdict, cheaper rejects.
+    return (
+        sm.real_quick_ratio() >= FUZZY_RATIO
+        and sm.quick_ratio() >= FUZZY_RATIO
+        and sm.ratio() >= FUZZY_RATIO
+    )
+
+
+def match_institution(prepared: Sequence[Institution], res: Resource) -> str | None:
+    """RESOURCE_DB §6.3 fuzzy match over ``prepare_institutions`` output; the name as written."""
+    candidates = _name_forms(res.name, res.name_note)
+    for inst in prepared:
         for b in candidates:
-            if a in b or b in a or SequenceMatcher(None, a, b).ratio() >= FUZZY_RATIO:
-                return written
+            if _fuzzy_equal(inst.normalized, b):
+                return inst.written
     return None
+
+
+def institution_match(institutions: Sequence[str], res: Resource) -> str | None:
+    """RESOURCE_DB §6.3 for one resource (prepares the list itself; the matcher prepares once)."""
+    return match_institution(prepare_institutions(institutions), res)
 
 
 def tag_score(
@@ -244,6 +299,7 @@ def score_candidates(
     req_tags = list(dict.fromkeys(req.tags))
     pins = set(meta.doc_type_pins.get(req.document_type, ())) if req.document_type else set()
     boost_tags = meta.urgent_doc_boost.get(req.document_type) if req.document_type else None
+    institutions = prepare_institutions(req.institutions_as_written)
     scored: list[Scored] = []
     local_candidate = False
     for res in repo.active():
@@ -261,7 +317,7 @@ def score_candidates(
         if res.serves.scope != GeoScope.national:
             local_candidate = True
         language = language_credit(req.language, res.languages, meta)
-        institution = institution_match(req.institutions_as_written, res)
+        institution = match_institution(institutions, res)
         boosted = bool(boost_tags) and bool(set(res.tags) & set(boost_tags or ()))
         penalty = penalties(res, today)
         total = (
@@ -322,25 +378,35 @@ def apply_diversity_cap(scored: list[Scored], limit: int) -> list[Scored]:
     return kept
 
 
-def why_keys_for(cand: Scored, req_tags: list[ResourceTag]) -> list[str]:
-    """RESOURCE_DB §6.8 order, forced key first, at most ``MAX_WHY_KEYS``."""
+# The forced key and the tag key it makes redundant (identical copy in every pack).
+FORCED_WHY: dict[int, tuple[str, ResourceTag]] = {
+    FORCED_CRISIS: ("why.crisis_line", ResourceTag.crisis),
+    FORCED_SCAM: ("why.report_scam", ResourceTag.scam_report),
+}
+
+
+def why_keys_for(
+    cand: Scored, req_tags: list[ResourceTag], *, limit: int | None = MAX_WHY_KEYS
+) -> list[str]:
+    """RESOURCE_DB §6.8 order, forced key first, no repeated meaning, at most ``limit``."""
     keys: list[str] = []
-    if cand.forced == FORCED_CRISIS:
-        keys.append("why.crisis_line")
-    elif cand.forced == FORCED_SCAM:
-        keys.append("why.report_scam")
+    covered: ResourceTag | None = None
+    if cand.forced in FORCED_WHY:
+        forced_key, covered = FORCED_WHY[cand.forced]
+        keys.append(forced_key)
     if cand.pinned:
         keys.append("why.for_this_paper")
     if cand.institution:
         keys.append("why.institution_match")
-    if cand.shared:
+    shared = [t for t in cand.shared if t != covered]
+    if shared:
         primary = req_tags[0]
-        tag = primary if primary in cand.shared else cand.shared[0]
+        tag = primary if primary in shared else shared[0]
         keys.append(f"why.for_{tag.value}")
     keys.append(cand.geo_key)
     if cand.language >= LANG_EXACT:
         keys.append("why.speaks_your_language")
-    return keys[:MAX_WHY_KEYS]
+    return keys if limit is None else keys[:limit]
 
 
 def render_why(
@@ -355,6 +421,27 @@ def render_why(
     if "{state}" in text:
         text = text.replace("{state}", meta.state_names.get(loc_state or "", loc_state or ""))
     return text.strip()
+
+
+def rendered_why(
+    cand: Scored,
+    req_tags: list[ResourceTag],
+    loc_state: str | None,
+    meta: Meta,
+    strings: Mapping[str, str],
+) -> tuple[list[str], list[str]]:
+    """``why_keys`` and their English ``why`` in step; a key whose text repeats is dropped."""
+    keys: list[str] = []
+    texts: list[str] = []
+    for key in why_keys_for(cand, req_tags, limit=None):
+        text = render_why(key, cand, loc_state, meta, strings)
+        if text in texts:
+            continue
+        keys.append(key)
+        texts.append(text)
+        if len(keys) >= MAX_WHY_KEYS:
+            break
+    return keys, texts
 
 
 def national_fallbacks(
@@ -426,13 +513,13 @@ def match(
     prepare = repo.prepare_map()
     results: list[ResourceMatch] = []
     for cand in kept:
-        keys = why_keys_for(cand, req_tags)
+        keys, why = rendered_why(cand, req_tags, loc.state, meta, strings)
         results.append(
             ResourceMatch(
                 resource=cand.resource,
                 score=round(cand.score, 2),
                 why_keys=keys,
-                why=[render_why(k, cand, loc.state, meta, strings) for k in keys],
+                why=why,
                 eligibility_note_key=cand.resource.status_note_key,
                 checklist=checklist.build(
                     cand.resource,
@@ -456,6 +543,7 @@ __all__ = [
     "CRISIS_TAGS",
     "HEALTH_GROUP",
     "IMMIGRATION_GROUP",
+    "Institution",
     "Scored",
     "apply_diversity_cap",
     "geo_credit",
@@ -463,9 +551,12 @@ __all__ = [
     "is_dedicated_crisis",
     "language_credit",
     "match",
+    "match_institution",
     "national_fallbacks",
     "order_key",
     "penalties",
+    "prepare_institutions",
+    "rendered_why",
     "score_candidates",
     "tag_score",
     "why_keys_for",

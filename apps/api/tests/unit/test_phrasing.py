@@ -10,7 +10,13 @@ import pytest
 import yaml
 
 from proxyhealth_api.analysis import phrasing as ph
-from proxyhealth_api.contracts.enums import DocumentCategory, ReferTo, RefusalKind, WarningCode
+from proxyhealth_api.contracts.enums import (
+    DocumentCategory,
+    DocumentType,
+    ReferTo,
+    RefusalKind,
+    WarningCode,
+)
 from proxyhealth_api.settings import DATA_DIR
 from tests.unit._fixtures_wp2 import en_t
 
@@ -307,3 +313,73 @@ def test_medical_interpret_ignores_ordinary_you_have(sentence: str, category: C)
 )
 def test_medical_interpret_still_catches_diagnoses(sentence: str) -> None:
     assert "medical_interpret" in ph.lint_sentence(sentence, category=C.medical)
+
+
+# --- Phase 2B: regex defects (negated duty, contractions, adverbs, two-word analytes) ------------
+
+
+@pytest.mark.parametrize(
+    ("sentence", "category", "family"),
+    [
+        ("You don't need to go to court.", C.court, "negated_duty"),
+        ("You do not need to go to the hearing.", C.immigration, "negated_duty"),
+        ("You do not need to attend.", C.immigration, "negated_duty"),
+        ("You need not appear.", C.court, "negated_duty"),
+        ("There is no need to answer this letter.", C.court, "negated_duty"),
+        ("You're eligible for financial assistance.", C.medical, "eligibility"),
+        ("You’re eligible for financial assistance.", C.medical, "eligibility"),
+        ("You're not eligible.", C.benefits, "eligibility"),
+        ("You probably qualify for charity care.", C.medical, "eligibility"),
+        ("You will probably be approved.", C.immigration, "outcome"),
+        ("Your blood sugar is too high.", C.medical, "medical_interpret"),
+        ("Your cholesterol is 260, which is high.", C.medical, "medical_interpret"),
+        ("Your A1C of 9.1 is above normal.", C.medical, "medical_interpret"),
+        ("A glucose of 250 means diabetes.", C.medical, "medical_interpret"),
+        ("You can stop taking this medicine when you feel better.", C.medical, "medical_interpret"),
+    ],
+)
+def test_phase_2b_phrasings_are_caught(
+    sentence: str, category: DocumentCategory, family: str
+) -> None:
+    assert family in ph.lint_sentence(sentence, category=category), sentence
+
+
+@pytest.mark.parametrize(
+    ("sentence", "category"),
+    [
+        ("Your balance is $250.", C.medical),
+        ("Your total bill is high.", C.medical),
+        ("Your amount due of 250.00 is shown at the top.", C.medical),
+        ("Your appointment is on Monday.", C.medical),
+        ("The letter says you do not need to bring anything else.", C.benefits),
+        ("Bring this letter to your hearing.", C.court),
+    ],
+)
+def test_phase_2b_neighbours_still_pass(sentence: str, category: DocumentCategory) -> None:
+    assert ph.lint_sentence(sentence, category=category) == [], sentence
+
+
+async def test_chat_minimisation_about_a_hearing_is_hedged() -> None:
+    res = await ph.enforce(
+        "You don't need to go to the hearing if your lawyer goes for you.", t=en_t(),
+        category=C.court, language="en",
+    )  # fmt: skip
+    assert "don't need to go" not in res.text and res.hedged == 1
+
+
+# --- Phase 2B: DOJ-accredited representatives are for immigration papers only -------------------
+
+
+def test_professional_words_follow_the_paper_not_just_the_category() -> None:
+    dt = DocumentType
+    assert "DOJ-accredited" in ph.professional_for(C.court, document_type=dt.nta)
+    assert "DOJ-accredited" in ph.professional_for(C.immigration)
+    for category, doc in ((C.court, dt.traffic_court), (C.civic, dt.jury_summons),
+                          (C.employment, dt.pay_stub), (C.employment, dt.w2_1099)):  # fmt: skip
+        assert "DOJ" not in ph.professional_for(category, document_type=doc), doc
+
+
+def test_a_step_naming_a_tax_professional_gets_no_lawyer_referral() -> None:
+    step = "A free tax-help site or a tax professional can explain the boxes with you."
+    assert ph.names_professional(step)
+    assert ph.ensure_professional(step, C.employment, en_t()) == step

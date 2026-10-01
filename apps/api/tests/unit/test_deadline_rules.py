@@ -17,6 +17,7 @@ from proxyhealth_api.contracts.enums import (
     DateKind,
     DemandKind,
     DigitSystem,
+    DocumentCategory,
     DocumentType,
     RuleVerification,
 )
@@ -129,8 +130,8 @@ def test_cross_language_token_needs_the_language() -> None:
 def test_ambiguous_numeric_and_how_it_resolves() -> None:
     p = dr.parse_dates("03/04/2026")
     assert p.single is None and p.ambiguous_numeric
-    assert dr.parse_dates("03/04/2026", date_format=DateFormat.mdy).single == date(2026, 3, 4)
-    assert dr.parse_dates("03/04/2026", date_format=DateFormat.dmy).single == date(2026, 4, 3)
+    assert dr.parse_dates("03/04/2026", default_order=DateFormat.mdy).single == date(2026, 3, 4)
+    assert dr.parse_dates("03/04/2026", default_order=DateFormat.dmy).single == date(2026, 4, 3)
     assert dr.parse_dates("05/05/2026").single == date(2026, 5, 5)
     cue = dr.numeric_order_cue("Printed 10/14/2026. Pay by 03/04/2027.")
     assert cue is DateFormat.mdy
@@ -340,7 +341,7 @@ def test_ambiguous_printed_date_is_low_confidence_with_note(rules: list[Deadline
     assert out[0].reminder_eligible is False
     mdy = dr.DeadlineContext(
         document_type=DocumentType.other_notice, rules=rules, today=TODAY,
-        date_format=DateFormat.mdy,
+        default_order=DateFormat.mdy,
     )  # fmt: skip
     resolved = dr.apply_deadline_rules(v.verified, v.sources, mdy, t)[0]
     assert resolved.date is not None and resolved.date.value_iso == "2027-03-04"
@@ -406,8 +407,87 @@ def test_business_day_rule_and_localized_line(rules: list[DeadlineRule]) -> None
 
 
 def test_eeoc_rule_never_estimates_a_printed_300_day_window(rules: list[DeadlineRule]) -> None:
-    doc = DocumentType.other_notice
-    assert [r.id for r in dr.matching_rules("within 180 days", doc, rules, TODAY)] == [
+    doc, emp = DocumentType.other_notice, DocumentCategory.employment
+    assert [r.id for r in dr.matching_rules("within 180 days", doc, rules, TODAY, emp)] == [
         "eeoc_180_300d"
     ]
-    assert dr.matching_rules("within 300 days", doc, rules, TODAY) == []
+    assert dr.matching_rules("within 300 days", doc, rules, TODAY, emp) == []
+
+
+# --- Phase 2B: the display preference never reads a printed date; employment rules on letters ---
+
+
+NTA_TEXT = "Date of notice: 09/24/2026. You must appear on 10/07/2026 at 8:30 AM."
+
+
+def test_paper_order_beats_any_default_and_the_preference_is_not_a_parser_input() -> None:
+    """``Preferences.date_format`` is display only: a Dari reader who picks day-month-year must
+    never have a US court date 10/07/2026 read as 10 July (84 days in the past, high confidence)."""
+    cue = dr.numeric_order_cue(NTA_TEXT)
+    assert cue is DateFormat.mdy
+    got = dr.parse_dates("10/07/2026", default_order=DateFormat.dmy, order_cue=cue)
+    assert got.single == date(2026, 10, 7), "the page's own cue wins over any default"
+    assert "date_format" not in dr.context_for.__code__.co_varnames
+    assert "date_format" not in dr.parse_dates.__code__.co_varnames
+
+
+def test_us_paper_types_default_to_month_first_foreign_ones_stay_ambiguous() -> None:
+    assert dr.paper_default_order(DocumentType.nta) is DateFormat.mdy
+    assert dr.paper_default_order(DocumentType.uscis_rfe) is DateFormat.mdy
+    for doc in (DocumentType.vaccine_record, DocumentType.other_notice, DocumentType.unknown):
+        assert dr.paper_default_order(doc) is None
+    now = datetime(2026, 10, 2, 14, tzinfo=UTC)
+    ctx = dr.context_for(
+        document_type=DocumentType.nta, rules=[], now=now, transcript_text="Hearing 10/07/2026"
+    )
+    assert ctx.default_order is DateFormat.mdy and ctx.order_cue is None
+    t = assemble_transcript([block("p1b1", "Hearing on 10/07/2026 at 8:30 AM.")], pages_received=1)
+    d = demand_out(
+        "d1", value_verbatim="10/07/2026", source_quote="Hearing on 10/07/2026 at 8:30 AM.",
+        span_ids=["p1b1"], date_text="10/07/2026", role="hearing_date",
+    )  # fmt: skip
+    v = verify_demands([d], t)
+    out = dr.apply_deadline_rules(v.verified, v.sources, ctx, t)[0]
+    assert out.date is not None and out.date.value_iso == "2026-10-07"
+    foreign = dr.context_for(
+        document_type=DocumentType.vaccine_record, rules=[], now=now, transcript_text=""
+    )
+    vax = dr.apply_deadline_rules(v.verified, v.sources, foreign, t)[0]
+    assert vax.date is not None and vax.date.value_iso is None, "no cue, no default → ambiguous"
+
+
+def test_employment_rules_never_estimate_a_debt_collectors_window(
+    rules: list[DeadlineRule],
+) -> None:
+    """TAXONOMY §5.3: on an ``other_notice`` the OSHA/EEOC rules need category ``employment``."""
+    t = assemble_transcript(
+        [
+            block("p1b1", "Letter date: September 25, 2026"),
+            block("p1b2", "You may dispute this debt within 30 days of receiving this letter."),
+        ],
+        pages_received=1,
+    )
+    anchor = demand_out(
+        "d1", value_verbatim="September 25, 2026", source_quote="Letter date: September 25, 2026",
+        span_ids=["p1b1"], date_text="September 25, 2026", role="other",
+    )  # fmt: skip
+    window = demand_out(
+        "d2", kind=DemandKind.relative_deadline, value_verbatim="within 30 days",
+        source_quote="You may dispute this debt within 30 days of receiving this letter.",
+        span_ids=["p1b2"], relative_rule_text="within 30 days of receiving this letter",
+        anchor_span_id="p1b1", role="response_due",
+    )  # fmt: skip
+    v = verify_demands([anchor, window], t)
+    for category in (None, DocumentCategory.other, DocumentCategory.benefits):
+        ctx = dr.DeadlineContext(
+            document_type=DocumentType.other_notice, rules=rules, today=TODAY, category=category
+        )
+        d2 = dr.apply_deadline_rules(v.verified, v.sources, ctx, t)[1]
+        assert d2.date is not None and d2.date.kind is DateKind.unresolved, category
+        assert d2.date.rule_id is None
+    emp = dr.DeadlineContext(
+        document_type=DocumentType.other_notice, rules=rules, today=TODAY,
+        category=DocumentCategory.employment,
+    )  # fmt: skip
+    d2 = dr.apply_deadline_rules(v.verified, v.sources, emp, t)[1]
+    assert d2.date is not None and d2.date.rule_id == "osha_retaliation_30d"

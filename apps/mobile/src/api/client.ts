@@ -39,6 +39,14 @@ export interface CreateClientOptions {
   baseUrl: string;
   /** The accepted `consent_version`, or null when no consent record exists. */
   getConsentVersion(): string | null;
+  /**
+   * CL-070 defence in depth: refuse `/v1/analyze`, `/v1/troubleshoot` and `/v1/chat` client-side
+   * (no network call, `ApiError('consent_required')`) while there is no consent version and the
+   * request carries no `demo_sample_id`, so a screen that forgets its own consent gate still never
+   * uploads a user's photo, screenshot or paper text before S2. On for the app's client
+   * (`api/config.ts`); test clients that simulate the server's 428 may leave it off.
+   */
+  refuseUnconsentedUploads?: boolean;
   /** The install id (may resolve null before consent — CL-010; the header is then omitted). */
   getInstallId(): Promise<string | null>;
   appToken?: string;
@@ -96,6 +104,23 @@ export interface ApiClient {
 }
 
 const CONSENT_ROUTES = new Set(['/v1/analyze', '/v1/troubleshoot', '/v1/chat']);
+
+function hasDemoSampleId(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const id = (body as { demo_sample_id?: unknown }).demo_sample_id;
+  return typeof id === 'string' && id.trim().length > 0;
+}
+
+/** The client-side refusal (same code and copy as the server's 428; nothing was sent). */
+export function consentRequiredLocally(path: string): ApiError {
+  return new ApiError({
+    code: 'consent_required',
+    status: 428,
+    message: `${path} refused before sending: no consent version and no demo_sample_id (CL-070).`,
+    userMessageKey: 'err.consent_required',
+    details: { client_side: true },
+  });
+}
 
 function fallbackRequestId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -201,6 +226,14 @@ export function createClient(options: CreateClientOptions): ApiClient {
     opts: RequestOptions & { headers?: Record<string, string>; accept?: string } = {},
   ): Promise<Response> {
     const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS.default;
+    if (
+      options.refuseUnconsentedUploads &&
+      CONSENT_ROUTES.has(path) &&
+      !options.getConsentVersion() &&
+      !hasDemoSampleId(body)
+    ) {
+      throw consentRequiredLocally(path);
+    }
     const headers = await buildHeaders(path, opts.headers ?? {});
     if (opts.accept) headers.set('Accept', opts.accept);
     if (body !== undefined) headers.set('Content-Type', 'application/json; charset=utf-8');

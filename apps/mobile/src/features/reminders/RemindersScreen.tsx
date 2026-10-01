@@ -18,6 +18,8 @@ import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
 import { useAllReminders, useMembers } from '@/features/vault/hooks';
 import { memberName } from '@/features/vault/members';
+import { platformKey } from '@/features/vault/platformCopy';
+import { isolate } from '@/i18n/bidi';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import type { IcsEvent } from '@/lib/ics';
@@ -132,7 +134,7 @@ export function RemindersScreen({ focusDocumentId }: { focusDocumentId?: string 
             {item.localizedLine ? <AppText color="textMuted">{item.localizedLine}</AppText> : null}
             {item.reminders.map((r) => {
               const past = Date.parse(r.fireAt) <= now;
-              const label = `${t('reminders.fires_on', { date: formatFireTime(r.fireAt, tag) })} · ${
+              const label = `${t('reminders.fires_on', { date: isolate(formatFireTime(r.fireAt, tag), 'auto') })} · ${
                 past ? t('reminders.past') : r.enabled ? t('reminders.on') : t('reminders.off')
               }`;
               return (
@@ -168,7 +170,7 @@ export function RemindersScreen({ focusDocumentId }: { focusDocumentId?: string 
       <SwitchRow
         testID="reminders-lockscreen"
         label={t('reminders.lockscreen_detail')}
-        explanation={t('reminders.lockscreen_explain')}
+        explanation={t(platformKey('reminders.lockscreen_explain'))}
         value={lockScreenDetail}
         onChange={(v) => setSetting('lockScreenDetail', v)}
       />

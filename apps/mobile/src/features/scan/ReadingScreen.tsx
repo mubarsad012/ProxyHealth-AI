@@ -16,10 +16,10 @@ import { space } from '@/design/tokens';
 import { useAnalyze } from '@/features/analysis/useAnalyze';
 import { ConsentScreen, TABS_HREF } from '@/features/onboarding/ConsentScreen';
 import { useConsentDecision } from '@/features/onboarding/consentState';
-import { useI18n } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
-import { newId } from '@/lib/ids';
-import { useSession } from '@/store/session';
+import { type CapturedPage, useSession } from '@/store/session';
+
+import { useReadLater } from './readLater';
 
 const BACK_TO_PAGES: ReadonlySet<string> = new Set([
   'too_many_pages',
@@ -33,12 +33,6 @@ const BACK_TO_PAGES: ReadonlySet<string> = new Set([
 function backToReview() {
   if (router.canGoBack()) router.back();
   else router.replace('/scan/review' as Href);
-}
-
-function saveForLater() {
-  const s = useSession.getState();
-  if (!s.pages.length || s.demoSampleId) return;
-  s.enqueueOfflineScan({ id: newId(), pages: s.pages, targetLanguage: useI18n.getState().tag, memberId: null, queuedAt: new Date().toISOString() });
 }
 
 /** S6 `428` row: after S2 is accepted, retry the request once; any other exit goes where S2 says. */
@@ -104,7 +98,7 @@ export function ReadingScreen() {
   if (status === 'error' && run.error) {
     return (
       <Screen back onBack={cancel} testID="reading-screen">
-        <ReadingError error={run.error} onRetry={start} sample={isSample} />
+        <ReadingError error={run.error} onRetry={start} sample={isSample} pages={pages} />
       </Screen>
     );
   }
@@ -141,8 +135,10 @@ export function ReadingScreen() {
   );
 }
 
-function ReadingError({ error, onRetry, sample }: { error: ApiError; onRetry(): void; sample: boolean }) {
+function ReadingError({ error, onRetry, sample, pages }: { error: ApiError; onRetry(): void; sample: boolean; pages: readonly CapturedPage[] }) {
   const t = useT();
+  // "Save to read later" = save to My papers as "Not read yet" (PRODUCT_SPEC §5.4), then show the list.
+  const readLater = useReadLater(pages, sample, () => router.replace('/papers' as Href));
   if (error.isConsentRequired()) {
     return (
       <View role="alert" style={styles.stack}>
@@ -167,14 +163,7 @@ function ReadingError({ error, onRetry, sample }: { error: ApiError; onRetry(): 
       <ErrorState
         error={error}
         onRetry={onRetry}
-        onSaveLater={
-          offlineLike && !sample
-            ? () => {
-                saveForLater();
-                router.replace('/' as Href);
-              }
-            : undefined
-        }
+        onSaveLater={offlineLike && readLater.block === 'none' ? () => void readLater.start() : undefined}
         onCall211={call211}
         onTrySample={() => router.replace('/?sample=1' as Href)}
       />
@@ -189,6 +178,12 @@ function ReadingError({ error, onRetry, sample }: { error: ApiError; onRetry(): 
       {error.isUnpaidBlocked() || error.code === 'not_found' || error.code === 'unauthorized' ? (
         <BigButton label={t('btn.go_home')} icon="home" variant="secondary" size={56} onPress={() => router.replace('/' as Href)} />
       ) : null}
+      {readLater.failed ? (
+        <AppText role="alert" color="danger">
+          {t('err.internal')}
+        </AppText>
+      ) : null}
+      {readLater.sheet}
     </View>
   );
 }

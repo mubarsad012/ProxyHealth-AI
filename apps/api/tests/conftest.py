@@ -24,7 +24,7 @@ def make_settings(tmp_path: Path, **overrides: object) -> Settings:
         "mock_latency_min_ms": 0,
         "mock_latency_max_ms": 0,
         "install_hash_secret": "test",
-        "consent_version": "2026-09-24",
+        "consent_version": "2026-10-01",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -56,7 +56,7 @@ def frozen_now() -> Callable[[], datetime]:
 
 @pytest.fixture
 def consent_headers() -> dict[str, str]:
-    return {"X-Consent-Version": "2026-09-24"}
+    return {"X-Consent-Version": "2026-10-01"}
 
 
 @pytest.fixture

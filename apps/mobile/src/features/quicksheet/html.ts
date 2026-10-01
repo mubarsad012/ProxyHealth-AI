@@ -2,7 +2,8 @@
 // Native: `Print.printToFileAsync({ html })` renders this in a WebView, which cannot see bundled
 // app fonts, so the Noto faces are embedded as base64 data URIs (`fontData.*`). Web: the same HTML
 // feeds `Print.printAsync` (the browser print dialog). `dir` is set on <html>; English section
-// headings stay LTR; phone numbers, dates and other Latin/digit runs are LTR-isolated in RTL.
+// headings stay LTR; phone numbers, dates and other Latin/digit runs are LTR-isolated in RTL. The
+// header disclaimer (PRODUCT_SPEC §5.6) sits under the title, with its English line for the clerk.
 // Pure: no I/O here, so it is unit-tested directly.
 
 import type { QuickSheetText } from './build';
@@ -93,6 +94,12 @@ export function buildQuickSheetHtml(sheet: QuickSheetText, opts: QuickSheetHtmlO
   const faceCss = faces.length ? fontFaceCss(faces) : localOnlyFaces(families);
   const stack = `${families.map(cssString).join(', ')}, system-ui, sans-serif`;
   const align = dir === 'rtl' ? 'right' : 'left';
+  const disclaimer = sheet.disclaimer
+    ? `<p class="disclaimer" role="note">${isolateLtrRuns(sheet.disclaimer, dir)}</p>` +
+      (sheet.disclaimer_en && sheet.disclaimer_en !== sheet.disclaimer
+        ? `\n<p class="en" dir="ltr" lang="en">${escapeHtml(sheet.disclaimer_en)}</p>`
+        : '')
+    : '';
   const sections = sheet.sections
     .map((s) => {
       const en =
@@ -116,6 +123,7 @@ body { font-family: ${stack}; font-size: 13pt; line-height: 1.5; text-align: ${a
 h1 { font-size: 20pt; font-weight: 700; margin: 0 0 12pt; }
 h2 { font-size: 15pt; font-weight: 700; margin: 16pt 0 0; }
 p { margin: 2pt 0; }
+.disclaimer { font-weight: 700; margin: 0 0 2pt; }
 .en { font-family: ${cssString(LATIN_FAMILY)}, system-ui, sans-serif; color: #3E4C5A; font-size: 11pt; text-align: left; margin-bottom: 4pt; }
 bdi { unicode-bidi: isolate; direction: ltr; }
 section { page-break-inside: avoid; border-top: 1px solid #D5DCE3; padding-top: 4pt; }
@@ -124,6 +132,7 @@ footer { margin-top: 20pt; border-top: 1px solid #7A8794; padding-top: 6pt; font
 </head>
 <body>
 <h1>${isolateLtrRuns(sheet.title, dir)}</h1>
+${disclaimer}
 ${sections}
 <footer>${isolateLtrRuns(sheet.footer, dir)}</footer>
 </body>

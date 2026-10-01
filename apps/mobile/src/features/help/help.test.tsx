@@ -8,7 +8,9 @@ import { ApiError } from '@/api/errors';
 import type { AnalysisResult, Resource, ResourceMatchResponse } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
 
-import { whyText, whyVars } from './format';
+import { LRI, PDI } from '@/i18n/bidi';
+
+import { callLabel, whyText, whyVars } from './format';
 import { HelpForDocument } from './HelpForDocument';
 import {
   buildMatchRequestForAnalysis,
@@ -19,6 +21,7 @@ import {
   offlineFallbacksFor,
   offlineMatchResponse,
 } from './request';
+import { ResourceCard } from './ResourceCard';
 import { ResourceList } from './ResourceList';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -139,6 +142,22 @@ describe('ResourceList', () => {
     expect(getByText('Nothing verified near you yet. These national services can help.')).toBeTruthy();
     expect(getByText('Always available')).toBeTruthy();
     expect(getAllByText(/^Verified on /).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('ResourceCard bidi (S11: phones and dates LTR-isolated)', () => {
+  it('isolates the Call number and the "Verified on" date; the hint reads "Call {organization}, digits"', async () => {
+    // After a Dari/Arabic word an unisolated "1-800-323-8603" shows as "8603-323-800-1" (UAX #9).
+    const oig = byId('dhs_oig');
+    const { getByRole, getByText } = await render(
+      <AppProviders client={fakeClient()} staticMetrics>
+        <ResourceCard resource={oig} primary />
+      </AppProviders>,
+    );
+    const call = getByRole('button', { name: `Call ${LRI}1-800-323-8603${PDI}` });
+    expect(call.props.accessibilityHint).toBe(callLabel(oig, (k) => (k === 'btn.call' ? 'Call' : k)));
+    expect(call.props.accessibilityHint).toBe(`Call ${oig.name}, 1, 8 0 0, 3 2 3, 8 6 0 3`);
+    expect(getByText(`Verified on ${LRI}${oig.verified_on}${PDI}`)).toBeTruthy();
   });
 });
 

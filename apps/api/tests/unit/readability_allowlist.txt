@@ -49,32 +49,19 @@ key:consent.line4.masks_web      # D-02 / D-19 consent copy (§4.7)
 key:privacy.notice.delete        # COMPLIANCE §4.5, reused verbatim in the privacy policy (§16, §4.7)
 key:privacy.notice.device_web    # COMPLIANCE §4.5 / §16 (§4.7)
 key:privacy.notice.settings_sent # COMPLIANCE §4.5 / §16 (§4.7)
-key:privacy.notice.what_we_keep  # COMPLIANCE §4.5 / §16 (§4.7)
 key:privacy.notice.no_ads        # COMPLIANCE §4.5 / §16, reused verbatim in the privacy policy
 key:settings.developer           # developer-only section, never shown when EXPO_PUBLIC_APP_ENV=production
 
 # --- pending: plain-language rewrites requested from the en.json owner (suggestions in DECISIONS §14 CL-059)
-pending:banner.web_session_only      # 17-word sentence (privacy key: keep the meaning, split it)
+# 2026-09-30 (Phase 2B): 15 rewrites landed with the en.json merge (CL-074). The 9 below each need a
+# lockstep change outside en.json first (a resources _meta.yaml text, a fixture/mock string or a test
+# that quotes the old English) — proposed copy and the files to change are listed in DECISIONS CL-074.
 pending:clerk.generic_need           # "understanding"
 pending:help.always                  # "available"
 pending:notes.county_unknown         # 16-word sentence
 pending:prepare.bring_school_records # "evaluations"
-pending:reading.step2                # "Understanding"
-pending:review.hide_note_receipt     # 15-word sentence
-pending:settings.date_format_auto    # "Automatic"
-pending:settings.hear_mode_default   # "automatically"
-pending:source.mode_original         # "Original"
-pending:source.no_box                # "available"
-pending:state.offline_disabled       # "available"
-pending:state.share_unavailable      # "available"
-pending:troubleshoot.mock_unrecognised  # 13-word average
-pending:warning.checks_unavailable   # "available"
 pending:warning.org_removed_inline   # "organization"
-pending:warning.translation_partial  # "original"
 pending:why.for_lab_results          # "understanding"
 pending:why.for_naturalization       # "applications"
-pending:card.asking_nothing          # "information" (e.g. "It is only for you to know.")
-pending:urgency.word.info            # "information" (e.g. "Good to know")
-pending:need.utilities               # "Utility" (e.g. "Power, gas or water shutoff")
 pending:prepare.bring_proof_rent_utilities  # "utility" (e.g. "Your rent, power, gas and water bills")
 pending:why.for_utility_shutoff      # "utility" (e.g. "For power, gas or water shutoff notices")

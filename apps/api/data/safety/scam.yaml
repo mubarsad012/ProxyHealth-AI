@@ -1,13 +1,18 @@
 # data/safety/scam.yaml — WP2 (D-13; DOCUMENT_TAXONOMY §6). Schema: §6.6.
 #
 # Regexes are case-insensitive over NFKC-normalized, whitespace-collapsed block text (same
-# normalizer as `analysis/verify.py`), in English and Spanish; other languages inherit both.
+# normalizer as `analysis/verify.py`), in English, Spanish, Arabic, Dari and Pashto; every pattern
+# runs on every text (brand names are Latin in any language).
 # `reason_key` must exist in `data/langpacks/en.json` (null = scores but shows no chip).
 # Guards: `{sender_kind: [...], document_type: [...], negative_regex: "...", weight: N,
 # unless_any_of: [signal ids]}` — the first matching guard's weight replaces the signal weight
 # (0 = the signal never counts on its own; `unless_any_of` keeps the full weight when one of the
-# listed signals also fires).
-version: "2026-09-27"
+# listed signals also fires); `gov_url_in_segment: true` = the hit block prints a .gov/.mil address
+# and no other contact (an agency's own payment portal).
+# `negation: true` signals skip a match inside a negated or anti-fraud sentence (`negation_cues`):
+# agency boilerplate such as "USCIS will never ask you to pay with gift cards" is not a demand. A
+# `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match.
+version: "2026-09-30"
 thresholds: {possible: 2, likely: 4}
 gov_tlds: [".gov", ".mil"]
 agency_names:
@@ -52,6 +57,30 @@ threat_signals: [arrest_threat, deportation_threat, impersonation, non_gov_domai
 fee_signals: [expedite_fee, fee_for_free_form, upfront_fee]
 request_signals: [id_or_payment_data_request, gift_card, wire_transfer, payment_app, crypto, upfront_fee]
 likely_rules: [payment_and_agency_sender, payment_and_threat, nongov_and_request, guaranteed_and_fee]
+negation_cues:
+  before:
+    en:
+      - "\\b(never|not|won't|don't|doesn't|cannot|can't|nor)\\b(?:\\s+[\\w']+){0,5}?\\s+(ask|asks|request|requests|demand|demands|require|requires|accept|accepts)\\b"
+      - "\\b(scammers?|fraudsters?|impostors?|imposters?|criminals?|thieves)\\b(?:\\s+[\\w']+){0,4}?\\s+(ask|asks|demand|demands|request|requests|want|tell|may|might|often|will|could)\\b"
+      - "\\b(if|when) (someone|anyone|somebody|a caller|a person|a stranger)\\b"
+      - "\\b(avoid|beware of|watch out for|protect yourself from|report) (a |any |these )?(scams?|fraud|impostors?)\\b"
+    es:
+      - "\\b(nunca|jam[aá]s|no)\\b(?:\\s+\\w+){0,4}?\\s+(pide|piden|pedir[aá]|pedir[aá]n|pediremos|solicita|solicitan|solicitar[aá]|solicitaremos|exige|exigen|exigir[aá]|acepta|aceptan|aceptamos|aceptar[aá])\\b"
+      - "\\b(estafadores|impostores|delincuentes)\\b(?:\\s+\\w+){0,4}?\\s+(piden|pueden|podr[ií]an|exigen|dicen)\\b"
+      - "\\bsi (alguien|una persona)\\b"
+      - "\\b(evite|cuidado con|prot[eé]jase de|denuncie) (las |los )?(estafas?|fraudes?)\\b"
+    ar:
+      - "(لن|لا|أبدا|ابدا|أبداً|ابداً)(?:\\s+\\S+){0,4}?\\s+(نطلب|يطلب|تطلب|نقبل|يقبل|تقبل)"
+    prs:
+      - "(هرگز|هیچ ?وقت|هیچ‌وقت)"
+    ps:
+      - "(هېڅکله|هیڅکله|هېڅ وخت)"
+  after:
+    en:
+      - "\\b(is|are|it's|that's|this is) (always |a sign of )?(an? )?(scam|scammer|fraud|fraudster|impostor|imposter)s?\\b"
+    es:
+      - "\\b(es|son) (siempre )?(una? )?(estafa|estafador|fraude|impostor)(es|a|as)?\\b"
+  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b"
 signals:
   - id: gift_card
     reason_key: scam.gift_card
@@ -66,6 +95,18 @@ signals:
       es:
         - "\\btarjetas? de regalo\\b"
         - "\\btarjetas? prepaga(da)?s?\\b"
+      ar:
+        - "بطاق(ة|ات|ه) (ال)?(هدية|هدايا|هديه)"
+        - "بطاق(ة|ات|ه) مسبق(ة|ه) الدفع"
+        - "بطاق(ة|ات|ه) (آيتونز|ايتونز|أيتونز|جوجل ?بلاي|غوغل ?بلاي|قوقل ?بلاي|ستيم|أمازون|امازون)"
+      prs:
+        - "کارت[\\s\\u200c]*(های[\\s\\u200c]*)?(هدیه|تحفه)"
+        - "کارت[\\s\\u200c]*(های[\\s\\u200c]*)?(گوگل ?پلی|آیتونز|ایتونز|اپل|آمازون|امازون)"
+      ps:
+        - "(ډالۍ|ډالئ|تحفه)[\\s\\u200c]*(کارت|کارډ)"
+        - "(کارت|کارډ)[\\s\\u200c]*(د )?(ډالۍ|تحفه)"
+        - "(ګوګل|گوگل) ?(پلې|پلی) (کارت|کارډ)"
+    negation: true
     guards: []
 
   - id: wire_transfer
@@ -81,6 +122,16 @@ signals:
       es:
         - "\\bgiro (bancario|de dinero)\\b"
         - "\\btransferencia (bancaria )?(inmediata|urgente)\\b"
+      ar:
+        - "(ويسترن|وسترن|ويستيرن) ?(يونيون|يونين)"
+        - "(موني|مني) ?(جرام|غرام|غرم)"
+      prs:
+        - "(وسترن|ویسترن|وسټرن) ?(یونین|یونیون)"
+        - "(مانی|مني|منی) ?(گرام|ګرام)"
+      ps:
+        - "(وېسټرن|ویسټرن|وسټرن) ?(یونین|یونیون)"
+        - "(مني|مانی) ?(ګرام|گرام)"
+    negation: true
     guards:
       - sender_kind: [hospital_or_clinic, utility, insurer]
         negative_regex: "wire transfers? (are )?accepted|accepted forms? of payment"
@@ -102,7 +153,11 @@ signals:
         - "\\bzelle\\b"
         - "\\bvenmo\\b"
         - "\\bpaypal\\b"
+    negation: true
     guards:
+      # "Pay online with a card or PayPal at vacourts.gov": the agency's own .gov portal.
+      - gov_url_in_segment: true
+        weight: 0
       - sender_kind: [landlord, hospital_or_clinic, utility, pharmacy, school, employer]
         requires_sender_name: true
         weight: 1
@@ -119,6 +174,13 @@ signals:
       es:
         - "\\b(bitcoin|criptomonedas?|cripto)\\b"
         - "\\bcajero (de )?cripto\\b"
+      ar:
+        - "(بيتكوين|بتكوين|بيت ?كوين|عملة رقمية|عملات رقمية|عملات مشفرة|العملة المشفرة|العملات المشفرة)"
+      prs:
+        - "(بیت[\\s\\u200c]*کوین|بیتکوین|ارز[\\s\\u200c]*(های[\\s\\u200c]*)?دیجیتال|رمز[\\s\\u200c]*ارز)"
+      ps:
+        - "(بټ[\\s\\u200c]*کوین|بیټ[\\s\\u200c]*کوین|ډیجیټل (اسعار|پیسې))"
+    negation: true
     guards: []
 
   - id: arrest_threat
@@ -150,6 +212,14 @@ signals:
       es:
         - "\\b(deport(ado|aci[oó]n)|expulsi[oó]n).{0,80}\\b(pag(ue|ar|o)|a menos que|tarifa|cuota|inmediatamente)\\b"
         - "\\b(pag(ue|ar|o)|tarifa|cuota)\\b.{0,80}\\bo\\b.{0,40}\\b(deportad[oa]s?|deportaci[oó]n|expulsad[oa]s?)\\b"
+      ar:
+        - "(ترحيل|الترحيل|ترحيلك|ترحيلكم|طرد|الطرد).{0,80}(ادفع|دفع|الدفع|تدفع|رسوم|فورا|فوراً|حالا|حالاً)"
+        - "(ادفع|دفع|الدفع|تدفع).{0,80}(لتجنب|لمنع|لتفادي|لإيقاف|لايقاف) (ال)?(ترحيل|اعتقال|طرد)"
+      prs:
+        - "(اخراج|دیپورت|ديپورت|ترحیل).{0,80}(پرداخت|بپردازید|بخرید|بفرستید|فیس|فوراً|فورا)"
+        - "(پرداخت|بپردازید|بخرید|بفرستید).{0,80}(جلوگیری از|برای جلوگیری از) (اخراج|دیپورت)"
+      ps:
+        - "(اخراج|ډیپورټ|شړل).{0,80}(ورکړئ|تادیه|پیسې|فیس|سمدستي)"
     guards:
       - document_type: [nta, hearing_notice, ij_decision, bia_notice]
         weight: 0
@@ -180,6 +250,7 @@ signals:
       es:
         - "\\bnotarios?( p[úu]blicos?)?\\b.{0,60}\\b(inmigraci[oó]n|migratori[oa]|papeles|residencia|visa)\\b"
         - "\\bconsultor(a)? de inmigraci[oó]n\\b"
+        - "\\bnotar[ií]as? p[úu]blicas?\\b"
     guards:
       - document_type: [lease, offer_letter, i9, w2_1099, pay_stub]
         negative_regex: "notary public"
@@ -246,6 +317,12 @@ signals:
       es:
         - "\\b(act[uú]e|responda|pague|llame) (ahora|inmediatamente|dentro de (24|48|72) horas)\\b"
         - "\\b[uú]ltima oportunidad\\b"
+      ar:
+        - "(خلال|في غضون) \\d+ (ساعة|ساعات|دقيقة|دقائق)"
+      prs:
+        - "(در ظرف|در عرض|تا) \\d+ (ساعت|دقیقه)"
+      ps:
+        - "(په|تر) \\d+ (ساعتونو|ساعتو|دقیقو)"
     secrecy_patterns:
       en:
         - "\\bdo not (tell|discuss|hang up)\\b"
@@ -274,6 +351,14 @@ signals:
         - "\\boficina federal de inmigraci[oó]n\\b"
         - "\\bdepartamento de deportaci[oó]n\\b"
         - "\\bn[uú]mero de placa\\b.{0,40}\\b(pag(o|ar|ue)|tarifa)\\b"
+      ar:
+        - "دائرة الهجرة (الأمريكية|الامريكية)"
+        - "(إدارة|ادارة|قسم) الترحيل"
+      prs:
+        - "اداره[\\s\\u200c]*(ٔ )?مهاجرت امریکا"
+        - "اداره[\\s\\u200c]*(ٔ )?اخراج"
+      ps:
+        - "د امریکا د مهاجرت اداره"
     guards: []
 
   - id: id_or_payment_data_request
@@ -296,4 +381,4 @@ signals:
     weight: 1
     patterns: {en: [], es: []}   # computed: sender_as_written is null and money or data is demanded
     guards: []
-reviewed_by: {en: null, es: null}
+reviewed_by: {en: null, es: null, ar: null, prs: null, ps: null}

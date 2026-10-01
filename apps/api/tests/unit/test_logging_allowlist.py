@@ -101,7 +101,7 @@ async def test_request_cycle_logs_only_allowed_keys(
 ) -> None:
     secret = "SECRET-QUESTION-TEXT"
     async with running(make_settings(tmp_path)) as (_app, client):
-        consent = {"X-Consent-Version": "2026-09-24", "X-Install-Id": "install-123"}
+        consent = {"X-Consent-Version": "2026-10-01", "X-Install-Id": "install-123"}
         await client.post("/v1/analyze", json=page_body(tiny_png_base64), headers=consent)
         await client.post("/v1/analyze", json=demo_body())
         await client.post("/v1/analyze", json=page_body(tiny_png_base64))  # 428
@@ -120,6 +120,31 @@ async def test_request_cycle_logs_only_allowed_keys(
     assert "install-123" not in text  # only the HMAC hash may appear
     routes = {e.get("route") for e in entries}
     assert {"/v1/analyze", "/v1/language-packs", "/v1/chat", "unmatched"} <= routes
+
+
+async def test_access_log_records_the_body_client_platform(
+    tmp_path: Path, captured: io.StringIO, tiny_png_base64: str
+) -> None:
+    """Regression: client_platform came from an X-Client-Platform header nobody sends, so it was
+    always null. The contract carries it in the body (AnalyzeRequest/TroubleshootRequest)."""
+    shot = {"mime_type": "image/png", "data_base64": tiny_png_base64}
+    screen = {"screenshot": shot, "target_language": "en", "client_platform": "android",
+              "demo_sample_id": "portal_file_too_large"}  # fmt: skip
+    async with running(make_settings(tmp_path)) as (_app, client):
+        assert (await client.post("/v1/analyze", json=demo_body())).status_code == 200
+        assert (await client.post("/v1/troubleshoot", json=screen)).status_code == 200
+        ios = {**demo_body(), "client_platform": "ios"}
+        r = await client.post("/v1/analyze", json=ios, headers={"X-Client-Platform": "android"})
+        assert r.status_code == 200
+        bad = {**demo_body(), "client_platform": "desktop"}  # not a Platform: 400, logged null
+        assert (await client.post("/v1/analyze", json=bad)).status_code == 400
+        await client.post("/v1/analyze", json=page_body(tiny_png_base64))  # 428 still has it
+    access = [e for e in lines(captured) if "client_platform" in e and "latency_ms" in e]
+    got = [(e["route"], e["status"], e["client_platform"]) for e in access]
+    assert got == [
+        ("/v1/analyze", 200, "web"), ("/v1/troubleshoot", 200, "android"),
+        ("/v1/analyze", 200, "ios"), ("/v1/analyze", 400, None), ("/v1/analyze", 428, "web"),
+    ]  # fmt: skip
 
 
 SECRET = "MODEL-PROSE-SECRET your caseworker Jane Doe"

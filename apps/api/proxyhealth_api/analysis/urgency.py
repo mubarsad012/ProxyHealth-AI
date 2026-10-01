@@ -13,9 +13,13 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
 5. only ``estimated`` dates → the same thresholds capped at ``medium``;
 6. floors: ``nta``, ``hearing_notice``, ``eviction_summons``, ``uscis_noid``, ``utility_shutoff``,
    ``pay_or_quit`` never below ``high``;
-7. nothing found → ``info`` (``no_action`` / ``no_date``);
-8. ``verify_resource_id`` = ``uscis_contact`` (USCIS types) / ``eoir_hotline`` (EOIR types) when a
-   date drives the banner.
+7. no verified date drives it but ``unverified[]`` holds a dated demand (a quote that did not
+   verify on a skewed photo) → ``medium`` "I saw a date but could not confirm it" (D-12: unverified
+   facts raise urgency up to ``medium``, never above; the type floor still applies);
+8. nothing found → ``info`` (``no_action`` only when neither list holds anything, else
+   ``no_date``);
+9. ``verify_resource_id`` = ``uscis_contact`` (USCIS types) / ``eoir_hotline`` (EOIR types) when a
+   date drives the banner (a verified one, or the unverified one of step 7).
 
 Copy keys are PRODUCT_SPEC §5.5 ``urgency.*``. Pure function with an injected ``today``.
 """
@@ -30,6 +34,7 @@ from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.contracts.analysis import Demand, RedFlag, Urgency
 from proxyhealth_api.contracts.enums import (
     DateKind,
+    DemandKind,
     DocumentCategory,
     DocumentType,
     RedFlagKind,
@@ -49,6 +54,8 @@ KEY_MEDIUM_ESTIMATED = "urgency.medium.estimated"
 KEY_INFO_LATER = "urgency.info.date_later"
 KEY_INFO_NO_ACTION = "urgency.info.no_action"
 KEY_INFO_NO_DATE = "urgency.info.no_date"
+KEY_UNVERIFIED_DATE = "urgency.medium.unverified_date"
+DATED_KINDS = frozenset({DemandKind.deadline, DemandKind.relative_deadline, DemandKind.appointment})
 
 VERIFY_USCIS = "uscis_contact"  # _meta.yaml well_known_ids.verify_uscis_date
 VERIFY_EOIR = "eoir_hotline"  # _meta.yaml well_known_ids.verify_court_date
@@ -256,9 +263,12 @@ def compute_urgency(
     emergency: bool,
     today: date,
     t: Translator | None = None,
+    unverified: Sequence[Demand] = (),
 ) -> UrgencyOutcome:
-    """DOCUMENT_TAXONOMY §5.1 over the **verified** demands (``unverified[]`` must not be passed;
-    any ``verified=False`` item is ignored anyway). ``t`` renders the ``expired_date`` red flag
+    """DOCUMENT_TAXONOMY §5.1 over the **verified** ``demands`` (any ``verified=False`` item there
+    is ignored). ``unverified`` is ``AnalysisResult.unverified``: a dated item there never drives
+    a date, but lifts a dateless result to ``medium`` with its own headline (step 7) and keeps the
+    banner from saying "Nothing to do right now". ``t`` renders the ``expired_date`` red flag
     text; without it the key is used as text."""
     if emergency:
         return UrgencyOutcome(_urgency(UrgencyLevel.emergency, KEY_EMERGENCY))
@@ -314,12 +324,18 @@ def compute_urgency(
                 levels[id(cand)], KEY_MEDIUM_ESTIMATED, cand=cand,
                 params={"date": iso, "date_iso": iso}, verify=verify,
             )  # fmt: skip
+    if result is None and any(
+        d.kind in DATED_KINDS and d.role not in NEVER_DRIVING for d in unverified
+    ):
+        result = _urgency(UrgencyLevel.medium, KEY_UNVERIFIED_DATE).model_copy(
+            update={"verify_resource_id": verify}
+        )
     if result is None:
-        headline = KEY_INFO_NO_ACTION if not demands else KEY_INFO_NO_DATE
+        headline = KEY_INFO_NO_ACTION if not demands and not unverified else KEY_INFO_NO_DATE
         result = _urgency(UrgencyLevel.info, headline)
     if document_type in FLOORS and level_rank(result.level) < level_rank(UrgencyLevel.high):
         update: dict[str, object] = {"level": UrgencyLevel.high, "floor_applied": True}
-        if result.driving_demand_id is None:
+        if result.driving_demand_id is None and result.headline_key != KEY_UNVERIFIED_DATE:
             update["headline_key"] = KEY_HIGH_FLOOR
             update["headline_params"] = {}
         result = result.model_copy(update=update)
@@ -329,9 +345,11 @@ def compute_urgency(
 __all__ = [
     "ANY_DRIVING",
     "CRITICAL_SET",
+    "DATED_KINDS",
     "DRIVING_ROLES",
     "EOIR_TYPES",
     "FLOORS",
+    "KEY_UNVERIFIED_DATE",
     "NEVER_DRIVING",
     "PAST_CRITICAL_TYPES",
     "PAST_WINDOW_DAYS",

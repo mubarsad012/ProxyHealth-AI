@@ -64,7 +64,7 @@ gcloud run deploy proxyhealth-api \
   --image "$IMAGE" --region "$REGION" --allow-unauthenticated \
   --cpu 1 --memory 1Gi --concurrency 32 --timeout 120 \
   --min-instances 0 --max-instances 4 \
-  --set-env-vars "ENV=production,AI_PROVIDER=gemini,LOG_LEVEL=info,CORS_ORIGINS=https://proxyhealth.expo.app,PRIVACY_POLICY_URL=https://proxyhealth.expo.app/privacy,CONSENT_VERSION=2026-09-24" \
+  --set-env-vars "ENV=production,AI_PROVIDER=gemini,LOG_LEVEL=info,CORS_ORIGINS=https://proxyhealth.expo.app,PRIVACY_POLICY_URL=https://proxyhealth.expo.app/privacy,CONSENT_VERSION=2026-10-01" \
   --set-secrets "GEMINI_KEYS=GEMINI_KEYS:latest,INSTALL_HASH_SECRET=INSTALL_HASH_SECRET:latest,ADMIN_TOKEN=ADMIN_TOKEN:latest"
 ```
 
@@ -149,7 +149,7 @@ npx eas-cli@latest deploy            # preview URL https://proxyhealth--<id>.exp
 npx eas-cli@latest deploy --prod     # https://proxyhealth.expo.app
 ```
 
-Free plan: 100,000 requests/month, 1 GB storage; custom domains need a paid plan (Q4). EAS Hosting runs on Cloudflare Workers. Whether it lets a static export set the response headers below is **not covered by the research files — check the EAS Hosting docs at deploy time**; if it cannot, serve the same `dist/` from Cloudflare Pages or Netlify with the `_headers` file below, and keep EAS Hosting for previews.
+Free plan: 100,000 requests/month, 1 GB storage; custom domains need a paid plan (Q4). EAS Hosting runs on Cloudflare Workers. Whether it lets a static export set the response headers below is **not covered by the research files — check the EAS Hosting docs at deploy time**; if it cannot, serve the same `dist/` from Cloudflare Pages or Netlify with the `_headers` file below **and the dynamic-route rewrites of §2.3** (without them `/result/<id>` and `/papers/member/<id>` are the host's 404), and keep EAS Hosting for previews. EAS Hosting is the only host that resolves Expo Router's `[param]` files by itself; it is the supported web host, and any other static host is supported only with §2.3 applied and verified.
 
 ### 2.2 Response headers (exact values)
 
@@ -176,7 +176,40 @@ Netlify / Cloudflare Pages `_headers` (put it in `dist/` at deploy time, not in 
 
 Why each one: HSTS keeps every visit on HTTPS; `nosniff` stops MIME confusion; `Referrer-Policy: no-referrer` means a click to a resource's website never tells it the user came from a paper-reading app; `X-Frame-Options`/`frame-ancestors` stop the app being framed on another site; `Permissions-Policy` allows only the camera (web capture) and nothing else; `connect-src` limits network calls to our API; HTML is `no-cache` so a new deploy is seen at once, while hashed bundles under `/_expo/static/` and `/assets/` are immutable.
 
-Vercel: `vercel.json` with `"cleanUrls": true`, no SPA rewrite (static output), and the same header set under `"headers": [{"source": "/(.*)", "headers": [...]}]`.
+Vercel: `vercel.json` with `"cleanUrls": true`, the dynamic-route `"rewrites"` of §2.3 (not a catch-all SPA rewrite — every static route has its own HTML file), and the same header set under `"headers": [{"source": "/(.*)", "headers": [...]}]`.
+
+### 2.3 Dynamic routes on static hosts (Netlify, Cloudflare Pages, Vercel)
+
+The static export writes a dynamic route as a file whose name keeps the brackets: `dist/result/[id].html`, `dist/result/[id]/{chat,clerk,help,quicksheet,source}.html` and `dist/papers/member/[id].html` (`dist/_expo/.routes.json` holds only `{"redirects": []}`, no route table). A plain static host maps `/result/abc` to no file, so a reload, a shared link, and the reminder and clerk deep links answer the host's 404 instead of the app (for a session-only result the app itself would show S18 "I could not find that page"). EAS Hosting resolves these files; the other hosts need one rewrite per dynamic route. Generate them from the export — never by hand, so a new route cannot be missed:
+
+```sh
+export PATH="$HOME/.local/node/bin:$PATH"
+make export-web EXPO_PUBLIC_API_URL=https://<prod-api>    # or the §2 command
+make host-rules      # = python3 scripts/web-host-rules.py apps/mobile/dist --write --check
+```
+
+That writes `dist/_redirects` (Netlify and Cloudflare Pages read the same file) and `dist/404.html` (a copy of Expo Router's `+not-found.html`, the S18 screen, which these hosts serve for unknown paths). Today's rules, most specific first:
+
+```text
+/papers/member/:id      /papers/member/[id]      200
+/result/:id/chat        /result/[id]/chat        200
+/result/:id/clerk       /result/[id]/clerk       200
+/result/:id/help        /result/[id]/help        200
+/result/:id/quicksheet  /result/[id]/quicksheet  200
+/result/:id/source      /result/[id]/source      200
+/result/:id             /result/[id]             200
+```
+
+`200` makes each rule a rewrite (the address bar keeps `/result/abc`; query strings such as `?block=…&page=…` pass through). Targets carry no `.html` because both hosts serve `x.html` for `/x`, and Cloudflare Pages answers a `.html` target with a 308 to the extension-less path. Rewrites apply only when no real file matches, so static routes are untouched. For Vercel, `python3 scripts/web-host-rules.py apps/mobile/dist --vercel` prints the `cleanUrls` + `rewrites` block to paste into `vercel.json` (`/result/:id` → `/result/[id]` …).
+
+Verify on the preview deploy before promoting it — host rewrite semantics are not covered by the research files, so this check is the proof:
+
+```sh
+python3 scripts/web-host-rules.py apps/mobile/dist --verify https://<preview-host>
+# ok  https://<preview-host>/result/sample-id … one line per rule; exit 1 on any 404 or non-app page
+```
+
+Then open `https://<preview-host>/result/sample-id` and `/papers/member/sample-id` in a browser: the first shows S18 "I could not find that page" (results are session-only, so a cold link has none), the second the member screen. `scripts/ci.sh` (step `web-export`) runs `web-host-rules.py --check` on every export, so a dynamic route without a rule fails CI.
 
 The privacy page itself (`/privacy/`) must stay public, HTML (never a PDF), not geofenced, readable without JavaScript and without analytics (COMPLIANCE_PRIVACY §16); `apps/api/tests/unit/test_privacy_claims.py` checks it on every CI run.
 
@@ -237,7 +270,7 @@ Rotation and leak handling: RUNBOOK §2.
 
 1. `scripts/ci.sh` green on the release commit; `make smoke` green; the `docker` CI job green.
 2. Production API deployed (§1.2) with every guard; `GET /v1/config` → `paid`, `consent_version` = the page's printed version, `privacy_policy_url` = the live `/privacy`.
-3. Web exported with the production API URL and deployed with the §2.2 headers; `/privacy/` loads without JavaScript.
+3. Web exported with the production API URL and deployed with the §2.2 headers; `/privacy/` loads without JavaScript; on any host other than EAS Hosting, `make host-rules` applied and `web-host-rules.py --verify <host>` green (§2.3).
 4. `CORS_ORIGINS` = the web host only.
 5. EAS `production` build; manifest check logged; STORE_LISTING §0 blockers cleared; COMPLIANCE_PRIVACY §18 ticked.
 6. Tag the commit (`v1.0.0-rc1` per BUILD_PLAN §6) — the orchestrator/maintainer does git operations.

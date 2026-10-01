@@ -60,16 +60,26 @@ reserved `example.com`.
 
 | Time | Screen | Do | Say / point at | Expected |
 |---|---|---|---|---|
-| 0:00 | S1 | Tap دری (Dari) | "Any language, one tap; right-to-left flips immediately." | Grid mirrors |
+| 0:00 | S1 | Tap دری (Dari), then "Continue" | "Any language, one tap. The next screen is right-to-left." | Tapping the chip only selects it (checked). After Continue, the next screen (S2) is in Dari and mirrored (web: `<html dir="rtl" lang="prs">`) |
 | 0:10 | S2 | Point at the badge; tap "Try a sample paper first" | "This build contacts no AI service; the consent screen says so." | Badge "Sample mode"; sample picker opens with 18 samples |
-| 0:20 | S5 → S6 | Pick "Medicaid letter asking to confirm your address" → "Read this paper" | "The mock adds 300–900 ms so the reading steps are visible." | S6 steps, then S7 |
-| 0:30 | S7 | Scroll; tap the crop on the date; tap a speaker; tap "Remind me" | "Every fact is a quotation with its crop. The date is `stated`, so it can become a reminder." | Banner for October 14, 2026 (`high`); Dari text from `out.prs.json` |
+| 0:20 | S5 → S6 | Pick "Medicaid letter asking to confirm your address" → "Read this paper" | "The mock adds 300–900 ms so the reading steps are visible." | S6 steps, then S7 (about 1.5 s after the tap) |
+| 0:30 | S7 | Scroll; tap the crop on the date; tap a speaker; tap "Remind me" | "Every fact is a quotation with its crop. Dates stay as printed, even in Dari. The date is `stated`, so it can become a reminder." | Banner for October 14, 2026 (`high`). The Dari text from `out.prs.json` repeats "October 14, 2026" as printed. The Persian-digit line `۲۰۲۶-۱۰-۱۴` is added under the date and does not replace it |
 | 1:05 | S7 → S10 | "Show the clerk"; long-press "Back to me" | "English card, fixed template; the interpreter line appears because Medicaid is HHS-funded." | Card with the interpreter line |
 | 1:25 | S7 → S11 | "Get help nearby" | "Only resources from our database, with the date we checked them." | Medicaid resources, national fallbacks |
 | 2:00 | S16 | "Stuck on a website?" → sample screenshot | "Steps name the buttons exactly as the screen writes them." | "Choose File", "Upload", "Back"; caution on "Submit Application" |
 | 2:20 | S5 | Sample "Letter claiming to be USCIS and demanding gift cards" | "Scam risk is scored in code; reporting contacts come from the database, never the model." | Scam card first; DHS OIG and FTC in the list |
 | 2:40 | S17 | "My language is not here" → type "Rohingya" | "The mock returns a pseudo-localized pack; with a key it is generated and cached." | Loading copy, then an RTL pack with `⟦rhg⟧` markers and the machine-translation banner |
 | 2:55 | Browser | Show `/health` | "provider mock, keys_configured 0." | `{"provider":"mock","keys_configured":0,...}` |
+
+**Measured timings (BUILD_PLAN §6.7)**, taken 2026-09-30 on a local web export against a local
+`AI_PROVIDER=mock` API. The mock's 300–900 ms delay is random, so every run differs.
+
+| Step | Measured |
+|---|---|
+| Tap "Read this paper" on a sample, until S7 shows (web) | about 1.55 s |
+| `POST /v1/analyze` with `demo_sample_id=medicaid_address_confirmation`, `target_language=en` | 0.5–0.9 s |
+| The same request with `target_language=prs` | 0.9–1.7 s (usually 1.2–1.4 s) |
+| `POST /v1/quicksheet/pdf`, Dari Medicaid sheet (about 39 KB) | under 0.12 s from the app; 8–45 ms at the API |
 
 If time allows:
 - **Camera match.** Photograph the printed Medicaid page with the phone and read it. The mock
@@ -94,8 +104,11 @@ app at the mock instance and continue with §2.
 
 1. Edit `apps/api/data/fixtures/<id>/template.yaml` (page lines, per-language outputs).
 2. `apps/api/.venv/bin/python apps/api/scripts/make_fixtures.py` — re-renders pages, transcript,
-   manifest (dHash) and `out.<lang>.json`, and refuses a template whose quotes are not verbatim,
-   whose contacts are not printed, or whose page hash is within 10 bits of another sample.
+   manifest (dHash) and `out.<lang>.json`. It refuses a template whose quotes are not verbatim,
+   whose contacts are not printed, or whose page hash is within 10 bits of another sample. It
+   also refuses one whose prose has non-Western digits, for example `٧` or `۱۴` (AI_PROMPTS §5.0
+   rule 7). In a language written in a non-Latin script (ar, prs), a demand sentence that repeats a
+   date or time must repeat it as printed ("October 7, 2026", "8:30 AM").
 3. `apps/api/.venv/bin/python apps/api/scripts/sync_to_mobile.py` — rebuilds the mobile bundle.
 4. `apps/api/.venv/bin/pytest apps/api -k "golden or demo or mock or phash"`.
 

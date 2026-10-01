@@ -2,9 +2,13 @@
 // picker runs inside the gesture (web rule); optional goal (≤ limits.max_user_goal_chars) and
 // portal hint; the standing credential guard; two-step progress; the emergency card first when
 // `safety.emergency`; result cards. One image only — a PDF is never sent.
+// Consent (S2, CL-070): without an accepted consent record "Pick a screenshot" and "Explain this
+// screen" open S2 instead — the user's own screenshot never leaves the phone before consent (the
+// server's 428 would come only after the bytes were uploaded). "Try a sample" stays open.
 
+import { type Href, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { PortalHint, TroubleshootMode } from '@/api/types';
 import {
@@ -20,6 +24,7 @@ import {
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
+import { useConsentDecision } from '@/features/onboarding/consentState';
 import { bumpVault, ME_MEMBER_ID, memberName, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
@@ -60,6 +65,10 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   const { members } = useMembers();
   const hideIds = useSettings((s) => s.hideIdNumbers);
   const ts = useTroubleshoot();
+  const decision = useConsentDecision((s) => s.decision);
+  const consent = useSession((s) => s.consent);
+  // Same rule as Home `scan()`/`pick()`: a real screenshot needs an accepted consent record.
+  const consentOk = decision === 'accepted' && consent !== null;
   const emergency = useEmergencyTrigger(ts.result?.safety ?? null);
   const resultId = ts.result?.request_id ?? null;
 
@@ -68,8 +77,14 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
     if (emergency.triggered && resultId) openEmergency();
   }, [emergency.triggered, resultId]);
 
+  const openConsent = () => router.push('/onboarding/consent' as Href);
+
   const onPick = () => {
-    const picking = pickScreenshot(); // first statement: the web file dialog needs the gesture
+    if (!consentOk) {
+      openConsent(); // nothing is picked (or sent) before consent
+      return;
+    }
+    const picking = pickScreenshot(); // first call: the web file dialog needs the gesture
     setPickFailed(false);
     void picking
       .then((s) => {
@@ -85,6 +100,11 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   const common = { mode, goal, portalHint: hint, language: meta.tag, platform: platformName(), maxGoalChars: maxGoal };
   const onSubmit = () => {
     if (!shot) return;
+    if (!consentOk) {
+      // e.g. "Stop sending papers" after the pick: the picked screenshot is not sent.
+      openConsent();
+      return;
+    }
     void ts.submit(buildTroubleshootRequest({ ...common, screenshot: toPageInput(shot) }));
   };
   const onSample = () => {
@@ -155,6 +175,17 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
           disabled={loading}
           testID="troubleshoot-pick"
         />
+        {!consentOk ? (
+          <Pressable
+            testID="troubleshoot-consent-needed"
+            role="link"
+            onPress={openConsent}
+            hitSlop={size.hitSlop}>
+            <AppText color="link" weight="bold">
+              {t('home.consent_needed')}
+            </AppText>
+          </Pressable>
+        ) : null}
         {pickFailed ? <AppText role="alert">{t('state.unreadable_screenshot')}</AppText> : null}
         {shot ? (
           <Image

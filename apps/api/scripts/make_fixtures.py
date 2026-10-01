@@ -439,6 +439,13 @@ PROSE_ANALYSIS = ("summary_title", "summary_body", "summary_body_en", "clerk_nee
 # Same shapes as WP2's contacts filter (AI_PROMPTS §11.3): URLs and bare domains, NANP phones.
 _URL_RE = re.compile(r"(https?://\S+|www\.\S+|\b[\w-]+\.(gov|org|com|net|us|edu|info)\b)", re.I)
 _PHONE_RE = re.compile(r"(\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}|\b\d{7,}\b)")
+# AI_PROMPTS §5.0 rule 7 and §5.1.1 step 4, PRODUCT_SPEC §7.1 "Numbers": dates, times, amounts and
+# numbers stay exactly as printed, in Latin letters and Western digits, even in a right-to-left
+# language. The app may *add* a localized line (``DateInfo.localized_line``); prose never swaps
+# one in. ``\d`` is every Unicode decimal digit, so this matches Eastern Arabic (U+0660–0669),
+# Persian (U+06F0–06F9), Devanagari, Bengali, … runs.
+_NON_WESTERN_DIGITS_RE = re.compile(r"(?:(?![0-9])\d)+")
+_VERBATIM_DATE_KEYS = ("date_text", "time_text")
 
 
 class TemplateError(Exception):
@@ -628,8 +635,54 @@ def _prose_contacts(text: str, transcript: str) -> str | None:
     return None
 
 
+def _unprinted_digits(text: str, transcript: str) -> str | None:
+    """A non-Western digit run in prose is allowed only when the paper prints it that way."""
+    for m in _NON_WESTERN_DIGITS_RE.finditer(text):
+        if m.group(0) not in transcript:
+            return m.group(0)
+    return None
+
+
+@functools.cache
+def _scripts() -> dict[str, str]:
+    """ISO 15924 script per language tag from ``data/languages.yaml``."""
+    with (DATA / "languages.yaml").open(encoding="utf-8") as fh:
+        table: dict[str, dict[str, Any]] = yaml.safe_load(fh)
+    return {tag: str(row.get("script") or "") for tag, row in table.items()}
+
+
+def check_printed_dates(
+    fid: str, lang: str, out: dict[str, Any], base: dict[str, Any] | None
+) -> list[str]:
+    """Rule 7 "in Latin letters … even in a right-to-left language": in a language written in
+    another script, a demand sentence repeats its printed ``date_text`` / ``time_text`` verbatim
+    wherever the English sentence repeats it (``October 7, 2026``, never ``٧ أكتوبر ٢٠٢٦``)."""
+    if base is None or lang == "en" or _scripts().get(lang, "Latn") == "Latn":
+        return []
+    errors: list[str] = []
+    base_text = {d["id"]: d["text"] for d in base["demands"]}
+    for d in out["demands"]:
+        for key in _VERBATIM_DATE_KEYS:
+            value = d.get(key)
+            if (
+                value
+                and _contains(base_text.get(d["id"], ""), value)
+                and not _contains(d["text"], value)
+            ):
+                errors.append(
+                    f"{fid}/out.{lang}.json demand {d['id']}: text does not repeat the printed "
+                    f"{key} {value!r} verbatim"
+                )
+    return errors
+
+
 def check_analysis(
-    fid: str, lang: str, out: dict[str, Any], blocks: list[PlacedBlock], transcript: str
+    fid: str,
+    lang: str,
+    out: dict[str, Any],
+    blocks: list[PlacedBlock],
+    transcript: str,
+    base: dict[str, Any] | None = None,
 ) -> list[str]:
     errors: list[str] = []
     where = f"{fid}/out.{lang}.json"
@@ -705,6 +758,11 @@ def check_analysis(
         hit = _prose_contacts(text, transcript)
         if hit:
             errors.append(f"{where}: contact {hit!r} in prose is not printed on the paper")
+    for text in prose + [p["text"] for p in out["translated_pages"]]:
+        localized = _unprinted_digits(text, transcript)
+        if localized:
+            errors.append(f"{where}: localized digits {localized!r} in prose; keep Western digits")
+    errors += check_printed_dates(fid, lang, out, base)
     return errors
 
 
@@ -729,6 +787,11 @@ def check_troubleshoot(fid: str, lang: str, out: dict[str, Any], transcript: str
     bad_tags = [t for t in out["resource_tags"] if t not in _VALID_TAGS]
     if bad_tags:
         errors.append(f"{where}: resource_tags {bad_tags} are not ResourceTag values")
+    prose = [out["screen_summary"], out["error_meaning"], *out["cautions"]]
+    for text in prose + [s["text"] for s in out["steps"]]:
+        localized = _unprinted_digits(text, transcript)
+        if localized:
+            errors.append(f"{where}: localized digits {localized!r} in prose; keep Western digits")
     return errors
 
 
@@ -796,13 +859,16 @@ def build_fixture(tpl_dir: Path) -> Built:
         "recorded_on": RECORDED_ON, "model_id": "hand",
     }  # fmt: skip
     errors: list[str] = []
+    en_body: dict[str, Any] | None = None  # langs[0] is en: the reference for printed dates
     for lang in langs:
         if kind == "screenshot":
             body = troubleshoot_out(tpl, lang)
             errors += check_troubleshoot(fid, lang, body, transcript)
         else:
             body = analysis_out(tpl, lang, blocks, page_texts)
-            errors += check_analysis(fid, lang, body, blocks, transcript)
+            errors += check_analysis(fid, lang, body, blocks, transcript, base=en_body)
+        if lang == "en":
+            en_body = body
         files[f"out.{lang}.json"] = _json_bytes({"_meta": meta, **body})
     if errors:
         raise TemplateError("\n".join(errors))

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import random
+import string
+import time
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +92,42 @@ async def test_match_unknown_tag_is_400(client: httpx.AsyncClient) -> None:
 async def test_match_extra_field_is_400(client: httpx.AsyncClient) -> None:
     r = await client.post("/v1/resources/match", json={**INOVA_EXAMPLE, "city": "Herndon"})
     assert r.status_code == 400
+
+
+async def test_match_huge_institution_names_stay_cheap_and_bounded(
+    client: httpx.AsyncClient,
+) -> None:
+    # Phase 2B: 10 x 190k random chars (1.9 MB) used to hold the event loop for ~15 s.
+    rng = random.Random(11)
+    letters = string.ascii_letters + " "
+    huge = ["".join(rng.choices(letters, k=190_000)) for _ in range(10)]
+    body = {
+        "tags": ["immigration_legal_help"],
+        "state": "VA",
+        "language": "en",
+        "institutions_as_written": huge,
+    }
+    started = time.perf_counter()
+    r = await client.post("/v1/resources/match", json=body)
+    elapsed = time.perf_counter() - started
+    assert r.status_code == 200, r.text[:300]
+    assert elapsed < 3.0, f"match took {elapsed:.2f}s"
+    resp = ResourceMatchResponse.model_validate(r.json())
+    assert resp.results
+    assert all(len(text) <= 300 for m in resp.results for text in m.why)
+
+
+async def test_match_scam_cards_show_each_chip_once(client: httpx.AsyncClient) -> None:
+    body = {"tags": ["scam_report"], "scam_risk": "likely", "language": "en"}
+    r = await client.post("/v1/resources/match", json=body)
+    assert r.status_code == 200
+    resp = ResourceMatchResponse.model_validate(r.json())
+    for m in resp.results:
+        assert len(set(m.why)) == len(m.why) == len(m.why_keys), m.resource.id
+        assert "why.for_scam_report" not in m.why_keys or "why.report_scam" not in m.why_keys
+    dhs = resp.results[0]
+    assert dhs.resource.id == "dhs_oig"
+    assert dhs.why.count("To report a scam") == 1
 
 
 async def test_list_by_jury_tag(client: httpx.AsyncClient) -> None:

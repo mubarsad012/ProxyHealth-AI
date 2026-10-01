@@ -4,9 +4,10 @@
 breathing, overdose, poison, self-harm, stroke, bleeding, allergic reaction, violence). The scan
 runs over the transcript (analysis), ``question`` + ``messages`` (chat) or ``screen_text`` +
 ``user_goal`` (troubleshoot) in the detected language, the target language and always ``en`` +
-``es``. Any hit — or a non-empty model ``emergency_terms_found`` / ``TaggingModelOut.emergency`` —
-sets ``Safety.emergency`` so the client shows the fixed emergency card first. A detected or target
-language without a list adds ``warnings: [emergency_lexicon_unavailable]``. The bias is to
+``es``; what the user typed runs through every language's list. Any hit — or a non-empty model
+``emergency_terms_found`` / ``TaggingModelOut.emergency`` / a chat or troubleshoot ``crisis``
+tag — sets ``Safety.emergency`` so the client shows the fixed emergency card first. A detected or
+target language without a list adds ``warnings: [emergency_lexicon_unavailable]``. The bias is to
 over-trigger: a language's ``exclude`` phrases ("Poison Control", "If swallowed") are removed
 only from printed text (``texts``), never from what the user typed (``user_texts``: the chat
 question, the troubleshoot ``user_goal``). Pure functions; nothing logged.
@@ -37,6 +38,21 @@ MatchMode = Literal["word", "prefix", "substring"]
 # Zero-width space/joiners (Persian ZWNJ in "نمی\u200cتوانم") become spaces; term parts then
 # match with or without the gap, so the spaced, joined and ZWNJ spellings are the same.
 _ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff"), " ")
+# Arabic-script spellings people type interchangeably fold to one letter (terms and texts alike):
+# hamza-carrying alefs → ا, Arabic yeh/alef maksura ↔ Persian yeh, Arabic ↔ Persian kaf, teh
+# marbuta/heh-yeh → ه; harakat and tatweel are dropped. "انتحر" then matches "أنتحر".
+_ARABIC_FOLD = {
+    **dict.fromkeys(map(ord, "أإآٱ"), "ا"), **dict.fromkeys(map(ord, "يى"), "ی"),
+    ord("ك"): "ک", **dict.fromkeys(map(ord, "ةۀ"), "ه"),
+    **dict.fromkeys([*range(0x064B, 0x0660), 0x0670, 0x0640], None),
+}  # fmt: skip
+# Latin letters written with or without their accent match each other ("tomo" = "tomó",
+# "suicidarme" typed without accents): each accented vowel of a term becomes a class.
+_ACCENT_CLASS = {
+    "á": "[áa]", "à": "[àa]", "â": "[âa]", "ã": "[ãa]", "é": "[ée]", "è": "[èe]", "ê": "[êe]",
+    "í": "[íi]", "ì": "[ìi]", "î": "[îi]", "ó": "[óo]", "ò": "[òo]", "ô": "[ôo]", "õ": "[õo]",
+    "ú": "[úu]", "ù": "[ùu]", "û": "[ûu]", "ü": "[üu]", "ñ": "[ñn]", "ç": "[çc]",
+}  # fmt: skip
 _TAG_ALIASES: Mapping[str, str] = {
     "zh": "zh-Hans", "zh-cn": "zh-Hans", "zh-sg": "zh-Hans", "zh-hans": "zh-Hans",
     "zh-tw": "zh-Hant", "zh-hk": "zh-Hant", "zh-mo": "zh-Hant", "zh-hant": "zh-Hant",
@@ -46,14 +62,18 @@ _TAG_ALIASES: Mapping[str, str] = {
 
 def normalize_for_match(text: str) -> str:
     """The D-09 normaliser, zero-width joiners as spaces, case-folded (terms and texts alike)."""
-    return normalize(text.translate(_ZERO_WIDTH)).casefold()
+    return normalize(text.translate(_ZERO_WIDTH)).casefold().translate(_ARABIC_FOLD)
+
+
+def _escape_part(part: str) -> str:
+    return "".join(_ACCENT_CLASS.get(ch) or re.escape(ch) for ch in part)
 
 
 def _term_regex(term: str, mode: MatchMode) -> str:
     raw = normalize_for_match(term)
     open_end = raw.endswith("*")
     raw = raw.rstrip("*")
-    body = r"\s*".join(re.escape(part) for part in raw.split(" ") if part)
+    body = r"\s*".join(_escape_part(part) for part in raw.split(" ") if part)
     if mode == "substring":
         return body
     if mode == "prefix" or open_end:
@@ -237,8 +257,11 @@ def detect_emergency(
     kinds: set[str] = set()
     for text in texts:
         kinds.update(scan_text(text, tags, lex))
+    # What the reader typed may be in any language (a Dari speaker asking about a Spanish paper
+    # in English …): it is short, so every list runs over it.
+    every = [*tags, *(tag for tag in lex.languages if tag not in tags)]
     for text in user_texts:
-        kinds.update(scan_text(text, tags, lex, apply_exclude=False))
+        kinds.update(scan_text(text, every, lex, apply_exclude=False))
     model_list = [t for t in model_terms if t and t.strip()]
     model_kinds = map_model_terms(model_list, lex)
     lexicon_hit = bool(kinds)

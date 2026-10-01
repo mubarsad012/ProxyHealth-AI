@@ -28,6 +28,7 @@ import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import type { CapturedPage } from '@/store/session';
 
+import { paperLangProps, SourceText } from './cards/shared';
 import { pageImageFor } from './pageImages';
 import { blockLabel, initialSourcePage, type SourceMode, sourcePageModel, sourcePages } from './sourceModel';
 
@@ -286,6 +287,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
                 key={r.block.id}
                 role="button"
                 accessibilityLabel={blockLabel(r, current)}
+                {...paperLangProps(a.detected_language, dir.dir)}
                 onPress={() => select(r.block.id)}
                 style={[
                   styles.hit,
@@ -337,10 +339,12 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
           style={[styles.block, { borderColor: r.block.id === selected ? colors.focus : colors.divider }]}>
           {mode !== 'translation' ? (
             <View style={[styles.row, { flexDirection: dir.row }]}>
-              <Pressable style={styles.flex} onPress={() => select(r.block.id)} accessibilityLabel={blockLabel(r, current)}>
-                <Bidi dir="auto" variant="body">
-                  {r.block.text}
-                </Bidi>
+              <Pressable
+                style={styles.flex}
+                onPress={() => select(r.block.id)}
+                accessibilityLabel={blockLabel(r, current)}
+                {...paperLangProps(a.detected_language, dir.dir)}>
+                <SourceText lang={a.detected_language}>{r.block.text}</SourceText>
               </Pressable>
               <SpeakButton text={r.block.text} lang={a.detected_language} onResolved={originalVoice.onResolved} />
             </View>

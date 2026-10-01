@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 import pytest
+import yaml
 from fastapi import FastAPI
 from PIL import Image
 from pydantic import BaseModel
@@ -455,3 +456,34 @@ def test_make_fixtures_keeps_recordings_for_review(
     (folder / "out.fr.json").unlink()
     assert mf.main(["--only", "w2_form"]) == 0
     assert mf.main(["--check", "--only", "w2_form"]) == 0
+
+
+@pytest.mark.parametrize(
+    ("ar_d1", "expected"),
+    [
+        # Eastern Arabic digits and a translated month (the pre-fix recording).
+        ("اذهب إلى محكمة الهجرة في ٧ أكتوبر ٢٠٢٦ الساعة ٨:٣٠ صباحًا.", "localized digits '٧'"),
+        # Western digits but a translated month: still not the printed date.
+        ("اذهب إلى محكمة الهجرة في 7 أكتوبر 2026 الساعة 8:30 AM.", "printed date_text"),
+    ],
+)
+def test_make_fixtures_rejects_localized_dates_in_rtl_prose(
+    ar_d1: str, expected: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # AI_PROMPTS §5.0 rule 7 / PRODUCT_SPEC §7.1 "Numbers": dates stay exactly as printed, in
+    # Latin letters and Western digits, even in a right-to-left language.
+    mf = load_make_fixtures(monkeypatch)
+    shutil.copytree(mf.FIXTURES_DIR / "nta_hearing_date", tmp_path / "nta_hearing_date")
+    folder = tmp_path / "nta_hearing_date"
+    tpl_path = folder / "template.yaml"
+    tpl = yaml.safe_load(tpl_path.read_text("utf-8"))
+    assert tpl["out"]["ar"]["demands"]["d1"]["text"] == (
+        "اذهب إلى محكمة الهجرة في October 7, 2026 الساعة 8:30 AM."
+    )
+    assert mf.build_fixture(folder).id == "nta_hearing_date"  # the shipped template passes
+    tpl["out"]["ar"]["demands"]["d1"]["text"] = ar_d1
+    tpl_path.write_text(yaml.safe_dump(tpl, allow_unicode=True, sort_keys=False), "utf-8")
+    with pytest.raises(mf.TemplateError) as exc:
+        mf.build_fixture(folder)
+    assert "nta_hearing_date/out.ar.json" in str(exc.value) and expected in str(exc.value)
+    assert "out.prs.json" not in str(exc.value) and "out.es.json" not in str(exc.value)

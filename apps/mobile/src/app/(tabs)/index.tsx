@@ -7,6 +7,9 @@
 // papers are off and the sample tile leads. `?sample=1` (from S2) or sample mode opens the picker.
 // Quota cooling: after a recent `429 quota_exhausted` the CTA keeps working and shows
 // `home.busy_until` (the shared signal is `session.quotaCoolingUntil`, CL-039).
+// Trust footer per platform (`trustFooterText`): web says "in this browser"; iOS shows the D-22
+// interim line until the vault is excluded from iCloud Backup (COMPLIANCE_PRIVACY §10.2).
+// Dates use the Gregorian calendar with Western digits (`formatDay`), FSI-isolated in the sentence.
 
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -26,12 +29,14 @@ import { radius, size, space } from '@/design/tokens';
 import { openSample } from '@/features/demo/openSample';
 import { SamplePickerSheet } from '@/features/demo/SamplePicker';
 import { useSampleMode } from '@/features/demo/useSampleMode';
+import { trustFooterText } from '@/features/vault/platformCopy';
 import { Sheet } from '@/features/vault/Sheet';
 import { useConsentDecision } from '@/features/onboarding/consentState';
 import { formatClock, formatDay } from '@/features/reminders/format';
 import { useReminderTapRouting } from '@/features/reminders/useReminderTapRouting';
 import { pagesAfterPick, usePickImage } from '@/features/scan';
 import { useDocuments, useNextDate } from '@/features/vault/hooks';
+import { isolate } from '@/i18n/bidi';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
@@ -87,6 +92,9 @@ function NextDateCard() {
   const next = useNextDate();
   if (!next) return null;
   const href = next.documentId ? `/reminders?doc=${encodeURIComponent(next.documentId)}` : '/reminders';
+  // First-strong isolate: a Dari/Arabic date keeps its right-to-left word order, an English one its
+  // left-to-right order, and neither pulls the title or the dash into its run.
+  const date = isolate(formatDay(next.dateIso, tag), 'auto');
   return (
     <Pressable
       testID="home-next-date"
@@ -99,7 +107,7 @@ function NextDateCard() {
         <Interpolated
           weight="bold"
           template={t('home.next_date')}
-          vars={{ date: formatDay(next.dateIso, tag), document_title: next.title }}
+          vars={{ date, document_title: next.title }}
           ltrKeys={[]}
         />
       </View>
@@ -275,7 +283,7 @@ export default function HomeScreen() {
         <Icon name="lock" color={colors.textMuted} />
         <View style={styles.flex}>
           <AppText variant="caption" color="textMuted">
-            {isWeb ? t('home.trust_footer.web') : t('home.trust_footer')}
+            {trustFooterText(t)}
           </AppText>
         </View>
       </View>

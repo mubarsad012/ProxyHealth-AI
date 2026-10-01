@@ -35,6 +35,7 @@ def test_defaults_match_architecture_table(tmp_path: Path) -> None:
     assert (s.upstream_timeout_s, s.failover_deadline_s, s.translate_full_max_pages) == (90, 100, 4)
     assert (s.rate_limit_analyze_per_hour, s.rate_limit_analyze_per_day) == (20, 100)
     assert s.rate_limit_ip_per_minute == 60 and s.langpack_cache_ttl_days == 180
+    assert s.rate_limit_ip_per_day == 1000 and s.trusted_proxy_hops == 0
     assert s.cors_origin_list == ["http://localhost:8081"]
     assert s.provider is Provider.mock and s.data_use_tier is DataUseTier.demo
 

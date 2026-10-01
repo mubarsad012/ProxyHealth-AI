@@ -17,10 +17,21 @@ import { NotFoundScreen } from '@/features/onboarding/NotFoundScreen';
 import { useAppFonts } from '@/i18n/fonts';
 import { t, useI18n } from '@/i18n/store';
 import { useT } from '@/i18n/useT';
+import { purgeCaptureCache } from '@/storage/cache';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const SPLASH_MAX_MS = 3000;
+
+/** Native capture modules leave full-size photos / crops / picked files in the app cache
+ *  (storage/cache.native.ts). The scan session is memory-only, so at a cold start nothing still
+ *  needs them: remove them once per app launch (no-op on web). */
+let capturesPurged = false;
+function purgeCapturesOnce(): void {
+  if (capturesPurged) return;
+  capturesPurged = true;
+  void purgeCaptureCache().catch(() => undefined);
+}
 
 /** Root error boundary = S18 without a stack trace (developer builds show a collapsible). */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
@@ -83,6 +94,7 @@ function SplashGate() {
     // The consent record must be in the session on every entry route (deep links too), because
     // the API client reads X-Consent-Version from there.
     void loadConsent();
+    purgeCapturesOnce();
     try {
       AccessibilityInfo.announceForAccessibility(t('a11y.app_starting'));
     } catch {

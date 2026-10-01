@@ -1,7 +1,11 @@
 // S19 emergency card (D-14, PRODUCT_SPEC S19, COMPLIANCE_PRIVACY §7). Fixed copy only — never
 // model text. Four rows with 72 pt call/text buttons (`tel:` / `sms:`), numbers LTR-isolated, a
 // speaker on every line. On desktop web the numbers are shown large with "Use a phone to call."
+// The hotline numbers inside each line (`1-800-222-1222` in Arabic-script text) are isolated too:
+// without it, bidi rule W2 turns the digit groups into Arabic numbers and the hyphens reorder them
+// ("1222-222-800-1"), and on a phone that line is the only place the number is printed.
 
+import type { ReactNode } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { Bidi } from '@/design/components/Bidi';
@@ -19,34 +23,36 @@ export interface EmergencyRow {
   id: '911' | '988' | 'poison' | 'dv';
   lineKey: string;
   display: string;
-  actions: { labelKey: string; href: string; icon: 'phone' | 'info' }[];
+  /** `call` → `tel:` (danger button, phone glyph); `text` → `sms:` (secondary; the icon set has
+   *  no message glyph yet, and the old "info" circle suggested "more information"). */
+  actions: { labelKey: string; href: string; kind: 'call' | 'text' }[];
 }
 
 /** The four fixed rows (order is part of the spec). */
 export const EMERGENCY_ROWS: readonly EmergencyRow[] = [
-  { id: '911', lineKey: 'emergency.911', display: '911', actions: [{ labelKey: 'btn.call_911', href: 'tel:911', icon: 'phone' }] },
+  { id: '911', lineKey: 'emergency.911', display: '911', actions: [{ labelKey: 'btn.call_911', href: 'tel:911', kind: 'call' }] },
   {
     id: '988',
     lineKey: 'emergency.988',
     display: '988',
     actions: [
-      { labelKey: 'btn.call_988', href: 'tel:988', icon: 'phone' },
-      { labelKey: 'btn.text_988', href: 'sms:988', icon: 'info' },
+      { labelKey: 'btn.call_988', href: 'tel:988', kind: 'call' },
+      { labelKey: 'btn.text_988', href: 'sms:988', kind: 'text' },
     ],
   },
   {
     id: 'poison',
     lineKey: 'emergency.poison',
     display: '1-800-222-1222',
-    actions: [{ labelKey: 'btn.call_poison', href: 'tel:18002221222', icon: 'phone' }],
+    actions: [{ labelKey: 'btn.call_poison', href: 'tel:18002221222', kind: 'call' }],
   },
   {
     id: 'dv',
     lineKey: 'emergency.dv',
     display: '1-800-799-7233',
     actions: [
-      { labelKey: 'btn.call_dv', href: 'tel:18007997233', icon: 'phone' },
-      { labelKey: 'btn.text_dv', href: 'sms:88788?body=START', icon: 'info' },
+      { labelKey: 'btn.call_dv', href: 'tel:18007997233', kind: 'call' },
+      { labelKey: 'btn.text_dv', href: 'sms:88788?body=START', kind: 'text' },
     ],
   },
 ];
@@ -62,6 +68,36 @@ export function emergencyKindWords(kinds: string[], t: TFunction): string[] {
     }
   }
   return out;
+}
+
+/** Phone-like runs: digit groups joined by hyphens (`1-800-222-1222`), ASCII or Arabic-Indic. */
+const PHONE_RUN = /[0-9\u0660-\u0669\u06f0-\u06f9]+(?:[-\u2010\u2011][0-9\u0660-\u0669\u06f0-\u06f9]+)+/g;
+
+/** Split a fixed line into text and phone-number parts (numbers get an LTR isolate). */
+export function phoneParts(text: string): { text: string; phone: boolean }[] {
+  const out: { text: string; phone: boolean }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(PHONE_RUN)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at), phone: false });
+    out.push({ text: m[0], phone: true });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), phone: false });
+  return out;
+}
+
+/** The line with every phone number LTR-isolated (a `<Bidi dir="ltr">` span / LRI…PDI). */
+export function withIsolatedPhones(text: string): ReactNode[] {
+  return phoneParts(text).map((p, i) =>
+    p.phone ? (
+      <Bidi key={`n${i}`} dir="ltr">
+        {p.text}
+      </Bidi>
+    ) : (
+      p.text
+    ),
+  );
 }
 
 /** Desktop browsers cannot dial: no touch points and a wide window. */
@@ -128,7 +164,9 @@ export function EmergencyCard({ kinds, onClose, inline, onMoreHelp, triggered }:
         <View key={row.id} testID={`emergency-row-${row.id}`} style={[styles.block, { borderTopColor: colors.divider }]}>
           <View style={[styles.row, { flexDirection: dir.row }]}>
             <View style={styles.flex}>
-              <AppText variant="bodyLarge">{t(row.lineKey)}</AppText>
+              <AppText variant="bodyLarge" testID={`emergency-line-${row.id}`}>
+                {withIsolatedPhones(t(row.lineKey))}
+              </AppText>
             </View>
             <SpeakButton text={t(row.lineKey)} lang={meta.tag} />
           </View>
@@ -141,8 +179,8 @@ export function EmergencyCard({ kinds, onClose, inline, onMoreHelp, triggered }:
             <BigButton
               key={a.href}
               label={t(a.labelKey)}
-              icon={a.icon}
-              variant={a.icon === 'phone' ? 'danger' : 'secondary'}
+              icon={a.kind === 'call' ? 'phone' : undefined}
+              variant={a.kind === 'call' ? 'danger' : 'secondary'}
               size={72}
               onPress={() => openHref(a.href)}
             />

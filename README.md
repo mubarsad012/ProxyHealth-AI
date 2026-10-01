@@ -216,6 +216,7 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `make test` | API pytest, ruff, strict mypy, mobile `tsc`, `jest`, `expo lint`. |
 | `make ci` / `scripts/ci.sh` | The full CI list in order, stopping at the first failure (see [Testing](#testing)); `CI_FROM=<step>` resumes, `CI_ONLY=<step>` runs one. |
 | `make export-web` | `npx expo export --platform web --clear` → `apps/mobile/dist` (includes `dist/privacy/index.html`). |
+| `make host-rules` | After `make export-web`: `scripts/web-host-rules.py` writes `dist/_redirects` + `dist/404.html` so Netlify / Cloudflare Pages serve `/result/<id>` and `/papers/member/<id>` (EAS Hosting needs nothing; `--vercel` prints the `vercel.json` rewrites, `--verify <url>` checks a deploy — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §2.3). |
 | `make types` / `make types-check` | `scripts/gen-types.sh`: regenerate / verify `apps/api/openapi.json` and `apps/mobile/src/api/schema.d.ts` (regeneration is the contract owner's job). |
 | `make sync` / `make sync-check` | `apps/api/scripts/sync_to_mobile.py` (packs, languages, fixtures, fonts, national fallbacks into the app). |
 | `apps/api/.venv/bin/ruff check apps/api` | Lint. |

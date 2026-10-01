@@ -4,10 +4,15 @@
 import { renderHook } from '@testing-library/react-native';
 
 import { createClient, TIMEOUT_MS } from '@/api/client';
+import { getClient, setClient } from '@/api/config';
 import { ApiError, errorMessageVars, retryMinutes } from '@/api/errors';
 import type { ErrorResponse } from '@/api/types';
 import { useOnline } from '@/lib/network';
 import { useSession } from '@/store/session';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
 
 type FetchArgs = [string, RequestInit];
 
@@ -33,7 +38,11 @@ function envelope(code: string, extra: Partial<ErrorResponse['error']> = {}): Er
   };
 }
 
-function setup(response: Response | (() => Promise<Response>), consent: string | null = '2026-09-24') {
+function setup(
+  response: Response | (() => Promise<Response>),
+  consent: string | null = '2026-10-01',
+  refuseUnconsentedUploads = false,
+) {
   const calls: FetchArgs[] = [];
   const fetchMock = jest.fn((url: string, init: RequestInit) => {
     calls.push([url, init]);
@@ -42,6 +51,7 @@ function setup(response: Response | (() => Promise<Response>), consent: string |
   const client = createClient({
     baseUrl: 'http://127.0.0.1:8026/',
     getConsentVersion: () => consent,
+    refuseUnconsentedUploads,
     getInstallId: async () => 'install-123',
     appToken: 'tok',
     getLanguageTag: () => 'prs',
@@ -72,9 +82,9 @@ describe('headers', () => {
     await client.troubleshoot({} as never);
     await client.chat({} as never);
     await client.matchResources({} as never);
-    expect(header(0, 'X-Consent-Version')).toBe('2026-09-24');
-    expect(header(1, 'X-Consent-Version')).toBe('2026-09-24');
-    expect(header(2, 'X-Consent-Version')).toBe('2026-09-24');
+    expect(header(0, 'X-Consent-Version')).toBe('2026-10-01');
+    expect(header(1, 'X-Consent-Version')).toBe('2026-10-01');
+    expect(header(2, 'X-Consent-Version')).toBe('2026-10-01');
     expect(header(3, 'X-Consent-Version')).toBeNull();
   });
 
@@ -91,6 +101,57 @@ describe('headers', () => {
     });
     await client.getConfig();
     expect(new Headers(calls[0][1].headers).get('X-Install-Id')).toBeNull();
+  });
+});
+
+describe('consent guard (CL-070 defence in depth)', () => {
+  it('refuses analyze / troubleshoot / chat before consent without any network call', async () => {
+    const { client, calls } = setup(jsonResponse(200, {}), null, true);
+    for (const send of [
+      () => client.analyze({ client_platform: 'web', pages: [{ mime_type: 'image/jpeg', data_base64: 'x' }] } as never),
+      () => client.troubleshoot({ client_platform: 'web', screenshot: { mime_type: 'image/png', data_base64: 'x' } } as never),
+      () => client.chat({ analysis: {}, question: 'What is this?' } as never),
+    ]) {
+      const err = (await send().catch((x: unknown) => x)) as ApiError;
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.isConsentRequired()).toBe(true);
+      expect(err.userMessageKey).toBe('err.consent_required');
+      expect(err.details).toEqual({ client_side: true });
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('lets sample requests (demo_sample_id) and ungated routes through before consent', async () => {
+    const { client, calls, header } = setup(() => Promise.resolve(jsonResponse(200, {})), null, true);
+    await client.analyze({ client_platform: 'web', pages: [], demo_sample_id: 'medicaid_address_confirmation' } as never);
+    await client.troubleshoot({ client_platform: 'web', demo_sample_id: 'portal_login_error' } as never);
+    await client.matchResources({} as never);
+    await client.getConfig();
+    expect(calls).toHaveLength(4);
+    expect(header(0, 'X-Consent-Version')).toBeNull();
+  });
+
+  it('sends normally once consent is given', async () => {
+    const { client, calls, header } = setup(jsonResponse(200, {}), '2026-10-01', true);
+    await client.analyze(analyzeReq);
+    expect(calls).toHaveLength(1);
+    expect(header(0, 'X-Consent-Version')).toBe('2026-10-01');
+  });
+
+  it("the app's client has the guard on", async () => {
+    useSession.getState().reset();
+    const fetchSpy = jest.fn();
+    const saved = globalThis.fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    try {
+      setClient(null);
+      const err = (await getClient().chat({ analysis: {}, question: 'x' } as never).catch((x: unknown) => x)) as ApiError;
+      expect(err.isConsentRequired()).toBe(true);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = saved;
+      setClient(null);
+    }
   });
 });
 

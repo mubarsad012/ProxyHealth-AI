@@ -1,15 +1,20 @@
 """Contact scrubber (D-10; AI_PROMPTS §11.3): contacts only from the paper or the vetted DB.
 
 Runs over every *model-authored* user-facing string (summary, demand text, plan steps, glossary,
-model red flags, questions, ``clerk_need_en``, chat answers, troubleshoot text). Phone numbers
-(NANP, international, N11 codes next to a call/dial/text word), URLs and bare domains, e-mails and
-US street addresses survive only when they appear on the paper (the transcript, or ``screen_text``
-for troubleshoot); everything else becomes the target-language marker
+model red flags, questions, ``clerk_need_en``, demand documents and notes, the sender line, the
+glossary terms, chat answers, troubleshoot text; a translation only for phone/web/e-mail). Phone
+numbers (NANP with any dash look-alike as separator, ``+``/``00`` international, toll-free vanity
+numbers, N11 codes next to a call/dial/text word), URLs and bare domains, e-mails and US street
+addresses survive only when they appear on the paper (the transcript, or ``screen_text`` for
+troubleshoot); everything else becomes the target-language marker
 ``warning.contacts_stripped_inline`` ("[contact removed — see Get help nearby]"). Capitalised
-organisation names ending in an institution word (``… Center``, ``… Legal Aid``, ``… Inc``) that are
-neither on the paper nor in ``ResourceRepo.names()`` become ``warning.org_removed_inline``
-("an organization (see Get help nearby)"). Emergency numbers in model text are stripped like any
-other number — the fixed emergency card carries them.
+organisation names ending in an institution word (``… Center``, ``… Legal Aid``, ``… Project``,
+``… Inc``) that are neither on the paper nor in ``ResourceRepo.names()`` become
+``warning.org_removed_inline`` ("an organization (see Get help nearby)"); so do head-first names
+("Centro Legal de …", "Clínica …", "Servicios Legales …") and Arabic-script help-organisation
+names ("انجمن کمک حقوقی …") unless every specific word of them is printed on the paper.
+Emergency numbers in model text are stripped like any other number — the fixed emergency card
+carries them.
 
 Verbatim fields (``value_verbatim``, ``source_quote``, ``original_text``) are never passed here.
 Pure functions; nothing is logged.
@@ -32,6 +37,9 @@ MARKER_KEY = "warning.contacts_stripped_inline"
 ORG_MARKER_KEY = "warning.org_removed_inline"
 
 ContactKind = Literal["phone", "n11", "url", "email", "address", "org"]
+# Phone, web and e-mail contacts (no street addresses or organisation names): what a translation of
+# the paper is checked for, since a translation may legitimately translate a name or an address.
+CONTACT_KINDS: frozenset[ContactKind] = frozenset({"phone", "n11", "url", "email"})
 
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 # Bare domains take any 2–24-letter TLD ("scamsite.xyz", "bit.ly/abc123"), all lower- or all
@@ -44,8 +52,22 @@ _URL_RE = re.compile(
     r"(?:/[^\s<>\"')\]]*)?",
     re.IGNORECASE,
 )
-_NANP_RE = re.compile(r"(?<![\w+])(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\w)")
-_INTL_RE = re.compile(r"(?<![\w+])\+\d[\d\s.()-]{6,18}\d(?!\w)")
+# Separators: space, dot, the ASCII hyphen and its look-alikes (U+2010–U+2015 dashes, U+2212
+# minus) — "703–555–0199" and "703‑555‑0199" are the same number.
+_SEP = "[\\s.\\-\u2010-\u2015\u2212]"
+_NANP_RE = re.compile(
+    rf"(?<![\w+])(?:\+?1{_SEP}?)?\(?\d{{3}}\)?{_SEP}?\d{{3}}{_SEP}?\d{{4}}(?!\w)"
+)
+# International: "+44 20 7946 0958" and the "00" dialling prefix ("00 44 20 7946 0958").
+_INTL_RE = re.compile(
+    r"(?<![\w+])(?:\+|00[\s\u2010-\u2015\u2212-]?)[1-9]"
+    r"[\d\s.()\-\u2010-\u2015\u2212]{6,18}\d(?!\w)"
+)
+# Toll-free vanity numbers: "1-800-FIX-BILL", "(888) GET-HELP", "1-800-FLOWERS".
+_VANITY_RE = re.compile(
+    rf"(?<![\w+])(?:1{_SEP}?)?\(?8(?:00|33|44|55|66|77|88)\)?{_SEP}"
+    rf"(?=[A-Z0-9-]*[A-Z])[A-Z0-9]{{3}}{_SEP}?[A-Z0-9]{{4}}(?!\w)"
+)
 _N11_RE = re.compile(r"(?<![\w-])(211|311|511|711|811|911|988)(?![\w-])")
 _N11_CUE_RE = re.compile(
     r"\b(call|calls|calling|dial|dialing|text|texting|phone|ring|contact|"
@@ -59,8 +81,72 @@ _ADDRESS_RE = re.compile(
 )
 _ORG_SUFFIXES = (
     "Inc", "LLC", "Center", "Centre", "Services", "Hospital", "Clinic", "Court", "Department",
-    "Office", "Agency", "Association", "Society", "Foundation", "Aid", "Law",
+    "Office", "Agency", "Association", "Society", "Foundation", "Aid", "Law", "Project",
+    "Network", "Coalition", "Alliance", "Initiative", "Institute", "Council",
 )  # fmt: skip
+# Spanish/Portuguese/French names put the institution word first ("Centro Legal de Inmigración
+# Hispano", "Clínica Legal Latina", "Servicios Legales Comunitarios"): a head word followed by at
+# least one more capitalised word on the same line (connectors allowed). A translated agency name
+# ("la Oficina del Jurado") cannot be compared with an English paper, so — as for Arabic script —
+# only a name that offers help (legal aid, advice, immigrant or community help: the kind of
+# organisation the model must never invent) counts as an organisation span.
+_HEAD_FIRST = (
+    "Centro", "Centros", "Clínica", "Clinica", "Servicios", "Oficina", "Asociación", "Asociacion",
+    "Fundación", "Fundacion", "Instituto", "Coalición", "Coalicion", "Proyecto", "Comité",
+    "Comite", "Organización", "Organizacion", "Programa", "Despacho", "Bufete", "Associação",
+    "Fundação", "Instituição", "Clinique", "Fondation",
+)  # fmt: skip
+_HEAD_CONNECTORS = r"(?:de|del|la|las|el|los|y|e|para|do|da|dos|das|des|du|pour|et)"
+_HEAD_FIRST_RE = re.compile(
+    rf"\b(?:{'|'.join(_HEAD_FIRST)})"
+    rf"(?:[ \t\u00a0]+(?:{_HEAD_CONNECTORS}[ \t\u00a0]+)*[A-ZÁÉÍÓÚÑÜ][\w'&.-]*)+"
+)
+_HEAD_FIRST_HELP_WORDS = frozenset(
+    """legal legales jurídico juridico jurídica juridica jurídicos juridicos jurídicas
+    juridicas ayuda abogado abogados abogada abogadas inmigrante inmigrantes refugiado
+    refugiados comunitario comunitaria comunitarios comunitarias hispano hispana hispanos
+    hispanas latino latina latinos latinas derechos defensa asesoría asesoria consejería
+    consejeria apoyo trabajadores jurídica""".split()
+)
+# Arabic-script names (Arabic, Dari/Persian, Pashto, Urdu): an institution noun plus up to three
+# following words ("انجمن کمک حقوقی افغان‌ها", "بمركز المساعدة القانونية العربي"), cut before a verb
+# or preposition. A translated agency name is not comparable with an English paper, so only a
+# name that offers help — legal aid, advice, immigrant or refugee help, the kind of organisation
+# the model must never invent (resources come from the DB) — counts as an organisation span.
+_ARABIC_INSTITUTION = (
+    "مرکز", "مركز", "بمركز", "لمركز", "للمركز", "انجمن", "جمعیت", "جمعية", "مؤسسة", "مؤسسه",
+    "موسسه", "سازمان", "منظمة", "دفتر", "مكتب", "عيادة", "کلینیک", "اتحادیه", "اتحاد", "شبكة",
+    "شبکه", "ټولنه", "بنیاد",
+)  # fmt: skip
+_ARABIC_HELP_WORDS = frozenset(
+    """کمک کمکی حقوقی حقوق مساعدة المساعدة مساعده القانونية القانوني قانوني قانونية قانونی
+    مرستې مرسته حقوقي مشاوره مشورتی مشورې الاستشارات استشارات الاستشارية پناهندگان پناهنده
+    اللاجئين لاجئين مهاجرین المهاجرين مهاجرو کډوالو""".split()
+)
+_ARABIC_STOP = frozenset(
+    """تماس بگیرید بگیر بروید برو مراجعه کنید کن اتصل اتصلوا راجع راجعوا زنگ بزنید وکړئ اړیکه
+    ونیسئ ولاړ شئ را به با و در از ته سره په من في على إلى الى مع عن""".split()
+)
+_ARABIC_INSTITUTION_RE = re.compile(
+    rf"(?<![\w\u200c])(?:{'|'.join(_ARABIC_INSTITUTION)})"
+    r"(?:[\s\u200c]+[\u0600-\u06FF][\u0600-\u06FF\u200c]*){1,3}"
+)
+# Spanish words that name a *kind* of institution or a public body, so a translated agency name
+# ("la Oficina del Seguro Social", "Servicios de Ciudadanía e Inmigración de los Estados Unidos")
+# is not an invented organisation.
+_SPANISH_GENERIC = frozenset(
+    """oficina oficinas departamento departamentos servicio servicios seguro social sociales
+    ciudadanía ciudadania inmigración inmigracion migración migracion migratorio estados unidos
+    corte cortes tribunal tribunales juzgado centro centros clínica clinica clínicas clinicas
+    hospital hospitales escuela escuelas distrito condado ciudad estado federal nacional local
+    público pública publico publica salud humanos humanas familia familias familiares niños
+    ninos alimentos vivienda trabajo empleo beneficios médico medico médica medica legal legales
+    ayuda asistencia programa programas seguridad administración administracion gobierno
+    impuestos rentas internas agencia agencias asociación asociacion fundación fundacion
+    instituto sistema oficial registro civil aduanas protección proteccion fronteras nacionalidad
+    junta apelaciones revisión revision juez jueces tarjeta verde departamento comité comite
+    del de la las el los y e para do da dos das des du pour et eeuu eua""".split()
+)
 _CONNECTORS = r"(?:of|for|and|the|on|in|at|de|del|la|el|los|las|y|&)"
 _CAP_WORD = r"[A-Z][\w'&.-]*"
 _CAP_RUN_RE = re.compile(rf"\b{_CAP_WORD}(?:\s+(?:{_CONNECTORS}\s+)?{_CAP_WORD})+")
@@ -75,7 +161,8 @@ GENERIC_ORG_WORDS = frozenset(
     american national district superior circuit general juvenile traffic small claims civil
     criminal board appeals appeal judge doctor doctor's doctors nurse pharmacy pharmacist bank
     welfare labor justice homeland motor vehicles dmv irs uscis ice eoir ssa medicaid medicare
-    snap wic chip hhs insurance plan financial assistance billing business front main
+    snap wic chip hhs insurance plan financial assistance billing business front main project
+    projects network networks coalition alliance initiative institute council
     """.split()
 )
 # Capitalised words that start a sentence or instruction rather than a name ("Ask the …",
@@ -114,6 +201,8 @@ _WS_RE = re.compile(r"\s+")
 # An article just before a replaced organisation is absorbed into the replacement, so
 # "Visit the Fake Law Center" becomes "Visit an organization (…)", not "Visit the an organization".
 _ARTICLE_BEFORE_RE = re.compile(r"(?:(?<=\s)|^)(the|el|la|los|las)\s+$", re.IGNORECASE)
+# Spanish contractions of that article: "Llame al Centro …" → "Llame a una organización …".
+_CONTRACTION_BEFORE_RE = re.compile(r"(?:(?<=\s)|^)(al|del)\s+$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -124,6 +213,9 @@ class ContactMatch:
     start: int
     end: int
     text: str
+    lenient: bool = False
+    """A translated-style name (head-first Spanish, Arabic script): allowed when every specific
+    word of it is printed somewhere on the paper (``AllowList.allows_translated_org``)."""
 
 
 def _norm_words(text: str) -> str:
@@ -140,9 +232,19 @@ def _norm_compact(text: str) -> str:
     return _WS_RE.sub("", unicodedata.normalize("NFKC", text).casefold())
 
 
+_KEYPAD = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "22233344455566677778889999"
+)
+
+
 def normalize_phone(text: str) -> str:
-    """Digits only (Eastern digits folded); an 11-digit ``1…`` NANP number drops the ``1``."""
-    digits = re.sub(r"\D", "", ascii_digits(unicodedata.normalize("NFKC", text)))
+    """Digits only (Eastern digits folded, vanity letters as keypad digits, a ``00`` dialling
+    prefix dropped); an 11-digit ``1…`` NANP number drops the ``1``."""
+    raw = ascii_digits(unicodedata.normalize("NFKC", text)).upper().translate(_KEYPAD)
+    stripped = raw.strip()
+    digits = re.sub(r"\D", "", raw)
+    if stripped.startswith("00") and not stripped.startswith("000"):
+        digits = digits[2:]
     if len(digits) == 11 and digits.startswith("1"):
         return digits[1:]
     return digits
@@ -216,12 +318,47 @@ def _org_spans(text: str) -> list[ContactMatch]:
     return spans
 
 
+def _head_first_spans(text: str) -> list[ContactMatch]:
+    """Head-first organisation names ("Centro Legal de Inmigración Hispano"), checked leniently
+    (``AllowList.allows_translated_org``)."""
+    spans: list[ContactMatch] = []
+    for m in _HEAD_FIRST_RE.finditer(text):
+        span = m.group(0)
+        if not any(w in _HEAD_FIRST_HELP_WORDS for w in _norm_words(span).split()[1:]):
+            continue
+        stop = m.start() + len(span.rstrip(" .,;:"))
+        spans.append(ContactMatch("org", m.start(), stop, text[m.start() : stop], lenient=True))
+    return spans
+
+
+def _arabic_org_spans(text: str) -> list[ContactMatch]:
+    """Arabic-script help-organisation names, cut before the first verb/preposition word."""
+    spans: list[ContactMatch] = []
+    for m in _ARABIC_INSTITUTION_RE.finditer(text):
+        words = list(re.finditer(r"[^\s\u200c]+(?:\u200c[^\s\u200c]+)*", m.group(0)))
+        kept = [words[0]]
+        for w in words[1:]:
+            if w.group(0).strip("،.؛:") in _ARABIC_STOP:
+                break
+            kept.append(w)
+        names = [w.group(0).strip("،.؛:") for w in kept]
+        if len(kept) < 2 or not any(n in _ARABIC_HELP_WORDS for n in names[1:]):
+            continue
+        stop = m.start() + kept[-1].end()
+        while stop > m.start() and text[stop - 1] in "،.؛:":
+            stop -= 1
+        spans.append(
+            ContactMatch("org", m.start(), stop, text[m.start() : stop], lenient=True)
+        )
+    return spans
+
+
 def find_contacts(text: str, *, include_orgs: bool = True) -> list[ContactMatch]:
     """Every contact-like span in ``text``, non-overlapping, in order (longest wins on overlap)."""
     found: list[ContactMatch] = []
     patterns: tuple[tuple[ContactKind, re.Pattern[str]], ...] = (
         ("email", _EMAIL_RE), ("url", _URL_RE), ("phone", _NANP_RE), ("phone", _INTL_RE),
-        ("address", _ADDRESS_RE),
+        ("phone", _VANITY_RE), ("address", _ADDRESS_RE),
     )  # fmt: skip
     for kind, pattern in patterns:
         for m in pattern.finditer(text):
@@ -235,6 +372,8 @@ def find_contacts(text: str, *, include_orgs: bool = True) -> list[ContactMatch]
             found.append(ContactMatch("n11", m.start(1), m.end(1), m.group(1)))
     if include_orgs:
         found += _org_spans(text)
+        found += _head_first_spans(text)
+        found += _arabic_org_spans(text)
     found.sort(key=lambda c: (c.start, -(c.end - c.start)))
     out: list[ContactMatch] = []
     for c in found:
@@ -311,7 +450,23 @@ class AllowList:
         if match.kind == "address":
             key = _norm_words(match.text)
             return bool(key) and f" {key} " in self.word_text
+        if match.lenient:
+            return self.allows_translated_org(match.text)
         return self.allows_org(match.text)
+
+    def allows_translated_org(self, name: str) -> bool:
+        """A head-first or Arabic-script name: a whole DB alias, all generic words, or every
+        specific word printed somewhere on the paper (a translated real name keeps the paper's
+        proper nouns, "… del Condado de Fairfax"; "Clínica Legal Latina" on a Medicaid letter
+        does not)."""
+        key = normalize_org(name)
+        if key and (key in self.org_names or f" {key} " in self.word_text):
+            return True
+        specific = [
+            w for w in _norm_words(name).split()
+            if w not in GENERIC_ORG_WORDS and w not in _SPANISH_GENERIC
+        ]  # fmt: skip
+        return all(f" {w} " in self.word_text for w in specific)
 
     def allows_url(self, url: str) -> bool:
         """The same host as a URL printed on the paper (``irs.co`` ≠ ``irs.com``, ``county.gov``
@@ -386,8 +541,16 @@ class ScrubResult:
     orgs: int
 
 
-def scrub_text(text: str, allow: AllowList, *, marker: str, org_marker: str) -> ScrubResult:
-    """Replace every contact / organisation span not allowed by ``allow`` with its marker.
+def scrub_text(
+    text: str,
+    allow: AllowList,
+    *,
+    marker: str,
+    org_marker: str,
+    kinds: frozenset[ContactKind] | None = None,
+) -> ScrubResult:
+    """Replace every contact / organisation span not allowed by ``allow`` with its marker
+    (only spans of ``kinds`` when given).
 
     Adjacent contacts separated only by whitespace or ``or``/``,`` collapse into one marker.
     """
@@ -397,17 +560,25 @@ def scrub_text(text: str, allow: AllowList, *, marker: str, org_marker: str) -> 
     last = 0
     contacts = orgs = 0
     prev_contact_end: int | None = None
-    for match in find_contacts(text):
+    for match in find_contacts(text, include_orgs=kinds is None or "org" in kinds):
+        if kinds is not None and match.kind not in kinds:
+            continue
         if allow.allows(match):
             continue
         gap = text[last : match.start]
         if match.kind == "org":
             replacement = org_marker
             article = _ARTICLE_BEFORE_RE.search(gap)
+            contraction = _CONTRACTION_BEFORE_RE.search(gap)
             if article:
                 gap = gap[: article.start()]
                 if article.group(1)[:1].isupper() and replacement[:1].islower():
                     replacement = replacement[:1].upper() + replacement[1:]
+            elif contraction:
+                word = contraction.group(1)
+                bare = ("a" if word.lower() == "al" else "de")
+                bare = bare.capitalize() if word[:1].isupper() else bare
+                gap = gap[: contraction.start()] + bare + " "
             at_start = _SENTENCE_START_RE.search("".join(pieces) + gap) is not None
             if at_start and replacement[:1].islower():
                 replacement = replacement[:1].upper() + replacement[1:]
@@ -451,6 +622,15 @@ class ContactScrubber:
         if text is None:
             return None
         result = scrub_text(text, self.allow, marker=self.marker, org_marker=self.org_marker)
+        self.contacts_stripped += result.contacts
+        self.orgs_replaced += result.orgs
+        return result.text
+
+    def scrub_kinds(self, text: str, kinds: frozenset[ContactKind]) -> str:
+        """Scrub only spans of ``kinds`` (a translation: ``CONTACT_KINDS``), counting them."""
+        result = scrub_text(
+            text, self.allow, marker=self.marker, org_marker=self.org_marker, kinds=kinds
+        )
         self.contacts_stripped += result.contacts
         self.orgs_replaced += result.orgs
         return result.text
@@ -511,6 +691,7 @@ def has_contact(text: str) -> bool:
 
 
 __all__ = [
+    "CONTACT_KINDS",
     "GENERIC_ORG_WORDS",
     "MARKER_KEY",
     "ORG_MARKER_KEY",

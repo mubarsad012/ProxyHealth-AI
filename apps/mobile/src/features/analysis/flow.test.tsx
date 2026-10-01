@@ -4,7 +4,8 @@
 //   sample → S6 Reading (three steps, ≥ 1.5 s) → `POST /v1/analyze` → S7 route → result cards;
 //   web scan with hidden parts → the body on the wire has `masks_applied_client_side: true` and
 //   empty `masks`; native keeps `masks[]`; a 428 shows S2 inline and retries once after consent;
-//   an unreachable server on a real scan shows the network error with its next steps.
+//   an unreachable server on a real scan shows the network error with its next steps, and "Save to
+//   read later" saves the pages to My papers as "Not read yet" (no in-memory queue).
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
@@ -17,6 +18,7 @@ import { resetConsentState } from '@/features/onboarding/consentState';
 import { consentThenRetry, ReadingScreen } from '@/features/scan/ReadingScreen';
 import { samplePages } from '@/features/scan/samples';
 import { EN_PACK, t, useI18n } from '@/i18n/store';
+import type { StoredDocument, StoredPageInput, Vault } from '@/storage/index';
 import { type CapturedPage, useSession } from '@/store/session';
 
 import medicaidEn from '../../../assets/fixtures/medicaid_address_confirmation.result.en.json';
@@ -61,7 +63,7 @@ jest.mock('@/api/offline', () => ({
 }));
 
 const API = 'http://127.0.0.1:8027';
-const CONSENT = '2026-09-24';
+const CONSENT = '2026-10-01';
 
 function demoConfig(): ServerConfig {
   return {
@@ -135,12 +137,38 @@ function consentGiven() {
   useSession.getState().setConsent({ consent_version: CONSENT, accepted_at: '2026-09-27T10:00:00Z', tier_seen: 'demo', platform: 'web' });
 }
 
-async function renderReading(client: ApiClient) {
+async function renderReading(client: ApiClient, vault?: Vault) {
   return render(
-    <AppProviders client={client} staticMetrics>
+    <AppProviders client={client} vault={vault} staticMetrics>
       <ReadingScreen />
     </AppProviders>,
   );
+}
+
+/** A vault that records `documents.save` (the read-later path). */
+function recordingVault() {
+  const saved: { doc: StoredDocument; pages: StoredPageInput[] }[] = [];
+  const none = () => Promise.resolve();
+  const vault = {
+    init: none,
+    members: { list: async () => [], add: jest.fn(), rename: none, remove: none },
+    documents: {
+      list: async () => [],
+      get: async () => null,
+      save: jest.fn(async (doc: StoredDocument, pages: StoredPageInput[]) => {
+        saved.push({ doc, pages });
+      }),
+      move: none,
+      remove: none,
+      search: async () => [],
+    },
+    pages: { list: async () => [], uri: async () => null },
+    checklist: { get: async () => ({}), set: none },
+    reminders: { list: async () => [], add: jest.fn(), remove: none, setEnabled: none },
+    consent: { get: async () => null, set: none, clear: none },
+    wipeAll: none,
+  } as unknown as Vault;
+  return { vault, saved };
 }
 
 function webPage(patch: Partial<CapturedPage> = {}): CapturedPage {
@@ -261,9 +289,10 @@ describe('S6 error rows', () => {
 
   it('network failure on a real scan: error copy with Retry, Save to read later, Call 211 and Try a sample', async () => {
     const { client } = mockApi((call) => (call.url.endsWith('/v1/analyze') ? Promise.reject(new TypeError('Failed to fetch')) : null));
+    const { vault, saved } = recordingVault();
     consentGiven();
     useSession.getState().setPages([webPage({ masks: [] })]);
-    const screen = await renderReading(client);
+    const screen = await renderReading(client, vault);
     await waitFor(() => expect(screen.getByText(t('btn.retry'))).toBeTruthy(), { timeout: 5000 });
     expect(screen.getByText(t('btn.save_to_read_later'))).toBeTruthy();
     expect(screen.getByText(t('btn.try_sample'))).toBeTruthy();
@@ -271,7 +300,26 @@ describe('S6 error rows', () => {
     await act(async () => {
       fireEvent.press(screen.getByText(t('btn.save_to_read_later')));
     });
-    expect(useSession.getState().offlineQueue).toHaveLength(1);
-    expect(router.replace).toHaveBeenCalledWith('/');
+    // The vault's own "Whose paper is this?" sheet: nothing is written until Save.
+    await waitFor(() => expect(screen.getByTestId('save-to-vault-sheet')).toBeTruthy());
+    expect(saved).toHaveLength(0);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('save-to-vault-confirm'));
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0].doc.analysis).toBeNull(); // "Not read yet"
+    expect(saved[0].pages).toHaveLength(1); // the page is kept, so "Read it now" can send it later
+    expect(saved[0].pages[0].base64Jpeg).toBe('SlBFRw==');
+    expect(useSession.getState().offlineQueue).toHaveLength(0); // no in-memory queue that nothing reads
+    expect(router.replace).toHaveBeenCalledWith('/papers');
+  }, 10_000);
+
+  it('network failure with hidden parts: no "Save to read later" (the stored copy would lose the boxes)', async () => {
+    const { client } = mockApi((call) => (call.url.endsWith('/v1/analyze') ? Promise.reject(new TypeError('Failed to fetch')) : null));
+    consentGiven();
+    useSession.getState().setPages([webPage()]);
+    const screen = await renderReading(client);
+    await waitFor(() => expect(screen.getByText(t('btn.retry'))).toBeTruthy(), { timeout: 5000 });
+    expect(screen.queryByText(t('btn.save_to_read_later'))).toBeNull();
   }, 10_000);
 });

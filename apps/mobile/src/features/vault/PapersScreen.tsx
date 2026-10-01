@@ -27,7 +27,9 @@ import { emptyVaultText, memberName, nextColor } from './members';
 import { Sheet } from './Sheet';
 import { bumpVault } from './store';
 
-export function StorageNotice() {
+/** Where saved papers live, per platform. `omit`: a line the screen already shows (on iOS the
+ *  empty state is the same D-22 line, `emptyVaultText`), so it is not read twice. */
+export function StorageNotice({ omit }: { omit?: string } = {}) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
@@ -36,11 +38,12 @@ export function StorageNotice() {
     Platform.OS === 'web'
       ? [webPersist === 'indexeddb' ? t('vault.web_kept') : t('banner.web_session_only'), t('vault.privacy_web')]
       : [t('vault.privacy_native')];
+  const shown = lines.filter((line) => line !== omit);
   return (
     <View role="note" style={[styles.notice, { flexDirection: dir.row, borderColor: colors.divider }]}>
       <Icon name="lock" color={colors.textMuted} />
       <View style={styles.flex}>
-        {lines.map((line) => (
+        {shown.map((line) => (
           <AppText key={line} variant="caption" color="textMuted">
             {line}
           </AppText>
@@ -66,6 +69,7 @@ export function PapersScreen() {
   const withPapers = useMemo(() => new Set(rows.map((r) => r.memberId)), [rows]);
   const grouped = withPapers.size > 1;
   const empty = !loading && rows.length === 0 && query.trim() === '';
+  const emptyText = emptyVaultText(t);
 
   return (
     <Screen title={t('tabs.papers')} testID="papers-screen">
@@ -91,7 +95,7 @@ export function PapersScreen() {
       {empty ? (
         <EmptyState
           icon="papers"
-          text={emptyVaultText(t)}
+          text={emptyText}
           actionLabel={t('btn.scan')}
           onAction={() => router.push('/' as Href)}
         />
@@ -122,7 +126,7 @@ export function PapersScreen() {
             : <DocumentList rows={rows} members={members} showMember={false} />}
         </>
       )}
-      <StorageNotice />
+      <StorageNotice omit={empty ? emptyText : undefined} />
       <Sheet visible={adding} title={t('vault.add_member')} onClose={() => setAdding(false)} testID="papers-add-member-sheet">
         <MemberForm
           initialColor={nextColor(members)}

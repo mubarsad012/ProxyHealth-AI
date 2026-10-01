@@ -8,6 +8,8 @@
 //   6/8 withdraw consent ("Stop sending papers" → wipe offer) and Delete everything → confirm →
 //     `storage/wipe.ts` (notifications, vault, secure store, settings, kv, install id, memory),
 //     then back to S1.
+// Web copy says "in this browser", never "on this phone" (§9.5, CL-047(a)): the wipe offer, the
+// confirm title/body and the lock-screen explanation use their `.web` keys there (`platformKey`).
 
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
@@ -20,6 +22,7 @@ import { space } from '@/design/tokens';
 import { resetSamplesCache } from '@/features/demo/sampleCache';
 import { useSampleMode } from '@/features/demo/useSampleMode';
 import { resetConsentState, useConsentDecision, withdrawConsent } from '@/features/onboarding/consentState';
+import { platformKey } from '@/features/vault/platformCopy';
 import { ConfirmDialog } from '@/features/vault/Sheet';
 import { bumpVault } from '@/features/vault/store';
 import { useT } from '@/i18n/useT';
@@ -65,7 +68,7 @@ function PapersSection() {
       <SwitchRow
         testID="settings-lockscreen"
         label={t('settings.lockscreen_detail')}
-        explanation={t('reminders.lockscreen_explain')}
+        explanation={t(platformKey('reminders.lockscreen_explain'))}
         value={lockScreen}
         onChange={(v) => set('lockScreenDetail', v)}
       />
@@ -156,7 +159,7 @@ function DeleteSection() {
       ) : null}
       {offerWipe ? (
         <View role="status" style={styles.offer}>
-          <AppText weight="bold">{t('settings.wipe_offer')}</AppText>
+          <AppText weight="bold">{t(platformKey('settings.wipe_offer'))}</AppText>
           <BigButton label={wipeLabel} variant="danger" size={56} onPress={() => setConfirm(true)} />
           <BigButton label={t('settings.keep_saved')} variant="secondary" size={56} onPress={() => setOfferWipe(false)} />
         </View>
@@ -172,8 +175,8 @@ function DeleteSection() {
       <ConfirmDialog
         testID="wipe-confirm"
         visible={confirm}
-        title={t('wipe.title')}
-        body={t('wipe.body')}
+        title={t(platformKey('wipe.title'))}
+        body={t(platformKey('wipe.body'))}
         confirmLabel={t('wipe.confirm')}
         cancelLabel={t('btn.cancel')}
         danger

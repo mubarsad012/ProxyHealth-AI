@@ -2,7 +2,10 @@
 // keys: name (+ name_note), what it does (EN chip on fallback), why-chips, cost, status note (the
 // LSC note is never hidden) with "If that is not you", Call / Website, TTY / text / hours,
 // languages, eligibility, warnings, "Verified on" (+ link-health / stale lines), the checklist,
-// and counts-only feedback. Phones, URLs and hours are LTR-isolated.
+// and counts-only feedback. Phones, URLs, hours and the "Verified on" date are LTR-isolated: after
+// a Dari or Arabic word a bare "1-800-323-8603" or "2026-09-27" would show its groups reversed
+// (UAX #9: digits after Arabic letters become Arabic numbers). The Call button reads the S11 line
+// "Call {organization}, {digits grouped}" as its hint (`callLabel`).
 
 import { Linking, StyleSheet, View } from 'react-native';
 
@@ -119,7 +122,7 @@ export function ResourceCard({
       ) : null}
       {resource.phone ? (
         <BigButton
-          label={`${t('btn.call')} ${formatPhone(resource.phone)}`}
+          label={`${t('btn.call')} ${isolate(formatPhone(resource.phone))}`}
           icon="phone"
           variant={primary ? 'primary' : 'secondary'}
           size={primary ? 72 : 56}
@@ -150,7 +153,7 @@ export function ResourceCard({
         </AppText>
       ))}
       <ChipRow>
-        <Chip text={t('resource.verified_on', { date: resource.verified_on })} icon="check" />
+        <Chip text={t('resource.verified_on', { date: isolate(resource.verified_on) })} icon="check" />
         {isStale(resource.verified_on) ? <Chip text={t('resource.stale')} tone="warning" /> : null}
         {linkNote ? <Chip text={t(linkNote)} tone="warning" /> : null}
       </ChipRow>

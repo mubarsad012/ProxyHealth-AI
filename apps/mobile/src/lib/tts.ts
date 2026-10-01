@@ -3,11 +3,18 @@
 // `speak(text, {language, voice, rate, onDone, onStopped, onError})`, `stop()`,
 // `getAvailableVoicesAsync() → Voice{identifier,name,language,quality}`, `maxSpeechInputLength`.
 // Voices are chosen honestly: exact language → same base language → the seed's fallback tag →
-// none (the UI then offers `tts.fallback_offer`). Long text is spoken in sentence chunks.
+// none. Whenever the chosen voice belongs to a different pack language than the one asked for (a
+// Farsi `fa-IR` voice for Dari, CL-053), `usedFallbackTag` names it so the UI shows the honest line
+// (`tts.fallback_offer`, D-26). When no voice exists for the language (or the device has none),
+// NOTHING is spoken — except that a Latin-script language may fall back to a (reported) English
+// voice: text in another script is never handed to an English voice, which would read Dari /
+// Pashto / Arabic as silence or nonsense (`noVoice`, line `tts.no_voice`). Long text is spoken in
+// sentence chunks.
 
 import * as Speech from 'expo-speech';
 import { create } from 'zustand';
 
+import type { LanguageInfo } from '@/api/types';
 import { LANGUAGES } from '@/i18n/languages';
 import { useSettings } from '@/store/settings';
 
@@ -36,11 +43,25 @@ export function useSpeakingId(): string | null {
 
 let voicesPromise: Promise<Voice[]> | null = null;
 
+/** Browsers that never fire `voiceschanged` would otherwise keep expo-speech waiting forever. */
+const VOICES_TIMEOUT_MS = 4000;
+
 export function getVoices(): Promise<Voice[]> {
   if (!voicesPromise) {
-    voicesPromise = Speech.getAvailableVoicesAsync()
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeout = new Promise<Voice[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), VOICES_TIMEOUT_MS);
+    });
+    const load = Speech.getAvailableVoicesAsync()
       .then((v) => (Array.isArray(v) ? v : []))
       .catch(() => [] as Voice[]);
+    const p: Promise<Voice[]> = Promise.race([load, timeout]).then((v) => {
+      if (timer) clearTimeout(timer);
+      // An empty list (engine still starting, no voices yet) is not cached: ask again next time.
+      if (!v.length && voicesPromise === p) voicesPromise = null;
+      return v;
+    });
+    voicesPromise = p;
   }
   return voicesPromise;
 }
@@ -63,10 +84,46 @@ function pickForTag(voices: Voice[], tag: string): Voice | null {
 
 export interface ResolvedVoice {
   voice: Voice | null;
-  /** The related-language tag actually used when the pack's own language has no voice. */
+  /** Set when the voice used belongs to a different pack language than the one asked for (per the
+   *  language seed): e.g. `fa-IR` (Farsi) reading Dari. Null for the language's own voice, including
+   *  a regional voice of the same language (`es-MX` for Spanish). */
   usedFallbackTag: string | null;
-  /** The BCP-47 tag to pass as `language` (voice may be null on platforms without a voice list). */
+  /** The BCP-47 tag to pass as `language`. */
   languageTag: string;
+  /** True when this device has no voice for the language nor its seed fallback (or no voices at
+   *  all): `speak()` then says nothing and the UI shows `tts.no_voice`. */
+  noVoice?: boolean;
+}
+
+function normTag(tag: string): string {
+  return tag.replace(/_/g, '-');
+}
+
+function sameTag(a: string | null | undefined, b: string | null | undefined): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+/**
+ * The seed language a BCP-47 tag belongs to: exact pack tag → exact `tts_tag` (so `fa-IR` is Persian
+ * and `fa-AF` is Dari) → same base pack tag → same base `tts_tag`. Null when the seed has none.
+ */
+export function languageForTag(tag: string | null | undefined): LanguageInfo | null {
+  if (!tag) return null;
+  const t = normTag(tag);
+  const all = Object.values(LANGUAGES);
+  return (
+    LANGUAGES[t] ??
+    all.find((l) => sameTag(l.tag, t)) ??
+    all.find((l) => sameTag(l.tts_tag, t)) ??
+    all.find((l) => baseLang(l.tag) === baseLang(t)) ??
+    all.find((l) => Boolean(l.tts_tag) && baseLang(l.tts_tag ?? '') === baseLang(t)) ??
+    null
+  );
+}
+
+/** Native name for the "no voice" line (the seed's name, else the tag itself). */
+export function ttsLanguageName(lang: string): string {
+  return languageForTag(lang)?.name_native ?? lang;
 }
 
 /** Map a pack tag to a voice. Uses the seed's `tts_tag` / `tts_fallback_tag` (D-26). */
@@ -75,14 +132,21 @@ export function resolveVoiceFrom(voices: Voice[], lang: string): ResolvedVoice {
   const primary = info?.tts_tag ?? lang;
   const fallback = info?.tts_fallback_tag ?? null;
   const own = pickForTag(voices, primary) ?? (info?.tts_tag ? null : pickForTag(voices, lang));
-  if (own) return { voice: own, usedFallbackTag: null, languageTag: primary };
-  if (fallback) {
-    const fb = pickForTag(voices, fallback);
-    if (fb) return { voice: fb, usedFallbackTag: fallback, languageTag: fallback };
+  const chosen = own ?? (fallback ? pickForTag(voices, fallback) : null);
+  const wanted = info ?? languageForTag(lang);
+  if (!chosen) {
+    // Last resort, Latin-script languages only (Spanish, Haitian Creole…): an English voice can
+    // still sound the letters out, and it is reported as a fallback. Never for Arabic-script,
+    // Ethiopic, Myanmar, Rohingya, CJK… text, which an English voice reads as silence or nonsense.
+    const en = wanted?.script === 'Latn' && baseLang(primary) !== 'en' ? pickForTag(voices, 'en-US') ?? pickForTag(voices, 'en') : null;
+    if (en) return { voice: en, usedFallbackTag: normTag(en.language), languageTag: normTag(en.language) };
+    return { voice: null, usedFallbackTag: null, languageTag: primary, noVoice: true };
   }
-  const en = pickForTag(voices, 'en-US') ?? pickForTag(voices, 'en');
-  if (!voices.length) return { voice: null, usedFallbackTag: null, languageTag: primary };
-  return { voice: en, usedFallbackTag: en ? 'en-US' : null, languageTag: en ? 'en-US' : primary };
+  const voiceTag = normTag(chosen.language);
+  const spoken = languageForTag(voiceTag);
+  const otherLanguage = Boolean(wanted && spoken && wanted.tag !== spoken.tag);
+  if (otherLanguage) return { voice: chosen, usedFallbackTag: voiceTag, languageTag: voiceTag };
+  return { voice: chosen, usedFallbackTag: null, languageTag: own ? primary : voiceTag };
 }
 
 export async function resolveVoice(lang: string): Promise<ResolvedVoice> {
@@ -146,7 +210,7 @@ export async function speak(text: string, lang: string, utteranceId?: string): P
   const myId = activeId;
   const resolved = await resolveVoice(lang);
   const chunks = chunkText(text);
-  if (!chunks.length) return resolved;
+  if (!chunks.length || resolved.noVoice) return resolved;
   const rate = useSettings.getState().voiceRate;
   const voiceId = await chosenVoiceFor(useSettings.getState().voiceId, resolved.languageTag);
   useSpeakingStore.getState().set(true, utteranceId ?? null);

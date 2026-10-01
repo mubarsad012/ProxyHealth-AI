@@ -43,6 +43,7 @@ async def test_tier_matrix(
         assert cfg.provider == "gemini"
         assert cfg.data_use_tier == tier and r.headers["X-Data-Use-Tier"] == tier
         assert cfg.features.real_documents_allowed is allowed
+        assert cfg.features.chat is allowed  # every chat turn is client text (D-01 gate)
         assert cfg.key_slots.total == len(billing) and cfg.key_slots.healthy == len(billing)
 
 
@@ -51,6 +52,7 @@ async def test_dev_bypass_turns_real_documents_on(tmp_path: Path) -> None:
     async with running(settings) as (_app, client):
         cfg = ServerConfig.model_validate((await client.get("/v1/config")).json())
         assert cfg.data_use_tier == "unpaid" and cfg.features.real_documents_allowed is True
+        assert cfg.features.chat is True
 
 
 async def test_gemini_without_slots_is_tier_none(tmp_path: Path) -> None:
@@ -71,7 +73,7 @@ async def test_models_limits_versions(tmp_path: Path) -> None:
     assert cfg.limits.max_question_chars == 1000 and cfg.limits.max_user_goal_chars == 300
     en_bytes = (DATA_DIR / "langpacks" / "en.json").read_bytes()
     assert cfg.base_pack_version == hashlib.sha256(en_bytes).hexdigest()
-    assert cfg.consent_version == "2026-09-24" and cfg.region_notice == "us_only"
+    assert cfg.consent_version == "2026-10-01" and cfg.region_notice == "us_only"
     assert cfg.privacy_policy_url.startswith("https://")
     assert cfg.taxonomy_version and cfg.resource_db_version and cfg.rules_version
     assert cfg.server_time.tzinfo is not None

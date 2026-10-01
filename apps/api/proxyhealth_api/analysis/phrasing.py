@@ -27,7 +27,13 @@ import yaml
 from proxyhealth_api.analysis.contacts_filter import new_contacts
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.verify import normalize
-from proxyhealth_api.contracts.enums import DocumentCategory, ReferTo, RefusalKind, WarningCode
+from proxyhealth_api.contracts.enums import (
+    DocumentCategory,
+    DocumentType,
+    ReferTo,
+    RefusalKind,
+    WarningCode,
+)
 from proxyhealth_api.settings import DATA_DIR
 
 PHRASING_YAML = DATA_DIR / "safety" / "phrasing.yaml"
@@ -79,6 +85,9 @@ class PhrasingConfig:
     # §8.3 attribution exemption per language (``languages.<tag>.attribution_regex``), used on
     # top of the English ``attribution`` when that language's families are linted.
     attribution_by_language: Mapping[str, re.Pattern[str]] = field(default_factory=dict)
+    # Types whose professional differs from their category's (``nta`` is a court paper whose
+    # professional includes DOJ-accredited representatives; a traffic ticket's does not).
+    professional_by_document_type: Mapping[str, str] = field(default_factory=dict)
 
 
 def _compile(p: str) -> re.Pattern[str]:
@@ -117,6 +126,7 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
         languages=languages,
         reviewed_by=reviewed,
         attribution_by_language=attribution,
+        professional_by_document_type=dict(data.get("professional_by_document_type") or {}),
     )
 
 
@@ -198,9 +208,16 @@ def lint_sentence(
     return hits
 
 
-def professional_for(category: DocumentCategory | None, cfg: PhrasingConfig | None = None) -> str:
-    """PRODUCT_SPEC §7.2 professional words for the rewrite template."""
+def professional_for(
+    category: DocumentCategory | None,
+    cfg: PhrasingConfig | None = None,
+    document_type: DocumentType | None = None,
+) -> str:
+    """PRODUCT_SPEC §7.2 professional words for the rewrite template (the document type's own
+    entry first: "a DOJ-accredited representative" only for immigration papers)."""
     c = cfg or load_config()
+    if document_type is not None and document_type.value in c.professional_by_document_type:
+        return c.professional_by_document_type[document_type.value]
     key = category.value if category else "other"
     return c.professional_by_category.get(key) or c.professional_by_category.get(
         "other", "a professional"
@@ -280,6 +297,7 @@ async def enforce(
     language: str | None = "en",
     rewrite: Rewriter | None = None,
     cfg: PhrasingConfig | None = None,
+    document_type: DocumentType | None = None,
 ) -> PhrasingResult:
     """Lint every sentence of one model-authored string; rewrite once, else hedge.
 
@@ -304,7 +322,7 @@ async def enforce(
         result.families += [f for f in fams if f not in result.families]
         replacement: str | None = None
         if rewrite is not None:
-            candidate = await rewrite(sentence, professional_for(category, c))
+            candidate = await rewrite(sentence, professional_for(category, c, document_type))
             if candidate:
                 candidate = candidate.strip()[:MAX_REWRITE_CHARS]
                 if candidate and not lint_sentence(
@@ -354,7 +372,8 @@ def ensure_professional(
     cfg: PhrasingConfig | None = None,
 ) -> str:
     """Append the category referral (``chat.refer.<ReferTo>``) to a professional step that names
-    nobody; leave steps that already name a professional unchanged."""
+    nobody ("a tax professional", "a free tax-help site" count as naming one); leave steps that
+    already name a professional unchanged."""
     if names_professional(step_text, cfg):
         return step_text
     referral = t(f"chat.refer.{refer_to_for(category, cfg).value}")

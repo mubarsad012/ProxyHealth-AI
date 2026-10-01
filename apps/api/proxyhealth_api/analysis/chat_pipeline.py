@@ -8,9 +8,9 @@ phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a refer
 injection guard (typed instructions + a failing answer → ``out_of_scope``) → a
 ``not_in_document`` answer that is not a refusal carries the pack's fixed ``chat.not_in_document``
 sentence exactly once (``with_not_in_document``; the client never adds it) → emergency lexicon over
-the question and the turns → tags → disclaimers and warnings. The model is never asked to
-compute a date: the context shows the app's own labelled dates only. Nothing here writes to disk
-or logs content (ARCHITECTURE §7).
+the question and the turns (plus the model's ``crisis`` tag) → tags → disclaimers and warnings.
+The model is never asked to compute a date: the context shows the app's own labelled dates only.
+Nothing here writes to disk or logs content (ARCHITECTURE §7).
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ import re
 import time
 import unicodedata
 from collections.abc import Sequence
+
+from starlette.concurrency import run_in_threadpool
 
 from proxyhealth_api.ai import prompt_loader as prompt
 from proxyhealth_api.ai.provider import Part, Task
@@ -48,7 +50,7 @@ from proxyhealth_api.analysis.pipeline import (
 )
 from proxyhealth_api.contracts.analysis import Demand
 from proxyhealth_api.contracts.chat import AnalysisContext, ChatAnswer, ChatRequest, Quote
-from proxyhealth_api.contracts.common import PageText
+from proxyhealth_api.contracts.common import PageText, TextBlock
 from proxyhealth_api.contracts.enums import (
     DateKind,
     DocumentType,
@@ -56,11 +58,18 @@ from proxyhealth_api.contracts.enums import (
     Provider,
     ReferTo,
     RefusalKind,
+    ResourceTag,
     WarningCode,
 )
 from proxyhealth_api.contracts.model_out import ChatModelOut
 
 MAX_CONTEXT_CHARS = 60_000
+# Bounds on what one chat turn reads from the re-sent context (the contract itself has no caps):
+# the longest accepted paper is a 60-page PDF (``Settings.max_pdf_pages``).
+MAX_CONTEXT_PAGES = 60
+MAX_BLOCKS_PER_PAGE = 400
+MAX_BLOCK_CHARS = 4_000
+MAX_CONTEXT_ITEMS = 60
 MAX_SUGGESTED = 3
 NOT_IN_DOCUMENT_KEY = "chat.not_in_document"
 # A model sentence this close to the fixed one (after normalisation) is the same sentence.
@@ -152,21 +161,56 @@ def render_context(
     return "\n".join(lines)
 
 
+def bounded_context(ctx: AnalysisContext) -> AnalysisContext:
+    """``ctx`` cut to what one chat turn can use: at most ``MAX_CONTEXT_PAGES`` pages of at most
+    ``MAX_BLOCKS_PER_PAGE`` blocks of at most ``MAX_BLOCK_CHARS`` characters, and at most
+    ``MAX_CONTEXT_ITEMS`` of each list. A real analysis is far inside these bounds (≤ 60 PDF
+    pages); a padded body can no longer make one request cost seconds of CPU for everyone."""
+
+    def block(b: TextBlock) -> TextBlock:
+        return b if len(b.text) <= MAX_BLOCK_CHARS else b.model_copy(
+            update={"text": b.text[:MAX_BLOCK_CHARS]}
+        )
+
+    pages = [
+        p.model_copy(update={"blocks": [block(b) for b in p.blocks[:MAX_BLOCKS_PER_PAGE]]})
+        for p in ctx.original_text[:MAX_CONTEXT_PAGES]
+    ]
+    n = MAX_CONTEXT_ITEMS
+    return ctx.model_copy(
+        update={
+            "original_text": pages, "demands": ctx.demands[:n], "unverified": ctx.unverified[:n],
+            "plan_steps": ctx.plan_steps[:n], "red_flags": ctx.red_flags[:n],
+            "glossary": ctx.glossary[:n],
+        }
+    )  # fmt: skip
+
+
 def compact_context(ctx: AnalysisContext, limit: int = MAX_CONTEXT_CHARS) -> str:
     """Drop glossary, then plan, then unverified items, then transcript pages from the last page
-    backwards until the text fits ``limit`` (the client already cut oldest pages)."""
+    backwards until the text fits ``limit`` (the client already cut oldest pages).
+
+    One linear pass: each page's rendered size is measured once and pages are kept while they
+    fit, so the cost grows with the input, never with its square."""
     options: dict[str, bool] = {"glossary": True, "plan": True, "unverified": True}
-    text = render_context(ctx, **options)
+    # Every transcript line adds its length plus one newline to the rendered text.
+    sizes = [sum(len(line) + 1 for line in _transcript_lines([p])) for p in ctx.original_text]
+    total = sum(sizes)
+    base = len(render_context(ctx, pages=0, **options))
     for name in ("glossary", "plan", "unverified"):
-        if len(text) <= limit:
-            return text
+        if base + total <= limit:
+            return render_context(ctx, **options)
         options[name] = False
-        text = render_context(ctx, **options)
-    pages = len(ctx.original_text)
-    while len(text) > limit and pages > 0:
-        pages -= 1
-        text = render_context(ctx, pages=pages, **options)
-    return text[:limit]
+        base = len(render_context(ctx, pages=0, **options))
+    if base + total <= limit:
+        return render_context(ctx, **options)
+    kept, used = 0, base
+    for size in sizes:
+        if used + size > limit:
+            break
+        used += size
+        kept += 1
+    return render_context(ctx, pages=kept, **options)[:limit]
 
 
 def render_history(req: ChatRequest, max_turns: int) -> str:
@@ -252,7 +296,8 @@ def with_not_in_document(answer: str, fixed: str, *variants: str) -> str:
 async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     started = time.perf_counter()
     deadline_at = deps.ai.request_deadline()
-    ctx = req.analysis
+    # Bounded first (pages, blocks, lists), and the CPU-bound rendering runs off the event loop.
+    ctx = bounded_context(req.analysis)
     target = req.target_language
     t = translator(deps, target)
     # A sample paper's context carries dates computed as of DEMO_AS_OF; the prompt's "today" must
@@ -260,7 +305,7 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     today = analysis_today(deps.clock(), None, sample=bool(req.demo_sample_id))
     vars = {
         **prompt_base_vars(deps, target_language=target, today=today),
-        "analysis_context": compact_context(ctx),
+        "analysis_context": await run_in_threadpool(compact_context, ctx),
         "history": render_history(req, deps.settings.max_chat_history),
         "question": prompt.untrusted(req.question, 1000),
     }
@@ -320,11 +365,13 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     elif refusal in REFER_REQUIRED and refer is ReferTo.none:
         refer = phrasing.refer_to_for(ctx.category)
 
-    # Emergency lexicon: the reader's words and the earlier assistant turns.
+    # Emergency lexicon: the reader's words (every language's list) and the earlier assistant
+    # turns; the model's ``crisis`` tag (chat prompt: life-safety situation) is the backstop for
+    # words no list holds (D-14: false negatives are not acceptable).
     emerg = emergency.detect_emergency(
         [m.text for m in req.messages if m.role == "assistant"],
         detected_language=ctx.detected_language, target_language=target,
-        user_texts=typed,
+        user_texts=typed, model_flag=ResourceTag.crisis.value in out.resource_tags,
     )  # fmt: skip
     warnings += [*emerg.warnings, *scrubber.warnings()]
     tags = tagging.finalize_tags(

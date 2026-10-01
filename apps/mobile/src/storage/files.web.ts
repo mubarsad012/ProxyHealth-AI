@@ -98,10 +98,27 @@ export async function deleteDocumentFiles(documentId: string): Promise<void> {
   await sink?.remove(prefix);
 }
 
-export async function deleteAllFiles(): Promise<void> {
+/** Synchronous part of `deleteAllFiles` (used on `pagehide`, where nothing awaited is sure to run). */
+export function clearMemoryFiles(): void {
   for (const path of [...objectUrls.keys()]) revoke(path);
   memoryBlobs.clear();
+}
+
+export async function deleteAllFiles(): Promise<void> {
+  clearMemoryFiles();
   await sink?.remove('web://');
+}
+
+/** Every page image held in memory (copied into IndexedDB when the user turns keeping on). */
+export function memoryBlobEntries(): [string, Blob][] {
+  return [...memoryBlobs.entries()];
+}
+
+/** Take page images into memory (before IndexedDB is deleted, so this tab keeps showing them). */
+export function adoptBlobs(entries: readonly { path: string; blob: Blob }[]): void {
+  for (const { path, blob } of entries) {
+    if (typeof path === 'string' && !memoryBlobs.has(path)) memoryBlobs.set(path, blob);
+  }
 }
 
 /** Test/inspection helper: number of blobs held in memory. */

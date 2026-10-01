@@ -35,7 +35,7 @@ async def test_config(client: httpx.AsyncClient) -> None:
     cfg = ServerConfig.model_validate(r.json())
     assert cfg.data_use_tier == "demo"
     assert cfg.features.real_documents_allowed is True
-    assert cfg.consent_version == "2026-09-24"
+    assert cfg.consent_version == "2026-10-01"
     assert {lang.tag for lang in cfg.languages} >= {"en", "es", "prs", "ar", "rhg"}
     assert len(cfg.base_pack_version) == 64
 

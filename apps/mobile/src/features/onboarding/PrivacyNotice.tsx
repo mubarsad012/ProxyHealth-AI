@@ -18,11 +18,14 @@ import { useSession, type UiTier } from '@/store/session';
 
 import { viewTier } from './consentModel';
 
-/** The notice's line keys in order (COMPLIANCE_PRIVACY §4.5 items 1–11). */
+/** The notice's line keys in order (COMPLIANCE_PRIVACY §4.5 items 1–11). On the demo tier item 1
+ *  ("… then to Google's AI (Gemini)") is left out, like S2's line 1 (`consentView`): nothing reaches
+ *  an AI service there, and `consent.line2.demo` says so — the two lines contradicted each other. */
 export function privacyNoticeKeys(tier: UiTier, platform: 'ios' | 'android' | 'web'): string[] {
+  const view = viewTier(tier);
   return [
-    'privacy.notice.sent',
-    `consent.line2.${viewTier(tier)}`,
+    ...(view === 'demo' ? [] : ['privacy.notice.sent']),
+    `consent.line2.${view}`,
     'privacy.notice.what_we_keep',
     platform === 'web' ? 'privacy.notice.device_web' : 'privacy.notice.device',
     'privacy.notice.hide_parts',

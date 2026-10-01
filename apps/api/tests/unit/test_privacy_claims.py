@@ -14,8 +14,13 @@ Parses the fenced ``yaml`` block of ``docs/COMPLIANCE_PRIVACY.md`` §17 and asse
 It also applies (b) to the public privacy policy (``apps/mobile/public/privacy/index.html``) and to
 the store copy blocks in ``docs/STORE_LISTING.md``, and checks that the policy reuses the in-app
 notice sentences verbatim and prints the current ``CONSENT_VERSION`` (COMPLIANCE_PRIVACY §16).
+
+Finally it backs "Our server does not keep your papers or photos" with a static check: every file
+write, temp file, rename, mkdir or SQLite connection in ``apps/api/proxyhealth_api`` must be a
+reviewed site (BUILD_PLAN §7 row 11).
 """
 
+import ast
 import html
 import json
 import re
@@ -254,3 +259,160 @@ def test_policy_states_where_masks_are_applied(policy: str) -> None:
     strings = en_strings()
     missing = [k for k in MASK_SENTENCES if strings[k] not in text]
     assert not missing, f"privacy policy lacks the verbatim sentences of {missing}"
+
+
+# --- "Our server does not keep your papers" — where server code may write (BUILD_PLAN §7 row 11) --
+
+SERVER_CODE = REPO / "apps" / "api" / "proxyhealth_api"
+
+# Calls that create, change or move something on disk. ``open``/``fdopen`` count only with a write
+# mode (or a mode the scan cannot read); ``shutil`` counts whole. ``Path.replace`` cannot be told
+# apart from ``str.replace``, so server code moves files with ``os.replace`` (which is scanned).
+_WRITE_METHODS = frozenset(
+    {"write_text", "write_bytes", "mkdir", "touch", "save", "rename", "symlink_to", "hardlink_to"}
+)
+_WRITE_MODULE_CALLS: dict[str, frozenset[str] | None] = {
+    "os": frozenset(
+        {"replace", "rename", "renames", "makedirs", "mkdir", "fdopen", "open", "link", "symlink"}
+    ),
+    "tempfile": frozenset(
+        {
+            "mkstemp",
+            "mkdtemp",
+            "NamedTemporaryFile",
+            "TemporaryFile",
+            "SpooledTemporaryFile",
+            "TemporaryDirectory",
+        }
+    ),
+    "sqlite3": frozenset({"connect"}),
+    "shutil": None,
+}
+
+# Every place the server writes, and why it never holds a user's paper. (module, function, call).
+REVIEWED_WRITE_SITES: dict[tuple[str, str, str], str] = {
+    ("main.py", "_build_state", "mkdir"): "creates settings.var_dir itself",
+    ("ai/keypool.py", "KeyPool.persist", "mkdir"): "var_dir/keypool.json: slot state, no user data",
+    ("ai/keypool.py", "KeyPool.persist", "write_text"): "var_dir/keypool.json (temp file first)",
+    ("ai/keypool.py", "KeyPool.persist", "os.replace"): "var_dir/keypool.json (atomic swap)",
+    ("packs/cache.py", "PackCache.put", "mkdir"): "var_dir/langpacks/: generated UI strings",
+    ("packs/cache.py", "PackCache.put", "tempfile.mkstemp"): "var_dir/langpacks/ temp file",
+    ("packs/cache.py", "PackCache.put", "os.fdopen"): "var_dir/langpacks/ temp file",
+    ("packs/cache.py", "PackCache.put", "os.replace"): "var_dir/langpacks/<tag>.json (atomic)",
+    ("feedback/store.py", "FeedbackStore._connect", "mkdir"): "var_dir: feedback counters",
+    ("feedback/store.py", "FeedbackStore._connect", "sqlite3.connect"): (
+        "var_dir/feedback_counts.sqlite: counters keyed by enums, never text (D-31)"
+    ),
+    ("ai/recording.py", "RecordingProvider.write", "write_text"): (
+        "dev-only recording provider (ENV=development, AI_PROVIDER=gemini, RECORD_FIXTURES=1): "
+        "data/fixtures/<id>/out.*.json, and only when every media part is that fixture's own page"
+    ),
+    ("analysis/redaction.py", "_encode", "save"): "Pillow into an io.BytesIO buffer (memory)",
+    ("analysis/pdf_pages.py", "rasterize", "save"): "Pillow into an io.BytesIO buffer (memory)",
+    ("quicksheet/render.py", "_Sheet.finish", "save"): "reportlab canvas on an io.BytesIO (memory)",
+}
+
+
+def _writes_with_mode(call: ast.Call, position: int, *, keyword_only: bool = False) -> bool:
+    mode: ast.expr | None = None
+    if len(call.args) > position:
+        mode = call.args[position]
+    for kw in call.keywords:
+        if kw.arg == "mode":
+            mode = kw.value
+    if mode is None:
+        return False
+    if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+        return any(ch in mode.value for ch in "wax+")
+    return not keyword_only  # a mode the scan cannot read counts as a write
+
+
+class _WriteScanner(ast.NodeVisitor):
+    def __init__(self, module: str) -> None:
+        self.module = module
+        self.scope: list[str] = []
+        self.sites: dict[tuple[str, str, str], int] = {}
+
+    def _enter(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> None:
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    visit_FunctionDef = visit_AsyncFunctionDef = visit_ClassDef = _enter
+
+    def visit_Call(self, node: ast.Call) -> None:
+        name = self._write_name(node)
+        if name is not None:
+            key = (self.module, ".".join(self.scope) or "<module>", name)
+            self.sites.setdefault(key, node.lineno)
+        self.generic_visit(node)
+
+    @staticmethod
+    def _write_name(node: ast.Call) -> str | None:
+        func = node.func
+        if isinstance(func, ast.Name):
+            return "open" if func.id == "open" and _writes_with_mode(node, 1) else None
+        if not isinstance(func, ast.Attribute):
+            return None
+        if isinstance(func.value, ast.Name) and func.value.id in _WRITE_MODULE_CALLS:
+            allowed = _WRITE_MODULE_CALLS[func.value.id]
+            if allowed is not None and func.attr not in allowed:
+                return None
+            if func.attr == "fdopen" and not _writes_with_mode(node, 1):
+                return None
+            return f"{func.value.id}.{func.attr}"
+        if func.attr in _WRITE_METHODS:
+            return func.attr
+        if func.attr == "open" and _writes_with_mode(node, 0, keyword_only=True):
+            return "open"  # Path.open("w"); Image.open(buffer) is a read
+        if func.attr == "open" and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                return "open" if any(ch in first.value for ch in "wax+") else None
+        return None
+
+
+def server_write_sites(root: Path = SERVER_CODE) -> dict[tuple[str, str, str], int]:
+    sites: dict[tuple[str, str, str], int] = {}
+    for path in sorted(root.rglob("*.py")):
+        scanner = _WriteScanner(path.relative_to(root).as_posix())
+        scanner.visit(ast.parse(path.read_text("utf-8"), filename=str(path)))
+        sites.update(scanner.sites)
+    return sites
+
+
+def test_write_scanner_sees_every_kind_of_write(tmp_path: Path) -> None:
+    (tmp_path / "m.py").write_text(
+        "import os, shutil, sqlite3, tempfile\n"
+        "from pathlib import Path\n"
+        "def f(p: Path, mode: str) -> None:\n"
+        "    open(p, 'w'); open(p, mode); open(p)\n"
+        "    p.write_text('x'); p.write_bytes(b''); p.mkdir(); p.touch(); p.open('ab')\n"
+        "    os.replace('a', 'b'); os.fdopen(3, 'wb'); os.fdopen(3, 'rb'); shutil.copy('a', 'b')\n"
+        "    sqlite3.connect(':memory:'); tempfile.mkstemp()\n"
+        "    'a'.replace('a', 'b'); p.read_text(); Image.open(buf)\n",
+        "utf-8",
+    )
+    names = sorted(name for (_, fn, name) in server_write_sites(tmp_path) if fn == "f")
+    assert names == sorted(
+        ["open", "write_text", "write_bytes", "mkdir", "touch", "os.replace", "os.fdopen",
+         "shutil.copy", "sqlite3.connect", "tempfile.mkstemp"]
+    )  # fmt: skip
+
+
+def test_server_writes_only_at_reviewed_sites() -> None:
+    """The proof for "Our server does not keep your papers or photos" and the privacy policy's "It
+    writes no copy of your paper to disk": server code writes only where a reviewer said why.
+
+    A new file write, temp file, rename, mkdir or SQLite connection in ``proxyhealth_api`` fails
+    here until it is added to ``REVIEWED_WRITE_SITES`` with a reason; a stale entry fails too.
+    """
+    found = server_write_sites()
+    unreviewed = {f"{m}:{line} {fn}() {name}" for (m, fn, name), line in found.items()
+                  if (m, fn, name) not in REVIEWED_WRITE_SITES}  # fmt: skip
+    assert not unreviewed, (
+        "server code writes to disk at a site nobody reviewed — keep user content in memory, or "
+        f"add the site to REVIEWED_WRITE_SITES with the reason it never holds a paper: {unreviewed}"
+    )
+    stale = sorted(set(REVIEWED_WRITE_SITES) - set(found))
+    assert not stale, f"REVIEWED_WRITE_SITES lists sites that no longer exist: {stale}"

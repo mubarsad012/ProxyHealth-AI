@@ -3,6 +3,7 @@
 // of `vault.wipeAll()` and "Delete everything". Platform files are imported explicitly.
 
 import type { AnalysisResult } from '@/api/types';
+import { CAPTURE_CACHE_DIRS, purgeCaptureCache } from '@/storage/cache.native';
 import type { StoredDocument } from '@/storage/index';
 import { kv, KV_KEYS } from '@/storage/kv';
 import { DB_NAME, LATEST_VERSION, migrate, type MigratableDb, MIGRATIONS, pendingMigrations } from '@/storage/migrations';
@@ -89,7 +90,7 @@ jest.mock('expo-file-system', () => {
       mockCalls.push(`rm:${this.uri}`);
     }
   }
-  return { Directory, File, Paths: { document: 'file:///doc' } };
+  return { Directory, File, Paths: { document: 'file:///doc', cache: 'file:///cache' } };
 });
 
 jest.mock('expo-notifications', () => ({
@@ -254,12 +255,31 @@ describe('Delete everything (storage/wipe.ts)', () => {
     await vault.init();
     mockCalls.length = 0;
     const steps = await wipeEverything();
-    expect(steps).toEqual(['notifications', 'hooks', 'vault', 'secure', 'settings', 'kv', 'install_id', 'memory']);
-    const order = ['notifications:cancelAll', 'rmdir:file:///doc/vault', `deleteDatabase:${DB_NAME}`, 'secure:delete:ph_vault_key'];
+    expect(steps).toEqual(['notifications', 'hooks', 'vault', 'cache', 'secure', 'settings', 'kv', 'install_id', 'memory']);
+    const order = [
+      'notifications:cancelAll',
+      'rmdir:file:///doc/vault',
+      `deleteDatabase:${DB_NAME}`,
+      'rmdir:file:///cache/Camera',
+      'secure:delete:ph_vault_key',
+    ];
     const idx = order.map((c) => mockCalls.indexOf(c));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
     expect(await kv.get(KV_KEYS.consent)).toBeNull();
     expect(await kv.get(KV_KEYS.installId)).toBeNull();
+    // Unsaved full-size photos, crops, picked PDFs and printed sheets go too (D-22).
+    for (const dir of ['Camera', 'ImageManipulator', 'ImagePicker', 'DocumentPicker', 'Print']) {
+      expect(mockCalls).toContain(`rmdir:file:///cache/${dir}`);
+    }
+  });
+});
+
+describe('capture cache (storage/cache.native.ts)', () => {
+  it('purgeCaptureCache deletes only the capture folders under Paths.cache, never the vault', async () => {
+    mockCalls.length = 0;
+    await purgeCaptureCache();
+    expect(mockCalls).toEqual(CAPTURE_CACHE_DIRS.map((d) => `rmdir:file:///cache/${d}`));
+    expect(CAPTURE_CACHE_DIRS).toEqual(['Camera', 'ImageManipulator', 'ImagePicker', 'DocumentPicker', 'Print']);
   });
 });

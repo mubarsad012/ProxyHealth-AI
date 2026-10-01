@@ -8,8 +8,8 @@ import { create } from 'zustand';
 import { useApi, useServerConfig } from '@/api/config';
 import { type ApiError, toApiError } from '@/api/errors';
 import type { AnalysisResult, ChatAnswer, ChatMessage } from '@/api/types';
+import { sampleIdForAnalysis } from '@/features/analysis/sampleOrigin';
 import { useI18n } from '@/i18n/store';
-import { useSession } from '@/store/session';
 
 import { buildChatRequest, DEFAULT_MAX_HISTORY, DEFAULT_MAX_QUESTION } from './context';
 
@@ -78,7 +78,8 @@ export function useChat(analysis: AnalysisResult): UseChat {
         history,
         question: q,
         targetLanguage: useI18n.getState().tag,
-        demoSampleId: useSession.getState().demoSampleId,
+        // From the analysis itself, never the session's (possibly left-over) sample id (SEC-01).
+        demoSampleId: sampleIdForAnalysis(analysis),
         maxHistory,
         maxQuestion,
       });

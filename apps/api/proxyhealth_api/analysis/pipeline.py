@@ -5,8 +5,10 @@ rotation, masks) → model reading (``single``, or ``two_call`` on ``SchemaFallb
 ``ANALYSIS_MODE``) → transcript assembly + quality (unreadable → stop, one call only) → injection
 detection and one masked re-run → span verification → contact scrubber → scam scorer (a likely
 scam is re-typed before any date or floor is applied) → deadline rules → the one ``tag`` call
-when tagging needs it → emergency lexicon → urgency → phrasing lint/rewrite → tags, resources,
-clerk card, fixed notices → disclaimers and warnings → ``AnalysisResult``.
+when tagging needs it → emergency lexicon → urgency → phrasing lint/rewrite → dates in prose
+checked against the paper (``prose_dates``) → tags, resources, clerk card, fixed notices →
+disclaimers and warnings → ``AnalysisResult``. Decoding, redaction and PDF rasterization run in
+the thread pool (``offload``).
 
 No step trusts a model field it can recompute: facts must quote the transcript (D-09), contacts
 come only from the paper or the resource DB (D-10), dates only from ``deadline_rules`` (D-11),
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import functools
 import re
+import threading
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -31,6 +34,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from proxyhealth_api.ai import prompt_loader as prompt
 from proxyhealth_api.ai.failover import AIService, GenerateOutcome, SchemaFallbackNeeded
@@ -45,6 +49,7 @@ from proxyhealth_api.analysis import (
     injection,
     pdf_pages,
     phrasing,
+    prose_dates,
     redaction,
     scam,
     tagging,
@@ -84,6 +89,7 @@ from proxyhealth_api.contracts.enums import (
     PackTier,
     PlanStepKind,
     Provider,
+    RedFlagKind,
     ResourceTag,
     ScamRisk,
     SenderKind,
@@ -420,6 +426,22 @@ def analysis_today(now: datetime, state: str | None, *, sample: bool) -> date:
 
 # ----------------------------------------------------------------------------- upload
 
+# Decoding, redaction, the mock dHash and PDF rasterization are CPU-bound (up to ~12 MP per page,
+# 12 pages or a 60-page PDF): they run in the thread pool so one upload never stalls the event
+# loop for every other request, and at most this many run at once to bound peak memory.
+MAX_PARALLEL_IMAGE_WORK = 2
+_IMAGE_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_IMAGE_WORK)
+
+
+async def offload[**P, R](fn: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs) -> R:
+    """``fn(*args, **kwargs)`` in the thread pool, holding one of the image-work slots."""
+
+    def run() -> R:
+        with _IMAGE_SLOTS:
+            return fn(*args, **kwargs)
+
+    return await run_in_threadpool(run)
+
 
 @dataclass
 class PreparedUpload:
@@ -753,13 +775,15 @@ async def phrase(
     category: DocumentCategory | None,
     rewrite: phrasing.Rewriter | None,
     stats: PhrasingStats,
+    document_type: DocumentType | None = None,
 ) -> str:
     """Lint one model-authored string; rewrite once, else hedge (fixed copy never comes here)."""
     if not text or not text.strip():
         return text
     res = await phrasing.enforce(
-        text, t=t, category=category, language=language, rewrite=rewrite
-    )
+        text, t=t, category=category, language=language, rewrite=rewrite,
+        document_type=document_type,
+    )  # fmt: skip
     stats.rewrites += res.replacements
     for w in res.warnings:
         if w not in stats.warnings:
@@ -929,6 +953,8 @@ class RequestContext:
     t: Translator
     started: float
     demo: bool
+    thumbnails: list[PageThumbnail] | None = None
+    """PDF page thumbnails, rasterized off the event loop (``page_thumbnails``)."""
 
 
 def finish_meta(
@@ -1005,7 +1031,7 @@ def unreadable_result(
         ),
         safety=no_safety(), disclaimer_kind=disclaimers.disclaimer_kind(out.category),
         disclaimers=secondary, warnings=final, model_meta=meta,
-        page_thumbnails=page_thumbnails(rc.req, rc.upload),
+        page_thumbnails=rc.thumbnails,
     )  # fmt: skip
 
 
@@ -1013,15 +1039,18 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     """The document pipeline (module docstring; AI_PROMPTS §11)."""
     started = time.perf_counter()
     deadline_at = deps.ai.request_deadline()
-    upload = prepare_upload(req, deps)
+    upload = await offload(prepare_upload, req, deps)
     uploads.check_inline_budget(upload.media, deps.settings)
     now = deps.clock()
     # Sample papers print fixed dates: their dates and urgency run as of DEMO_AS_OF (demo/as_of).
-    sample = is_sample_paper(deps, req.demo_sample_id, upload.media)
+    sample = await offload(is_sample_paper, deps, req.demo_sample_id, upload.media)
     today = analysis_today(now, req.state, sample=sample)
     lang = language_facts(deps, req.target_language)
     t = translator(deps, req.target_language)
-    rc = RequestContext(req, deps, upload, lang, t, started, demo_of(deps, req.demo_sample_id))
+    rc = RequestContext(
+        req, deps, upload, lang, t, started, demo_of(deps, req.demo_sample_id),
+        thumbnails=await offload(page_thumbnails, req, upload),
+    )  # fmt: skip
     hints = hints_for(demo_sample_id=req.demo_sample_id, target_language=req.target_language)
     vars = analysis_vars(req, deps, page_count=upload.pages_received, today=today)
 
@@ -1058,6 +1087,13 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     # §11.2 span verification.
     checked = verify.verify_demands(out.demands, paper)
     flags_checked = verify.verify_red_flags(out.red_flags, paper)
+    # An agency's anti-fraud line ("USCIS will never ask you to pay with gift cards") quoted as a
+    # payment red flag is boilerplate, not a demand: it neither scores nor shows.
+    flags_checked.flags = [
+        f for f in flags_checked.flags
+        if f.kind is not RedFlagKind.scam_payment_method
+        or not scam.is_anti_fraud_quote(f.source_quote)
+    ]  # fmt: skip
     if checked.page_edge_crop:
         warnings.append(WarningCode.page_edge_crop)
     summary_ids = verify.verify_summary_span_ids(out.summary_span_ids, paper)
@@ -1078,10 +1114,12 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     code_flags.extend(scam_out.red_flags)
 
     # §11.4 deadline rules.
+    # ``Preferences.date_format`` is a display preference only: printed dates are read in the
+    # paper's own order (page cue, then the type's default), never the reader's.
     ctx = deadline_rules.context_for(
         document_type=document_type, rules=deps.rules.deadline_rules(), now=now,
-        state=req.state, date_format=req.preferences.date_format, language=detected,
-        transcript_text=paper.full_text, digit_system=lang.digit_system, t=t,
+        state=req.state, language=detected, transcript_text=paper.full_text,
+        digit_system=lang.digit_system, t=t, category=out.category,
     )  # fmt: skip
     if ctx.today != today:  # a sample paper: pinned day (the state's zone never moves it)
         ctx = replace(ctx, today=today)
@@ -1113,7 +1151,7 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     warnings.extend(emerg.warnings)
     urg = urgency.compute_urgency(
         document_type, out.category, demands, emergency=emerg.safety.emergency,
-        today=ctx.today, t=t,
+        today=ctx.today, t=t, unverified=checked.unverified,
     )  # fmt: skip
     code_flags.extend(urg.red_flags)
 
@@ -1171,18 +1209,39 @@ async def finish_analysis(
                                deadline_at=deadline_at)  # fmt: skip
     stats = PhrasingStats()
 
-    async def clean(text: str) -> str:
-        return await phrase(scrubber.scrub(text), t=t, language=target, category=category,
-                            rewrite=rewrite, stats=stats)  # fmt: skip
+    # §11.4 in prose: a date the model wrote must be a verified demand's date, printed on the
+    # paper, or today (``prose_dates``); others are replaced or their sentence dropped.
+    allowed = prose_dates.allowed_dates(demands, paper.full_text, today=today, language=detected)
+    date_stats = prose_dates.ProseDateStats()
 
+    async def clean(text: str) -> str:
+        text = await phrase(scrubber.scrub(text), t=t, language=target, category=category,
+                            rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
+        return prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
+
+    async def clean_demand(d: Demand) -> Demand:
+        text = await phrase(scrubber.scrub(d.text), t=t, language=target, category=category,
+                            rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
+        d = d.model_copy(update={"text": text})
+        return d.model_copy(update={
+            "text": prose_dates.check_demand_text(
+                d, allowed, t=t, language=target, stats=date_stats
+            ),
+            # D-10: every model-authored field shown to the reader passes the contact filter.
+            "documents": [x for x in scrubber.scrub_all(d.documents) if x.strip()],
+            "ambiguity_note": await clean(d.ambiguity_note) if d.ambiguity_note else None,
+        })  # fmt: skip
+
+    body_en = await phrase(scrub_en.scrub(out.summary_body_en), t=en, language="en",
+                           category=category, rewrite=rewrite_en, stats=stats,
+                           document_type=document_type)  # fmt: skip
     summary = SummaryCard(
         title=await clean(out.summary_title), body=await clean(out.summary_body),
-        body_en=await phrase(scrub_en.scrub(out.summary_body_en), t=en, language="en",
-                             category=category, rewrite=rewrite_en, stats=stats),
+        body_en=prose_dates.check_text(body_en, allowed, t=en, language="en", stats=date_stats),
         span_ids=summary_ids,
     )  # fmt: skip
-    final_demands = [d.model_copy(update={"text": await clean(d.text)}) for d in demands]
-    unverified = [d.model_copy(update={"text": await clean(d.text)}) for d in checked.unverified]
+    final_demands = [await clean_demand(d) for d in demands]
+    unverified = [await clean_demand(d) for d in checked.unverified]
     flags: list[RedFlag] = []
     for f in model_flags.flags:
         if f.text.strip() == verify.MULTIPLE_DOCUMENTS_SENTINEL:
@@ -1198,9 +1257,23 @@ async def finish_analysis(
             text = phrasing.ensure_professional(text, category, t)
         steps.append(step.model_copy(update={"text": text}))
     glossary = [
-        g.model_copy(update={"explanation": await clean(g.explanation)}) for g in out.glossary
-    ]
-    questions = [q for q in scrubber.scrub_all(out.questions_to_ask) if q.strip()]
+        g.model_copy(update={"explanation": await clean(g.explanation)})
+        for g in out.glossary
+        # A term the paper does not print (an invented URL, phone or name) is no glossary entry.
+        if scrubber.scrub(g.term_as_written) == g.term_as_written
+    ]  # fmt: skip
+    questions = [q for q in [await clean(q) for q in out.questions_to_ask] if q.strip()]
+    # The sender line and the translation are model output too (D-10): an invented name or
+    # contact in the sender drops the line (as the clerk card does); the translation keeps
+    # translated organisation names but loses any phone, web or e-mail address the paper does not
+    # print (a digit slip in a translated phone number never reaches the reader).
+    sender = out.sender_as_written
+    if sender and scrubber.scrub(sender) != sender:
+        sender = None
+    translated = [
+        p.model_copy(update={"text": scrubber.scrub_kinds(p.text, contacts_filter.CONTACT_KINDS)})
+        for p in out.translated_pages
+    ]  # fmt: skip
 
     # §11.10 tags, resources, clerk card, fixed notices.
     tags = tagging.finalize_tags(
@@ -1229,11 +1302,14 @@ async def finish_analysis(
         first_resource_hhs_funded=bool(preview)
         and deps.resources.is_hhs_funded(preview[0].resource.id),
         translate=make_clerk_translator(deps, rc.lang, deadline_at=deadline_at),
+        t=t,  # a failed translation → the pack's clerk.generic_card (CL-055(c), AI_PROMPTS §5.5.4)
     )  # fmt: skip
+    # Code flags (the scam scorer's notario regex, injection, expired date) count as much as the
+    # model's for the fixed cards: a notario flyer gets "A notario is not a lawyer" either way.
     facts = fixed_notices.NoticeFacts(
         document_type=document_type, document_type_confidence=out.document_type_confidence,
         transcript_text=paper.full_text, form_numbers=forms, demands=final_demands,
-        red_flags=flags, scam_risk=scam_out.scam_risk,
+        red_flags=[*flags, *code_flags], scam_risk=scam_out.scam_risk,
     )  # fmt: skip
     notices = fixed_notices.evaluate_notices(deps.rules, facts, t)
     red_flags = fixed_notices.merge_red_flags(
@@ -1255,7 +1331,7 @@ async def finish_analysis(
         analysis_id=req.analysis_id or str(uuid.uuid4()), created_at=deps.clock(),
         quality=quality, category=category, document_type=document_type,
         document_type_confidence=out.document_type_confidence,
-        sender_as_written=out.sender_as_written, sender_kind=out.sender_kind,
+        sender_as_written=sender, sender_kind=out.sender_kind,
         detected_language=detected, target_language=target,
         translation_confidence=translation_confidence(detected, target, rc.lang),
         is_likely_scam=scam_out.is_likely_scam, scam_risk=scam_out.scam_risk,
@@ -1267,18 +1343,20 @@ async def finish_analysis(
             has_case_number=paper.has_case_number, has_receipt_number=paper.has_receipt_number,
         ),
         clerk_message=clerk_out.message, resource_tags=tags, resource_preview=preview,
-        original_text=paper.pages, translated_text=list(out.translated_pages),
+        original_text=paper.pages, translated_text=translated,
         questions_to_ask=questions,
         verification=VerificationSummary(
-            facts_checked=checked.facts_checked + model_flags.facts_checked,
-            facts_rejected=checked.facts_rejected + model_flags.facts_rejected,
+            # An unprinted date in prose is a rejected fact (checked and rejected once).
+            facts_checked=checked.facts_checked + model_flags.facts_checked + date_stats.rejected,
+            facts_rejected=checked.facts_rejected + model_flags.facts_rejected
+            + date_stats.rejected,
             contacts_stripped=scrubber.total + scrub_en.total,
             phrasing_rewrites=stats.rewrites, injection_masked=injection_masked,
             verifier_version=verify.VERIFIER_VERSION,
         ),
         safety=safety, disclaimer_kind=disclaimers.disclaimer_kind(category),
         disclaimers=secondary, warnings=final, model_meta=meta,
-        page_thumbnails=page_thumbnails(req, rc.upload),
+        page_thumbnails=rc.thumbnails,
     )  # fmt: skip
 
 

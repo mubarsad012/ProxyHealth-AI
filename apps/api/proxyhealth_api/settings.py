@@ -110,7 +110,12 @@ class Settings(BaseSettings):
     rate_limit_analyze_per_hour: int = Field(default=20, ge=1)
     rate_limit_analyze_per_day: int = Field(default=100, ge=1)
     rate_limit_ip_per_minute: int = Field(default=60, ge=1)
-    consent_version: str = "2026-09-24"
+    # D-08 "also": both IP-class buckets apply to every model-calling request, install id or not.
+    rate_limit_ip_per_day: int = Field(default=1000, ge=1)
+    # Proxies in front that each append to X-Forwarded-For (Cloud Run: 1; + external HTTPS load
+    # balancer: 2). 0 = rate-limit the socket peer (uvicorn reachable directly, local dev).
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    consent_version: str = "2026-10-01"
     privacy_policy_url: str = "https://proxyhealth.expo.app/privacy"
     var_dir: Path = Path("./var")
     langpack_cache_ttl_days: int = Field(default=180, ge=1)
@@ -240,7 +245,9 @@ class Settings(BaseSettings):
             demo_samples=True,
             dynamic_language_packs=True,
             troubleshoot=True,
-            chat=True,
+            # Every chat turn is client text (question, history, context), so the D-01 gate blocks
+            # it on unpaid/mixed even for a sample paper; the flag says so up front.
+            chat=self.real_documents_allowed,
             quicksheet_pdf=True,
             degraded_fallback=self.allow_degraded,
             hide_parts_server_masking=True,

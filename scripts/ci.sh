@@ -9,7 +9,8 @@
 # Steps: pytest · ruff · mypy (BUILD_PLAN §1.4 form) · openapi snapshot + TS types idempotence ·
 # make_fixtures --check · sync_to_mobile --check · YAML parses · no xfail outside tests/live ·
 # privacy-claims + readability · eas.json https · mobile tsc · jest · expo lint ·
-# expo config --type prebuild · web export (--clear) with dist/privacy/index.html.
+# expo config --type prebuild · web export (--clear) with dist/privacy/index.html and a static-host
+# rewrite for every dynamic route (scripts/web-host-rules.py --check).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -112,6 +113,8 @@ web_export() {
   local ok=0
   [ -f "$out/privacy/index.html" ] && [ -f "$out/index.html" ] || ok=1
   if [ "$ok" -ne 0 ]; then echo "web export lacks index.html or privacy/index.html in $out" >&2; fi
+  # Every dynamic route file (result/[id].html …) must get a static-host rewrite (DEPLOYMENT §2.3).
+  if [ "$ok" -eq 0 ]; then python3 "$ROOT/scripts/web-host-rules.py" "$out" --check || ok=1; fi
   [ "$cleanup" -eq 1 ] && rm -rf "$out"
   return "$ok"
 }

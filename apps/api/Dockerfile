@@ -7,12 +7,18 @@
 # CI builds it (WP8).
 FROM python:3.13-slim
 
+# TRUSTED_PROXY_HOPS=1: the host's front end (Cloud Run, Fly.io) appends the real client address
+# to X-Forwarded-For and the per-IP-class rate limit reads that entry, not the proxy's socket
+# address (with 0 every user would share one bucket) and not the client-supplied entries left of
+# it (spoofable). Set 2 behind an extra external HTTPS load balancer; 0 if uvicorn is reachable
+# directly (uvicorn's own --forwarded-allow-ips='*' would trust the spoofable leftmost entry).
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PORT=8080 \
-    VAR_DIR=/app/var
+    VAR_DIR=/app/var \
+    TRUSTED_PROXY_HOPS=1
 
 WORKDIR /app
 

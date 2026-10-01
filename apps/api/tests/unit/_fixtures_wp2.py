@@ -30,7 +30,7 @@ def settings(tmp_path: Path, **overrides: object) -> Settings:
         "mock_latency_min_ms": 0,
         "mock_latency_max_ms": 0,
         "install_hash_secret": "test",
-        "consent_version": "2026-09-24",
+        "consent_version": "2026-10-01",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]

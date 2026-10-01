@@ -3,7 +3,7 @@
 // bar: Save (WP6 `SaveToVaultSheet`), Show the clerk, Quick sheet, Read all aloud / Stop.
 
 import { type Href, router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
 import { useApi } from '@/api/config';
@@ -29,7 +29,9 @@ import { useSettings } from '@/store/settings';
 import type { ResultViewHandlers } from './ResultView';
 import { ResultView } from './ResultView';
 import { hearItItems } from './hearItMode';
+import { sampleIdForAnalysis } from './sampleOrigin';
 import { useStoredPages } from './storedPages';
+import { withLiveUrgency } from './urgencyCopy';
 
 export function resultHref(id: string, sub?: 'source' | 'chat' | 'clerk' | 'quicksheet' | 'help', query?: string): Href {
   const base = `/result/${encodeURIComponent(id)}${sub ? `/${sub}` : ''}`;
@@ -53,8 +55,25 @@ export function remindNotice(outcome: string, d: Demand, t: (k: string, v?: Reco
 }
 
 /**
+ * True when the session's sample state does not belong to the result on screen: a stored paper,
+ * or a session result that was not made from the session's current sample id. Such a left-over
+ * sample (pages + `demoSampleId`) is dropped so nothing about this paper is sent as a sample.
+ */
+export function isLeftoverSample(
+  shown: AnalysisResult | null,
+  fromSession: boolean,
+  sessionSampleId: string | null,
+): boolean {
+  if (!shown || !sessionSampleId) return false;
+  if (!fromSession) return true;
+  return sampleIdForAnalysis(shown) !== sessionSampleId;
+}
+
+/**
  * Resolve the analysis for a route id: session first, then the vault. For a vault document,
- * `pages` are its kept page files (`vault.pages.uri`) and `keepPages` is `doc.keepPages`.
+ * `pages` are its kept page files (`vault.pages.uri`) and `keepPages` is `doc.keepPages`. The
+ * urgency is re-counted against today's date (`withLiveUrgency`), so a paper reopened after its
+ * date says the date may have passed (samples keep the server's pinned count).
  */
 export function useAnalysisFor(id: string): {
   analysis: AnalysisResult | null;
@@ -65,12 +84,19 @@ export function useAnalysisFor(id: string): {
 } {
   const current = useSession((s) => s.currentAnalysis);
   const pages = useSession((s) => s.pages);
+  const sessionSampleId = useSession((s) => s.demoSampleId);
   const fromSession = current && current.analysis_id === id ? current : null;
   const { doc, loading } = useDocument(fromSession ? '' : id);
   const storedPages = useStoredPages(fromSession ? null : (doc?.id ?? null), Boolean(doc?.keepPages));
-  if (fromSession) return { analysis: fromSession, pages, loading: false, documentId: null, keepPages: true };
+  const raw = fromSession ?? doc?.analysis ?? null;
+  const analysis = useMemo(() => withLiveUrgency(raw), [raw]);
+  const leftover = isLeftoverSample(raw, Boolean(fromSession), sessionSampleId);
+  useEffect(() => {
+    if (leftover) useSession.getState().clearPages();
+  }, [leftover]);
+  if (fromSession) return { analysis, pages, loading: false, documentId: null, keepPages: true };
   return {
-    analysis: doc?.analysis ?? null,
+    analysis,
     pages: storedPages,
     loading,
     documentId: doc ? doc.id : null,

@@ -35,6 +35,8 @@ export function getClient(): ApiClient {
     singleton = createClient({
       baseUrl: env.apiUrl,
       getConsentVersion: currentConsentVersion,
+      // CL-070: never upload a user's paper before consent, even if a screen forgets its gate.
+      refuseUnconsentedUploads: true,
       getInstallId: installIdForRequests,
       appToken: env.appToken || undefined,
       getLanguageTag: () => useI18n.getState().tag,

@@ -1,7 +1,9 @@
 // WP6 lane 6B — troubleshoot: one image only (never a PDF), goal cap, the credential-guard banner
-// when `asks_for_credentials_or_payment`, the scam card first, and the offline sample path.
+// when `asks_for_credentials_or_payment`, the scam card first, the offline sample path, and the
+// consent gate (CL-070: no real screenshot is picked or sent before consent; the sample stays open).
 
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import { Platform } from 'react-native';
 
 import type { ApiClient } from '@/api/client';
@@ -10,10 +12,12 @@ import type { Resource, ResourceMatchResponse, TroubleshootResult } from '@/api/
 import { disclaimerKey } from '@/features/help/format';
 import type { StoredDocument, StoredPageInput, Vault } from '@/storage';
 import { AppProviders } from '@/design/components/Providers';
+import { useConsentDecision } from '@/features/onboarding/consentState';
+import { useSession } from '@/store/session';
 
 import { buildTroubleshootRequest, clampGoal, NotAnImageError, parseMode } from './request';
 import { buildEvidenceDocument, canSaveEvidence, saveScamEvidence } from './evidence';
-import type { Screenshot } from './pick';
+import { pickScreenshot, type Screenshot } from './pick';
 import { askPersonHref, TroubleshootResultCards } from './ResultCards';
 import { reportingResources } from './ScamReport';
 import { TroubleshootScreen } from './TroubleshootScreen';
@@ -23,6 +27,14 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 // The expo-network jest mock's listener has no `remove()`; reachability is not under test here.
 jest.mock('@/lib/network', () => ({ useOnline: () => ({ online: true, known: true }), isOnline: async () => true }));
+
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: () => false },
+  useLocalSearchParams: () => ({}),
+}));
+
+// The system picker cannot run under jest; each test says what it "picks".
+jest.mock('./pick', () => ({ ...jest.requireActual('./pick'), pickScreenshot: jest.fn() }));
 
 const portal = require('../../../assets/fixtures/portal_file_too_large.result.en.json') as TroubleshootResult;
 const png = { mime_type: 'image/png' as const, data_base64: 'iVBORw0KGgo=', masks: [], rotation: 0 as const };
@@ -120,13 +132,78 @@ describe('TroubleshootResultCards', () => {
   });
 });
 
+const pickedShot: Screenshot = { uri: 'file:///picked.jpg', base64: '/9j/REAL_SCREENSHOT', mimeType: 'image/jpeg', width: 800, height: 1600 };
+
+function acceptConsentForTest() {
+  useConsentDecision.getState().set('accepted');
+  useSession.getState().setConsent({
+    consent_version: '2026-10-01',
+    accepted_at: '2026-09-28T12:00:00.000Z',
+    tier_seen: 'demo',
+    platform: 'ios',
+  });
+}
+
 describe('TroubleshootScreen', () => {
   const realFetch = globalThis.fetch;
+  beforeEach(() => {
+    jest.mocked(router.push).mockClear();
+    jest.mocked(pickScreenshot).mockReset();
+    jest.mocked(pickScreenshot).mockResolvedValue(pickedShot);
+    useConsentDecision.getState().set('none');
+    useSession.getState().setConsent(null);
+  });
   afterEach(() => {
     globalThis.fetch = realFetch;
   });
 
-  it('shows mode chips, the standing guard, and serves the recorded sample offline', async () => {
+  it('without consent: "Pick a screenshot" opens S2 and never opens the picker (CL-070)', async () => {
+    const client = { ...offlineClient(), troubleshoot: jest.fn(() => Promise.reject(new Error('must not be called'))) };
+    useConsentDecision.getState().set('not_now');
+    const { getByTestId } = await render(
+      <AppProviders client={client} staticMetrics>
+        <TroubleshootScreen />
+      </AppProviders>,
+    );
+    expect(getByTestId('troubleshoot-consent-needed')).toBeTruthy();
+    await fireEvent.press(getByTestId('troubleshoot-pick'));
+    expect(router.push).toHaveBeenCalledWith('/onboarding/consent');
+    expect(pickScreenshot).not.toHaveBeenCalled();
+    await fireEvent.press(getByTestId('troubleshoot-submit'));
+    expect(client.troubleshoot).not.toHaveBeenCalled();
+  });
+
+  it('with consent the picked screenshot is sent; after "Stop sending papers" it is not (CL-070)', async () => {
+    const troubleshoot = jest.fn(async () => portal);
+    const client = { ...offlineClient(), troubleshoot };
+    acceptConsentForTest();
+    const { getByTestId, queryByTestId, findByTestId } = await render(
+      <AppProviders client={client} staticMetrics>
+        <TroubleshootScreen />
+      </AppProviders>,
+    );
+    expect(queryByTestId('troubleshoot-consent-needed')).toBeNull();
+    await fireEvent.press(getByTestId('troubleshoot-pick'));
+    expect(pickScreenshot).toHaveBeenCalledTimes(1);
+    await fireEvent.press(getByTestId('troubleshoot-submit'));
+    expect(await findByTestId('troubleshoot-result')).toBeTruthy();
+    expect(troubleshoot).toHaveBeenCalledTimes(1);
+    expect(troubleshoot.mock.calls[0]).toEqual([
+      expect.objectContaining({ screenshot: expect.objectContaining({ data_base64: pickedShot.base64 }), demo_sample_id: null }),
+    ]);
+    expect(router.push).not.toHaveBeenCalledWith('/onboarding/consent');
+
+    // Consent withdrawn while the screenshot is still on screen: nothing is sent, S2 opens.
+    await act(async () => {
+      useConsentDecision.getState().set('withdrawn');
+      useSession.getState().setConsent(null);
+    });
+    await fireEvent.press(getByTestId('troubleshoot-submit'));
+    expect(troubleshoot).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/onboarding/consent');
+  });
+
+  it('shows mode chips, the standing guard, and serves the recorded sample offline (before consent too)', async () => {
     globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed')) as unknown as typeof fetch;
     const { getByText, getByTestId, findByTestId } = await render(
       <AppProviders client={offlineClient()} staticMetrics>
@@ -139,6 +216,7 @@ describe('TroubleshootScreen', () => {
     await fireEvent.press(getByTestId('troubleshoot-sample'));
     expect(await findByTestId('troubleshoot-result')).toBeTruthy();
     expect(getByText('Do this next')).toBeTruthy();
+    expect(router.push).not.toHaveBeenCalledWith('/onboarding/consent');
   });
 });
 

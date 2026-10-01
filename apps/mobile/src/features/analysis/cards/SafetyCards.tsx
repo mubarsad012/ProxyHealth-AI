@@ -1,22 +1,22 @@
-// S7 items 2, 3 and 14: scam card (fixed copy + reason chips, D-13), warning chips (fixed copy,
-// §5.6) and red flags (fixed notices by `fixed_copy_key` (D-20), model flags with their quote,
+// S7 items 2, 3 and 14: scam card (fixed copy + the vetted `scam_report` contacts it ends with —
+// "Report it:" — + reason chips, D-13, J-F step 4), warning chips (fixed copy, §5.6) and red flags (fixed notices by `fixed_copy_key` (D-20), model flags with their quote,
 // `injection_suspected` → `warning.injection_masked`), sorted by severity, most severe first.
 
 import { StyleSheet, View } from 'react-native';
 
 import type { RedFlag, Severity } from '@/api/types';
-import { Bidi } from '@/design/components/Bidi';
 import { Card } from '@/design/components/Card';
 import { Icon } from '@/design/components/Icon';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
+import { ScamReportResources } from '@/features/troubleshoot/ScamReport';
 import { useDirection } from '@/i18n/direction';
-import { keyExists } from '@/i18n/store';
-import { useBidiText, useT, type TFunction } from '@/i18n/useT';
+import { keyExists, languageInfoFor } from '@/i18n/store';
+import { useBidiText, usePackMeta, useT, type TFunction } from '@/i18n/useT';
 
 import { warningChipKeys } from '../disclaimers';
-import type { ResultCardProps } from './shared';
+import { type ResultCardProps, SourceText } from './shared';
 
 const SEVERITY_ORDER: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
 
@@ -49,9 +49,7 @@ export function RedFlagsCard({ analysis }: ResultCardProps) {
           <View style={styles.flex}>
             <AppText weight={f.severity === 'high' ? 'bold' : 'regular'}>{bt(redFlagText(f, t))}</AppText>
             {f.source_quote && !f.fixed_copy_key && f.kind !== 'injection_suspected' ? (
-              <Bidi dir="auto" variant="caption">
-                {`“${f.source_quote}”`}
-              </Bidi>
+              <SourceText lang={analysis.detected_language} variant="caption">{`“${f.source_quote}”`}</SourceText>
             ) : null}
           </View>
         </View>
@@ -81,6 +79,8 @@ export function ScamCard({ analysis }: ResultCardProps) {
           <AppText weight="bold">{t(key)}</AppText>
         </View>
       </View>
+      {/* Where to report it: DHS OIG / FTC from the vetted DB (bundled subset offline), never model text. */}
+      <ScamReportResources risk={analysis.scam_risk} />
       {reasons.length ? (
         <View style={[styles.chips, { flexDirection: dir.row }]}>
           {reasons.map((r) => (
@@ -100,7 +100,9 @@ export function WarningChips({ analysis }: ResultCardProps) {
   const t = useT();
   const { colors } = useTheme();
   const dir = useDirection();
-  const keys = warningChipKeys(analysis.warnings);
+  const meta = usePackMeta();
+  const tier = meta.tag === analysis.target_language ? meta.tier : languageInfoFor(analysis.target_language).tier;
+  const keys = warningChipKeys(analysis.warnings, { packTier: tier });
   const unreadable = analysis.quality.pages_unreadable;
   if (!keys.length && !unreadable.length) return null;
   return (

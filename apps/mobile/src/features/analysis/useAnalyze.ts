@@ -17,6 +17,7 @@ import { useSettings } from '@/store/settings';
 
 import type { RequestContext } from './buildRequest';
 import { runAnalysis } from './runAnalysis';
+import { rememberSampleOrigin } from './sampleOrigin';
 
 export type AnalyzeStatus = 'idle' | 'running' | 'done' | 'unreadable' | 'error' | 'cancelled';
 
@@ -110,6 +111,7 @@ export function useAnalyze(): AnalyzeState & { start(): void; cancel(): void; re
           return;
         }
         if (out.displayPages.length) useSession.getState().setPages(out.displayPages);
+        if (ctx.demoSampleId) rememberSampleOrigin(out.result.analysis_id, ctx.demoSampleId);
         useSession.getState().setCurrentAnalysis(out.result);
         try {
           AccessibilityInfo.announceForAccessibility(t('a11y.reading_finished', { n: datesFound(out.result) }));

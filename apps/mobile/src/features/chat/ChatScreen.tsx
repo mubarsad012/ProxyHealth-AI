@@ -1,10 +1,13 @@
 // S9 — Ask about this paper (`/result/[id]/chat`). Grounded answers with quote chips (→ S8),
 // fixed refusal/referral templates, suggested-question chips, a speaker and "Was this clear?" on
 // every assistant bubble. `ChatAnswer.safety.emergency` opens the S19 card over the chat.
+// New answers are announced (PRODUCT_SPEC S9 "new bubbles announced", D-28, COMPLIANCE §15 4.1.3):
+// native speaks the answer's first line (`announceForAccessibility`); web — where that call is a
+// no-op in react-native-web — puts the turns in a polite `role="log"` live region.
 
 import { type Href, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { AnalysisResult, ChatAnswer } from '@/api/types';
 import { Bidi, stripIsolates } from '@/design/components/Bidi';
@@ -54,6 +57,16 @@ export function assistantLines(answer: ChatAnswer, t: (k: string) => string): st
   const refer = referKey(answer.refer_to_professional);
   if (refer) add(t(refer));
   return lines;
+}
+
+/** What a screen reader hears when an answer arrives: its first line, without bidi controls. */
+export function answerAnnouncement(answer: ChatAnswer, t: (k: string) => string): string {
+  return stripIsolates(assistantLines(answer, t)[0] ?? '').trim();
+}
+
+/** Web live-region props for the turn list (react-native-web forwards `role` / `aria-live`). */
+export function turnListLiveProps(os: typeof Platform.OS = Platform.OS): Record<string, string> {
+  return os === 'web' ? { role: 'log', 'aria-live': 'polite' } : {};
 }
 
 function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: AnalysisResult; onQuote(span: string, page: number): void }) {
@@ -139,7 +152,18 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
     setDraft('');
     void chat.send(q).then((answer) => {
       const trig = emergencyTrigger(answer?.safety);
-      if (trig.triggered) router.push(`/emergency?kinds=${trig.kinds.join(',')}` as Href);
+      if (trig.triggered) {
+        router.push(`/emergency?kinds=${trig.kinds.join(',')}` as Href);
+        return;
+      }
+      const line = answer ? answerAnnouncement(answer, t) : '';
+      if (line && Platform.OS !== 'web') {
+        try {
+          AccessibilityInfo.announceForAccessibility(line);
+        } catch {
+          // best-effort announcement
+        }
+      }
     });
   };
 
@@ -179,9 +203,11 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
       <AppText color="textMuted">{t('chat.scope')}</AppText>
       {online ? null : <AppText role="status">{t('state.offline_disabled')}</AppText>}
       {chat.historyCapped ? <AppText color="textMuted">{t('chat.history_cap')}</AppText> : null}
-      {chat.turns.map((turn) => (
-        <Bubble key={turn.id} turn={turn} analysis={analysis} onQuote={openQuote} />
-      ))}
+      <View testID="chat-turns" {...turnListLiveProps()} style={styles.turns}>
+        {chat.turns.map((turn) => (
+          <Bubble key={turn.id} turn={turn} analysis={analysis} onQuote={openQuote} />
+        ))}
+      </View>
       {chat.sending ? <AppText role="status" color="textMuted">{t('reading.step2')}</AppText> : null}
       {chat.error ? <ErrorState error={chat.error} onRetry={chat.dismissError} /> : null}
       <View style={[styles.chips, { flexDirection: dir.row }]}>
@@ -204,6 +230,7 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  turns: { gap: space.lg },
   bubble: { maxWidth: '92%', borderWidth: 1, borderRadius: radius.lg, padding: space.md, gap: space.sm },
   quote: { borderWidth: 1, borderRadius: radius.md, padding: space.sm },
   tools: { alignItems: 'center', gap: space.sm },

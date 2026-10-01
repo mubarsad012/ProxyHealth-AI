@@ -2,6 +2,7 @@
 // the last resource list for this paper, then per platform — native: Share PDF (expo-print →
 // expo-sharing, gated by isAvailableAsync); web: Download PDF (server render → <a download>) and
 // Print (browser dialog); everywhere: Copy text and Read aloud. Works offline except the web PDF.
+// The header disclaimer (`disclaimer.<kind>`, PRODUCT_SPEC §5.6) is under the title in every form.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -130,6 +131,16 @@ export function QuickSheetScreen({ analysis, documentId }: QuickSheetScreenProps
           <Heading level={1} variant="title">
             {sheet.title}
           </Heading>
+          {sheet.disclaimer ? (
+            <View role="note" testID="quicksheet-disclaimer" style={styles.section}>
+              <AppText weight="bold">{sheet.disclaimer}</AppText>
+              {sheet.disclaimer_en && sheet.disclaimer_en !== sheet.disclaimer ? (
+                <AppText variant="caption" color="textMuted" lang="en" align="auto" style={styles.ltr}>
+                  {sheet.disclaimer_en}
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
           {sheet.sections.map((s, i) => (
             <View key={`${s.heading_en}-${i}`} style={styles.section} role="region" accessibilityLabel={s.heading}>
               <Heading level={2} variant="bodyLarge">

@@ -97,7 +97,7 @@ async function renderHome(vault: Vault) {
 function acceptConsent() {
   useConsentDecision.getState().set('accepted');
   useSession.getState().setConsent({
-    consent_version: '2026-09-24',
+    consent_version: '2026-10-01',
     accepted_at: '2026-09-28T12:00:00.000Z',
     tier_seen: 'demo',
     platform: 'ios',
@@ -115,12 +115,18 @@ beforeEach(() => {
 
 describe('S3 Home', () => {
   it('first run: CTA, tiles, trust footer, no next-date card; the CTA opens consent', async () => {
-    const { findByText, getByText, getByTestId, queryByTestId } = await renderHome(fakeVault());
+    const { findByText, getByText, getByTestId, queryByTestId, queryByText } = await renderHome(fakeVault());
     expect(await findByText('Take a photo of a paper')).toBeTruthy();
     expect(getByText('Pick a photo or PDF')).toBeTruthy();
     expect(getByText('Stuck on a website?')).toBeTruthy();
     expect(getByText('Show the clerk')).toBeTruthy();
-    expect(getByText('Our server does not keep your paper. Papers you save stay only on this phone.')).toBeTruthy();
+    // jest-expo runs as iOS: the D-22 interim line until iCloud-backup exclusion (COMPLIANCE_PRIVACY §10.2).
+    expect(
+      getByText(
+        "Our server does not keep your paper. Papers you save stay on this phone, protected by your phone's own encryption. Turn on a phone passcode.",
+      ),
+    ).toBeTruthy();
+    expect(queryByText(/stay only on this phone/)).toBeNull();
     expect(getByText('Scanning is off until you accept how your paper is handled. Tap to read it.')).toBeTruthy();
     expect(queryByTestId('home-next-date')).toBeNull();
     await act(async () => {

@@ -123,11 +123,11 @@ out:
       - "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
   prs:
     summary_title: "اطلاعیه صاحب‌خانه درباره کرایه پرداخت‌نشده"
-    summary_body: "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا ۸ اکتبر ۲۰۲۶ پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست."
+    summary_body: "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا October 8, 2026 پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست."
     demands:
-      d1: {text: "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید."}
-      d2: {text: "اطلاعیه ۸ اکتبر ۲۰۲۶ را روز پرداخت کامل مبلغ می‌گوید."}
-      d3: {text: "اطلاعیه ۱۴ روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است."}
+      d1: {text: "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه September 2026 را بدهکار هستید."}
+      d2: {text: "اطلاعیه October 8, 2026 را روز پرداخت کامل مبلغ می‌گوید."}
+      d3: {text: "اطلاعیه 14 روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است."}
       d4: {text: "تلفون دفتر کرایه، از کاغذ شما: (703) 555-0175."}
     plan_steps:
       s1: {text: "پیش از تاریخ این کاغذ با یک وکیل یا مشاور مسکن صحبت کنید."}
@@ -142,14 +142,14 @@ out:
       - "$1,450.00 را کجا و چطور پرداخت کنم؟"
       - "وقتی پرداخت کنم به من رسید می‌دهید؟"
     translated_pages:
-      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: ۲۴ سپتمبر ۲۰۲۶\nاطلاعیه ۱۴ روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد ۱۲\nشما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید.\nشما باید تمام مبلغ را تا ۸ اکتبر ۲۰۲۶ پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف ۱۴ روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: September 24, 2026\nاطلاعیه 14 روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد 12\nشما $1,450.00 کرایه ماه September 2026 را بدهکار هستید.\nشما باید تمام مبلغ را تا October 8, 2026 پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف 14 روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
   ar:
     summary_title: "إشعار من المالك عن إيجار غير مدفوع"
-    summary_body: "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل ٨ أكتوبر ٢٠٢٦ أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة."
+    summary_body: "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل October 8, 2026 أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة."
     demands:
-      d1: {text: "يقول الإشعار إن عليك $1,450.00 إيجار شهر سبتمبر ٢٠٢٦."}
-      d2: {text: "يذكر الإشعار ٨ أكتوبر ٢٠٢٦ موعدًا لدفع المبلغ كاملًا."}
-      d3: {text: "يذكر الإشعار أيضًا ١٤ يومًا من تاريخ الإشعار. اسأل المالك عن التاريخ المقصود."}
+      d1: {text: "يقول الإشعار إن عليك $1,450.00 إيجار شهر September 2026."}
+      d2: {text: "يذكر الإشعار October 8, 2026 موعدًا لدفع المبلغ كاملًا."}
+      d3: {text: "يذكر الإشعار أيضًا 14 يومًا من تاريخ الإشعار. اسأل المالك عن التاريخ المقصود."}
       d4: {text: "هاتف مكتب التأجير، من ورقتك: (703) 555-0175."}
     plan_steps:
       s1: {text: "تحدث مع محامٍ أو مستشار إسكان قبل التاريخ المكتوب على هذه الورقة."}
@@ -164,4 +164,4 @@ out:
       - "أين وكيف أدفع $1,450.00؟"
       - "هل ستعطيني إيصالًا عندما أدفع؟"
     translated_pages:
-      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الإسكندرية، فرجينيا\nالتاريخ: ٢٤ سبتمبر ٢٠٢٦\nإشعار لمدة ١٤ يومًا بدفع الإيجار أو الإخلاء\nإلى: SAMPLE TENANT، Oak Hollow Apartments، الوحدة ١٢\nعليك إيجار قدره $1,450.00 عن شهر سبتمبر ٢٠٢٦.\nيجب أن تدفع المبلغ كاملًا قبل ٨ أكتوبر ٢٠٢٦، وإلا سينتهي عقد الإيجار.\nإذا لم يُدفع الإيجار خلال ١٤ يومًا من تاريخ هذا الإشعار، قد يرفع المالك قضية إخلاء في المحكمة.\nيُعطى هذا الإشعار بموجب قانون فرجينيا § 55.1-1245.\nادفع في مكتب التأجير أو اتصل على (703) 555-0175 إذا كانت لديك أسئلة.\nالتوقيع: مدير العقار، Oak Hollow Property Management LLC"
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الإسكندرية، فرجينيا\nالتاريخ: September 24, 2026\nإشعار لمدة 14 يومًا بدفع الإيجار أو الإخلاء\nإلى: SAMPLE TENANT، Oak Hollow Apartments، الوحدة 12\nعليك إيجار قدره $1,450.00 عن شهر September 2026.\nيجب أن تدفع المبلغ كاملًا قبل October 8, 2026، وإلا سينتهي عقد الإيجار.\nإذا لم يُدفع الإيجار خلال 14 يومًا من تاريخ هذا الإشعار، قد يرفع المالك قضية إخلاء في المحكمة.\nيُعطى هذا الإشعار بموجب قانون فرجينيا § 55.1-1245.\nادفع في مكتب التأجير أو اتصل على (703) 555-0175 إذا كانت لديك أسئلة.\nالتوقيع: مدير العقار، Oak Hollow Property Management LLC"

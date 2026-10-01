@@ -18,7 +18,7 @@ MYPY   := $(API)/.venv/bin/mypy
 EXPO_PUBLIC_API_URL ?= http://127.0.0.1:8000
 
 .PHONY: help dev api web types types-check sync sync-check test test-api lint-api test-mobile \
-        smoke export-web ci clean-web
+        smoke export-web host-rules ci clean-web
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
@@ -62,6 +62,9 @@ smoke: ## boot the mock API on a free port and exercise every endpoint (apps/api
 
 export-web: ## static web build → apps/mobile/dist (includes dist/privacy/index.html)
 	cd $(MOBILE) && EXPO_PUBLIC_API_URL=$(EXPO_PUBLIC_API_URL) npx expo export --platform web --clear
+
+host-rules: ## after export-web: write dist/_redirects + dist/404.html for Netlify/Cloudflare Pages (DEPLOYMENT §2.3)
+	python3 scripts/web-host-rules.py $(MOBILE)/dist --write --check
 
 ci: ## the full CI sequence locally, stopping at the first failure (scripts/ci.sh)
 	@scripts/ci.sh

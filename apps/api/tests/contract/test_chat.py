@@ -210,3 +210,81 @@ async def test_context_is_compacted_to_the_limit(client: httpx.AsyncClient) -> N
     assert len(text) <= MAX_CONTEXT_CHARS and text.endswith("=== END PAPER CONTEXT ===")
     assert "GLOSSARY:" not in text and "--- page 1 ---" in text and "--- page 11 ---" not in text
     assert "GLOSSARY:" in compact_context(ctx)
+
+
+# --- Phase 2B: a padded context cannot stall the server; emergency phrases and the model backstop
+
+
+def _padded(ctx: AnalysisContext, pages: int) -> AnalysisContext:
+    text = "x" * 2000
+    padded = [
+        PageText(page=n, width=None, height=None, blocks=[
+            TextBlock(id=f"p{n}b1", page=n, text=text, bbox=None, is_handwriting=False,
+                      is_unclear=False)
+        ])
+        for n in range(1, pages + 1)
+    ]  # fmt: skip
+    return ctx.model_copy(update={"original_text": padded})
+
+
+async def test_huge_context_is_bounded_and_compacted_in_linear_time(
+    client: httpx.AsyncClient,
+) -> None:
+    """9 000 pages × 2 000 chars used to cost ~100 s of event-loop time (quadratic compaction)."""
+    import time
+
+    from proxyhealth_api.analysis.chat_pipeline import MAX_CONTEXT_PAGES, bounded_context
+
+    ctx = AnalysisContext.model_validate(await context_for(client, "medicaid_address_confirmation"))
+    big = _padded(ctx, 9000)
+    started = time.perf_counter()
+    text = compact_context(big)
+    assert time.perf_counter() - started < 1.0
+    assert len(text) <= MAX_CONTEXT_CHARS and text.endswith("=== END PAPER CONTEXT ===")
+    bounded = bounded_context(big)
+    assert len(bounded.original_text) == MAX_CONTEXT_PAGES
+    assert compact_context(bounded) == text, "bounding never changes what the model sees"
+
+
+async def test_huge_chat_request_answers_quickly(
+    client: httpx.AsyncClient, consent_headers: dict[str, str]
+) -> None:
+    import time
+
+    data = await context_for(client, "medicaid_address_confirmation")
+    big = _padded(AnalysisContext.model_validate(data), 2000).model_dump(mode="json")
+    started = time.perf_counter()
+    r = await client.post(
+        "/v1/chat",
+        json={"analysis": big, "messages": [], "question": "When is it due?",
+              "target_language": "en"},  # fmt: skip
+        headers=consent_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert time.perf_counter() - started < 5.0
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Me quiero suicidar, no puedo más con esto",
+        "أريد أن أنتحر",
+        "می‌خواهم خودم را بکشم",
+        "I took all my pills tonight",
+    ],
+)
+async def test_first_person_crisis_question_opens_the_emergency_card(
+    client: httpx.AsyncClient, consent_headers: dict[str, str], question: str
+) -> None:
+    ans = await ask(client, consent_headers, question)
+    assert ans.safety.emergency is True, question
+    assert ans.resource_tags and ans.resource_tags[0] == "crisis"
+
+
+async def test_model_crisis_tag_is_the_emergency_backstop(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings, consent_headers: dict[str, str]
+) -> None:
+    """Words no list holds: the chat prompt asks for ``crisis`` first in ``resource_tags``."""
+    install(app, settings, chat=lambda kw: chat_out(resource_tags=["crisis"]))
+    ans = await ask(client, consent_headers, "Everything is too much, I want it all to stop")
+    assert ans.safety.emergency is True and ans.resource_tags[0] == "crisis"

@@ -4,7 +4,6 @@
 
 import { StyleSheet, View } from 'react-native';
 
-import { Bidi } from '@/design/components/Bidi';
 import { BigButton } from '@/design/components/BigButton';
 import { Card } from '@/design/components/Card';
 import { AppText } from '@/design/components/Text';
@@ -12,7 +11,7 @@ import { useTheme } from '@/design/theme';
 import { space } from '@/design/tokens';
 import { useBidiText, useT } from '@/i18n/useT';
 
-import type { ResultCardProps } from './cards/shared';
+import { type ResultCardProps, SourceText } from './cards/shared';
 
 export function UnverifiedSection({ analysis, handlers }: ResultCardProps) {
   const t = useT();
@@ -31,9 +30,9 @@ export function UnverifiedSection({ analysis, handlers }: ResultCardProps) {
           <AppText color="textMuted" style={styles.struck} lang={analysis.target_language}>
             {bt(d.text)}
           </AppText>
-          <Bidi dir="ltr" variant="body" style={{ ...styles.struck, color: colors.textMuted }}>
+          <SourceText lang={analysis.detected_language} dir="ltr" style={{ ...styles.struck, color: colors.textMuted }}>
             {d.value_verbatim}
-          </Bidi>
+          </SourceText>
           {d.verification_note ? (
             <AppText variant="caption" color="textMuted">
               {d.verification_note}

@@ -1,9 +1,11 @@
 // Settings building blocks (PRODUCT_SPEC S17) shared by `(tabs)/settings.tsx` and WP6's
 // `VaultAndDataSettings`: a titled section, a switch row with explanation, single-choice chips and a
 // navigation row. All rows are ≥ 56 pt, mirror in RTL and carry roles/states for screen readers.
+// The switch row is ONE control: the whole row (label + drawn switch) is the `role="switch"` target,
+// ≥ 56 pt tall (D-28). A bare RN `Switch` is only 40×20 CSS px on web and its label is not tappable.
 
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/design/components/Icon';
 import { AppText, Heading } from '@/design/components/Text';
@@ -35,20 +37,43 @@ export function SwitchRow({ label, value, onChange, explanation, disabled, testI
   const dir = useDirection();
   return (
     <View style={styles.rowWrap}>
-      <View style={[styles.row, { flexDirection: dir.row }]}>
+      <Pressable
+        testID={testID}
+        role="switch"
+        aria-checked={value}
+        aria-disabled={disabled || undefined}
+        accessibilityState={{ checked: value, disabled: Boolean(disabled) }}
+        accessibilityLabel={label}
+        accessibilityHint={explanation}
+        disabled={disabled}
+        hitSlop={size.hitSlop / 2}
+        onPress={() => onChange(!value)}
+        style={({ pressed }) => [
+          styles.row,
+          styles.switchRow,
+          { flexDirection: dir.row, opacity: disabled ? 0.5 : pressed ? 0.8 : 1 },
+        ]}>
         <View style={styles.flex}>
           <AppText>{label}</AppText>
         </View>
-        <Switch
-          testID={testID}
-          value={value}
-          onValueChange={onChange}
-          disabled={disabled}
-          accessibilityLabel={label}
-          accessibilityHint={explanation}
-          trackColor={{ true: colors.primary, false: colors.border }}
-        />
-      </View>
+        {/* Drawn, not a platform Switch: one focus stop and one hit target for the whole row. */}
+        <View
+          testID={testID ? `${testID}-track` : undefined}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+          aria-hidden
+          style={[
+            styles.track,
+            {
+              flexDirection: dir.row,
+              justifyContent: value ? 'flex-end' : 'flex-start',
+              backgroundColor: value ? colors.primary : colors.surface,
+              borderColor: value ? colors.primary : colors.border,
+            },
+          ]}>
+          <View style={[styles.thumb, { backgroundColor: value ? colors.onPrimary : colors.border }]} />
+        </View>
+      </Pressable>
       {explanation ? (
         <AppText variant="caption" color="textMuted">
           {explanation}
@@ -186,6 +211,23 @@ const styles = StyleSheet.create({
     minHeight: size.button,
     alignItems: 'center',
     gap: space.md,
+  },
+  switchRow: {
+    minWidth: size.button,
+  },
+  track: {
+    width: 56,
+    height: 32,
+    minWidth: 56,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    padding: 2,
+    alignItems: 'center',
+  },
+  thumb: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.pill,
   },
   link: {
     paddingHorizontal: space.md,

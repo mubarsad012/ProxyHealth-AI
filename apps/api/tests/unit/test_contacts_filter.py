@@ -328,3 +328,70 @@ def test_domains_are_compared_on_label_boundaries(text: str, expected: str) -> N
     paper = "Visit irs.com or www.fairfaxcounty.gov/familyservices. Email help@fairfaxcounty.gov."
     s = cf.make_scrubber(paper, [], en_t())
     assert s.scrub(text) == expected
+
+
+# --- Phase 2B: head-first and Arabic-script names, dash look-alikes, 00 and vanity numbers -------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Llame al Centro Legal de Inmigración Hispano para recibir ayuda.",
+        "Visite la Clínica Legal Latina en Fairfax.",
+        "Busque ayuda en Servicios Legales Comunitarios.",
+        "با انجمن کمک حقوقی افغان‌ها تماس بگیرید.",
+        "اتصل بمركز المساعدة القانونية العربي.",
+        "Ask the Northern Virginia Immigrant Justice Project.",
+    ],
+)
+def test_invented_organisations_in_any_word_order_or_script_are_replaced(
+    scrubber: cf.ContactScrubber, text: str
+) -> None:
+    assert ORG in scrubber.scrub(text), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Call 703–555–0199 today.",  # en dashes
+        "Call 703‑555‑0199 today.",  # U+2011 non-breaking hyphens
+        "Call ٧٠٣–٥٥٥–٠١٩٩ today.",  # Eastern digits, en dashes
+        "Call 00 44 20 7946 0958",
+        "Call 1-800-FIX-BILL for help.",
+    ],
+)
+def test_phone_spellings_the_old_patterns_missed(scrubber: cf.ContactScrubber, text: str) -> None:
+    assert MARK in scrubber.scrub(text), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Llame a la Oficina del Seguro Social.",
+        "Escriba a los Servicios de Ciudadanía e Inmigración de los Estados Unidos.",
+        "Llame a la Oficina del Jurado si tiene preguntas.",
+        "El Departamento de Servicios Familiares del Condado de Fairfax le escribió.",
+        "اداره خدمات تابعیت و مهاجرت ایالات متحده به شما نامه فرستاده است.",
+        "این نامه از دفتر تأمین اجتماعی است.",
+        "Contact the City Council.",
+        "Call (703) 555‑0142 with questions.",  # printed number, non-breaking hyphen
+        "Room 204 NEW WING",
+    ],
+)
+def test_translated_agency_names_and_printed_contacts_are_kept(
+    scrubber: cf.ContactScrubber, text: str
+) -> None:
+    assert scrubber.scrub(text) == text
+
+
+def test_spanish_contraction_is_absorbed_before_the_marker(scrubber: cf.ContactScrubber) -> None:
+    out = scrubber.scrub("Llame al Centro Legal de Inmigración Hispano hoy.")
+    assert out == f"Llame a {ORG} hoy."
+
+
+def test_scrub_kinds_checks_only_phone_web_and_email(scrubber: cf.ContactScrubber) -> None:
+    """A translation keeps a translated name but never an unprinted number or site."""
+    text = "Legal Aid Fairfax Help Center can help. Call 1-866-555-0123 or www.renew-now.com."
+    out = scrubber.scrub_kinds(text, cf.CONTACT_KINDS)
+    assert "Help Center" in out and "555-0123" not in out and "renew-now" not in out
+    assert scrubber.contacts_stripped >= 1

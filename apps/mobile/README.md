@@ -64,7 +64,7 @@ Redraw after a change: `apps/api/.venv/bin/python scripts/make_artwork.py` (from
 
 ## Web extras
 
-`public/` is copied into the web export: `public/privacy/index.html` is the public privacy policy served at `/privacy` (`PRIVACY_POLICY_URL`). It is plain HTML with `lang`/`dir`, readable without JavaScript, and checked by `apps/api/tests/unit/test_privacy_claims.py` (no forbidden phrases, the in-app notice sentences verbatim, the current consent version). Hosting and response headers: [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) §2.
+`public/` is copied into the web export: `public/privacy/index.html` is the public privacy policy served at `/privacy` (`PRIVACY_POLICY_URL`). It is plain HTML with `lang`/`dir`, readable without JavaScript, and checked by `apps/api/tests/unit/test_privacy_claims.py` (no forbidden phrases, the in-app notice sentences verbatim, the current consent version). Hosting and response headers: [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) §2; dynamic routes (`result/[id].html` …) need the rewrites of §2.3 on any host other than EAS Hosting (`make host-rules`).
 
 ## Layout
 

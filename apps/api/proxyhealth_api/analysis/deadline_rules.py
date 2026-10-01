@@ -9,7 +9,8 @@ The model never computes a date: it records ``date_text`` as printed, or ``relat
   ``confidence=low`` (a numeric ``03/04`` ambiguity also appends ``demand.ambiguous_date``).
 * ``estimated`` — only when a seeded rule's ``pattern`` matches the printed relative phrase, the
   anchor (``anchor_span_id``) is a *verified stated* demand whose ``role == rule.anchor_role``, the
-  document type is in ``applies_to_doc_types`` and ``valid_until`` has not passed. Business days
+  document type is in ``applies_to_doc_types`` (an ``other_notice`` also needs the rule's
+  category, ``OTHER_NOTICE_RULE_CATEGORY``) and ``valid_until`` has not passed. Business days
   skip weekends and the federal-holiday table below.
 * ``unresolved`` — anything else; the client shows "Ask the sender which date this means."
 
@@ -36,6 +37,7 @@ from proxyhealth_api.contracts.enums import (
     DateKind,
     DemandKind,
     DigitSystem,
+    DocumentCategory,
     DocumentType,
 )
 from proxyhealth_api.contracts.model_out import DemandOut
@@ -44,6 +46,13 @@ from proxyhealth_api.contracts.rules import DeadlineRule
 AMBIGUOUS_DATE_KEY = "demand.ambiguous_date"
 DATED_KINDS = frozenset({DemandKind.deadline, DemandKind.relative_deadline, DemandKind.appointment})
 NEVER_ESTIMATE_TYPES = frozenset({DocumentType.pay_or_quit, DocumentType.eviction_summons})
+# DOCUMENT_TAXONOMY §5.3: on the catch-all ``other_notice`` (also the scam re-type target) these
+# rules apply only to a paper of this category, so a debt collector's "within 30 days" never gets
+# an estimate cited to the OSHA retaliation rule.
+OTHER_NOTICE_RULE_CATEGORY: Mapping[str, DocumentCategory] = {
+    "eeoc_180_300d": DocumentCategory.employment,
+    "osha_retaliation_30d": DocumentCategory.employment,
+}
 
 # --- month names (Gregorian) in the 26 bundled languages -----------------------------------------
 # Each entry: month number → names/abbreviations as printed. Matching is case-insensitive after
@@ -273,15 +282,18 @@ def numeric_order_cue(text: str) -> DateFormat | None:
 def parse_dates(
     text: str | None,
     *,
-    date_format: DateFormat = DateFormat.auto,
+    default_order: DateFormat | None = None,
     language: str | None = None,
     order_cue: DateFormat | None = None,
 ) -> DateParse:
     """All Gregorian dates printed in ``text`` (deterministic regex table; D-11).
 
-    ``date_format`` is the user's preference (``auto`` = decide per date); ``order_cue`` is the
-    paper-wide numeric order from ``numeric_order_cue``; ``language`` resolves month tokens that
-    differ between languages. Two-digit years mean 2000+.
+    A numeric date whose day and month could swap ("10/07/2026") is read in the paper's own
+    order: ``order_cue`` (another numeric date on the page settles it, ``numeric_order_cue``),
+    else ``default_order`` (``paper_default_order``: US-issued paper types print month first),
+    else it stays ambiguous. The reader's ``Preferences.date_format`` is a display preference and
+    is never used here. ``language`` resolves month tokens that differ between languages.
+    Two-digit years mean 2000+.
     """
     if not text:
         return DateParse((), False)
@@ -310,7 +322,7 @@ def parse_dates(
     for pattern in (_P_DMY_NAME, _P_MDY_NAME):
         named_full += sum(1 for m in pattern.finditer(s) if _month_of(m.group("mon"), language))
     extra = named > named_full
-    order = date_format if date_format is not DateFormat.auto else order_cue
+    order = order_cue or (default_order if default_order is not DateFormat.auto else None)
     for m in _P_NUM.finditer(s):
         a, b, y = int(m.group("a")), int(m.group("b")), _year(m.group("y"))
         if a > 12 or (order is DateFormat.dmy and b <= 12):
@@ -453,11 +465,20 @@ def validate_rules(rules: Iterable[DeadlineRule]) -> list[str]:
     return problems
 
 
-def rule_applies(rule: DeadlineRule, document_type: DocumentType, today: date) -> bool:
-    """D-11 conditions (c) and (d): the type is listed and ``valid_until`` has not passed."""
+def rule_applies(
+    rule: DeadlineRule,
+    document_type: DocumentType,
+    today: date,
+    category: DocumentCategory | None = None,
+) -> bool:
+    """D-11 conditions (c) and (d): the type is listed (an ``other_notice`` also of the rule's
+    category, TAXONOMY §5.3) and ``valid_until`` has not passed."""
     if document_type in NEVER_ESTIMATE_TYPES:
         return False
     if document_type not in rule.applies_to_doc_types:
+        return False
+    needed = OTHER_NOTICE_RULE_CATEGORY.get(rule.id)
+    if document_type is DocumentType.other_notice and needed is not None and category != needed:
         return False
     return rule.valid_until is None or rule.valid_until >= today
 
@@ -467,6 +488,7 @@ def matching_rules(
     document_type: DocumentType,
     rules: Sequence[DeadlineRule],
     today: date,
+    category: DocumentCategory | None = None,
 ) -> list[DeadlineRule]:
     """Seeded rules (table order) whose pattern matches the printed phrase and that apply today."""
     if not relative_rule_text:
@@ -475,7 +497,8 @@ def matching_rules(
     return [
         rule
         for rule in rules
-        if rule_applies(rule, document_type, today) and compile_rule_pattern(rule).search(phrase)
+        if rule_applies(rule, document_type, today, category)
+        and compile_rule_pattern(rule).search(phrase)
     ]
 
 
@@ -484,9 +507,10 @@ def find_rule(
     document_type: DocumentType,
     rules: Sequence[DeadlineRule],
     today: date,
+    category: DocumentCategory | None = None,
 ) -> DeadlineRule | None:
     """First rule from ``matching_rules`` (``None`` when no seeded rule fits)."""
-    found = matching_rules(relative_rule_text, document_type, rules, today)
+    found = matching_rules(relative_rule_text, document_type, rules, today, category)
     return found[0] if found else None
 
 
@@ -541,18 +565,39 @@ def _append_note(existing: str | None, note: str) -> str:
     return existing if note in existing else f"{existing} {note}"
 
 
+# Paper types that only US senders issue print numeric dates month first (MM/DD/YYYY). A paper
+# that may come from abroad (vaccine records, lab results, medicine labels, report cards) or of
+# unknown origin (``other_notice``, ``unknown``) has no default: without a cue on the page an
+# ambiguous "03/04/2026" stays ambiguous.
+NO_DEFAULT_ORDER_TYPES = frozenset(
+    {
+        DocumentType.vaccine_record, DocumentType.lab_result, DocumentType.prescription_label,
+        DocumentType.report_card, DocumentType.other_notice, DocumentType.unknown,
+    }
+)  # fmt: skip
+
+
+def paper_default_order(document_type: DocumentType) -> DateFormat | None:
+    """The numeric date order a paper of this type prints when the page itself gives no cue."""
+    return None if document_type in NO_DEFAULT_ORDER_TYPES else DateFormat.mdy
+
+
 @dataclass(frozen=True)
 class DeadlineContext:
-    """Everything ``apply_deadline_rules`` needs besides the demands themselves."""
+    """Everything ``apply_deadline_rules`` needs besides the demands themselves.
+
+    ``default_order`` is the paper's own default numeric order (``paper_default_order``), never
+    the reader's display preference."""
 
     document_type: DocumentType
     rules: Sequence[DeadlineRule]
     today: date
-    date_format: DateFormat = DateFormat.auto
+    default_order: DateFormat | None = None
     language: str | None = None
     order_cue: DateFormat | None = None
     digit_system: DigitSystem = DigitSystem.western
     t: Translator | None = None
+    category: DocumentCategory | None = None
 
 
 def resolve_stated(demand: Demand, source: DemandOut | None, ctx: DeadlineContext) -> Demand:
@@ -562,7 +607,7 @@ def resolve_stated(demand: Demand, source: DemandOut | None, ctx: DeadlineContex
     if printed is None:
         return demand
     parsed = parse_dates(
-        printed, date_format=ctx.date_format, language=ctx.language, order_cue=ctx.order_cue
+        printed, default_order=ctx.default_order, language=ctx.language, order_cue=ctx.order_cue
     )
     if not parsed.dates and not parsed.ambiguous_numeric and not parsed.extra_mentions:
         return demand  # no date in the text at all → maybe relative, else unresolved in pass 2
@@ -621,7 +666,7 @@ def resolve_relative(
     anchor: Demand | None = None
     if demand.kind is DemandKind.relative_deadline and source is not None:
         phrase = source.relative_rule_text
-        for cand in matching_rules(phrase, ctx.document_type, ctx.rules, ctx.today):
+        for cand in matching_rules(phrase, ctx.document_type, ctx.rules, ctx.today, ctx.category):
             anchor = _anchor_for(source, cand, stated, transcript)
             if anchor is not None:
                 rule = cand
@@ -674,16 +719,18 @@ def context_for(
     rules: Sequence[DeadlineRule],
     now: datetime,
     state: str | None = None,
-    date_format: DateFormat = DateFormat.auto,
     language: str | None = None,
     transcript_text: str = "",
     digit_system: DigitSystem = DigitSystem.western,
     t: Translator | None = None,
+    category: DocumentCategory | None = None,
 ) -> DeadlineContext:
-    """Convenience builder: ``today`` in the state's zone and the paper-wide numeric order cue."""
+    """Convenience builder: ``today`` in the state's zone, the paper-wide numeric order cue and
+    the type's default order. There is no ``date_format`` argument on purpose: the reader's
+    display preference never decides how a printed date is read."""
     return DeadlineContext(
         document_type=document_type, rules=rules, today=local_today(now, state),
-        date_format=date_format, language=language,
+        default_order=paper_default_order(document_type), language=language, category=category,
         order_cue=numeric_order_cue(transcript_text) if transcript_text else None,
         digit_system=digit_system, t=t,
     )  # fmt: skip
@@ -695,6 +742,8 @@ __all__ = [
     "DEFAULT_TIME_ZONE",
     "MONTH_LANGUAGES",
     "NEVER_ESTIMATE_TYPES",
+    "NO_DEFAULT_ORDER_TYPES",
+    "OTHER_NOTICE_RULE_CATEGORY",
     "STATE_TIME_ZONES",
     "DateParse",
     "DeadlineContext",
@@ -710,6 +759,7 @@ __all__ = [
     "localize_digits",
     "matching_rules",
     "numeric_order_cue",
+    "paper_default_order",
     "parse_dates",
     "resolve_relative",
     "resolve_stated",

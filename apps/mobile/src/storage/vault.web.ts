@@ -1,13 +1,21 @@
 // Web vault (D-23, PRODUCT_SPEC §9.4): in-memory Maps for the tab session by default; after the
-// user opts into "Keep on this device (not encrypted by the app)" every record is also written to
-// IndexedDB `proxyhealth` (idb.web.ts) and loaded back on the next visit. "Clear when I close this
-// tab" wipes memory + IndexedDB on `pagehide`. No secrets on web. Consent wraps `kv` (D-22).
+// user opts into "Keep on this device (not encrypted by the app)" with "Clear when I close this tab"
+// OFF, every record is also written to IndexedDB `proxyhealth` (idb.web.ts) and loaded back on the
+// next visit. With "Clear when I close this tab" ON the papers stay in memory only and are never
+// written to IndexedDB: the browser does not finish asynchronous work after `pagehide`, so an
+// IndexedDB wipe started there never reached `deleteDatabase` and the papers came back on the next
+// visit (shared / library computers). The result the user sees is the one the spec promises (the
+// store is empty once the tab is closed or reloaded); `pagehide` still clears memory synchronously
+// and queues `deleteDatabase` without awaiting. Any `proxyhealth` database left behind (an older
+// build, a failed wipe, or a switch from keeping to clear-on-close) is deleted before anything is
+// loaded. No secrets on web. Consent wraps `kv` (D-22).
 
 import type { DocumentRow, Member, Reminder, StoredDocument, StoredPage, Vault } from '@/storage/index';
 import { consentStore } from '@/storage/consent';
 import * as files from '@/storage/files.web';
 import {
   deleteIdb,
+  deleteIdbNow,
   idbAll,
   idbDelete,
   idbDeletePrefix,
@@ -36,6 +44,8 @@ const mem = {
 };
 
 let persistent = false;
+/** False until the first `configureVault` call has checked for a leftover database. */
+let idbChecked = false;
 let pagehideListener: (() => void) | null = null;
 
 const pageKey = (documentId: string, page: number) => `${documentId}|${page}`;
@@ -89,15 +99,38 @@ async function flushToIdb(): Promise<void> {
   for (const c of mem.checklist.values()) await put('checklist_state', c);
   for (const r of mem.reminders.values()) await put('reminders', r);
   for (const [key, value] of mem.meta) await put('meta', { key, value });
+  for (const [path, blob] of files.memoryBlobEntries()) await put('blobs', { path, blob });
+}
+
+/** Before leaving IndexedDB: copy its page images into memory so this tab still shows them. */
+async function pullBlobsIntoMemory(): Promise<void> {
+  try {
+    files.adoptBlobs(await idbAll<{ path: string; blob: Blob }>('blobs'));
+  } catch {
+    // unreadable store: the records stay, their page images are gone with the database
+  }
 }
 
 function clearMemory(): void {
   Object.values(mem).forEach((m) => m.clear());
 }
 
+/** Synchronous clear for `pagehide` (and the only thing that may run while the page unloads). */
+function clearNow(): void {
+  clearMemory();
+  files.clearMemoryFiles();
+  deleteIdbNow();
+}
+
+type EventTargetLike = {
+  addEventListener?: (e: string, f: () => void) => void;
+  removeEventListener?: (e: string, f: () => void) => void;
+};
+
 /** Apply the user's web persistence settings (called by StorageProvider on every change). */
 export async function configureVault(config: VaultConfig): Promise<void> {
-  const wantIdb = config.persist === 'indexeddb' && indexedDbAvailable();
+  // "Clear when I close this tab" keeps papers in memory only (see the header comment).
+  const wantIdb = config.persist === 'indexeddb' && !config.clearOnClose && indexedDbAvailable();
   if (wantIdb && !persistent) {
     persistent = true;
     files.setBlobSink(idbBlobSink);
@@ -108,20 +141,33 @@ export async function configureVault(config: VaultConfig): Promise<void> {
       persistent = false;
       files.setBlobSink(null);
     }
-  } else if (!wantIdb && persistent) {
+  } else if (!wantIdb && (persistent || !idbChecked)) {
+    if (persistent) await pullBlobsIntoMemory();
     persistent = false;
     files.setBlobSink(null);
+    // Also at start-up: nothing may be read back from a database the user asked not to keep.
     await deleteIdb();
   }
-  const g = globalThis as { addEventListener?: (e: string, f: () => void) => void; removeEventListener?: (e: string, f: () => void) => void };
+  idbChecked = true;
+  const g = globalThis as EventTargetLike;
   if (pagehideListener && g.removeEventListener) g.removeEventListener('pagehide', pagehideListener);
   pagehideListener = null;
-  if (config.clearOnClose && persistent && g.addEventListener) {
-    pagehideListener = () => {
-      void vault.wipeAll();
-    };
+  if (config.persist === 'indexeddb' && config.clearOnClose && g.addEventListener) {
+    pagehideListener = clearNow;
     g.addEventListener('pagehide', pagehideListener);
   }
+}
+
+/** Tests: back to a fresh tab (memory only, no listener, leftover check pending). */
+export function resetWebVaultForTests(): void {
+  const g = globalThis as EventTargetLike;
+  if (pagehideListener && g.removeEventListener) g.removeEventListener('pagehide', pagehideListener);
+  pagehideListener = null;
+  persistent = false;
+  idbChecked = false;
+  files.setBlobSink(null);
+  clearMemory();
+  files.clearMemoryFiles();
 }
 
 export function isPersistent(): boolean {

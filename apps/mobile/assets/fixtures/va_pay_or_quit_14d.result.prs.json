@@ -27,7 +27,7 @@
       "span_ids": [
         "p1b6"
       ],
-      "text": "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید.",
+      "text": "اطلاعیه می‌گوید شما $1,450.00 کرایه ماه September 2026 را بدهکار هستید.",
       "value_verbatim": "$1,450.00",
       "verification_note": "exact",
       "verified": true
@@ -58,7 +58,7 @@
       "span_ids": [
         "p1b7"
       ],
-      "text": "اطلاعیه ۸ اکتبر ۲۰۲۶ را روز پرداخت کامل مبلغ می‌گوید.",
+      "text": "اطلاعیه October 8, 2026 را روز پرداخت کامل مبلغ می‌گوید.",
       "value_verbatim": "October 8, 2026",
       "verification_note": "exact",
       "verified": true
@@ -89,7 +89,7 @@
       "span_ids": [
         "p1b8"
       ],
-      "text": "اطلاعیه ۱۴ روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است.",
+      "text": "اطلاعیه 14 روز از تاریخ اطلاعیه را هم ذکر می‌کند. از صاحب‌خانه بپرسید منظور کدام تاریخ است.",
       "value_verbatim": "within 14 days of the date of this notice",
       "verification_note": "exact",
       "verified": true
@@ -616,7 +616,7 @@
   "sender_as_written": "Oak Hollow Property Management LLC",
   "sender_kind": "landlord",
   "summary": {
-    "body": "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا ۸ اکتبر ۲۰۲۶ پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست.",
+    "body": "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا October 8, 2026 پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست.",
     "body_en": "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order.",
     "span_ids": [
       "p1b1",
@@ -629,7 +629,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: ۲۴ سپتمبر ۲۰۲۶\nاطلاعیه ۱۴ روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد ۱۲\nشما $1,450.00 کرایه ماه سپتمبر ۲۰۲۶ را بدهکار هستید.\nشما باید تمام مبلغ را تا ۸ اکتبر ۲۰۲۶ پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف ۱۴ روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
+      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: September 24, 2026\nاطلاعیه 14 روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد 12\nشما $1,450.00 کرایه ماه September 2026 را بدهکار هستید.\nشما باید تمام مبلغ را تا October 8, 2026 پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف 14 روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
     }
   ],
   "translation_confidence": "medium",

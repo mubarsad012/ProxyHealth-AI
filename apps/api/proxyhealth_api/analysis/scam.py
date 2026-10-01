@@ -1,11 +1,15 @@
 """Scam scoring — code, not the model (D-13; DOCUMENT_TAXONOMY §6; AI_PROMPTS §11.6).
 
-Signals = regex hits from ``data/safety/scam.yaml`` over the NFKC-normalised transcript (en + es)
-∪ verified model ``red_flags`` of the scam kinds (a model flag and a regex for the same signal id
-count once). Guards (sender kind, document type, negative regex on the hit block) can lower a
-signal's weight to 0/1. ``score`` = Σ weights; ``likely`` when ``score ≥ 4`` or one of the
-``likely_rules`` holds; ``possible`` when ``2 ≤ score < 4`` or a lone payment-app request on a
-private sender; else ``none``. The model's ``scam_signals`` are hints only and never score.
+Signals = regex hits from ``data/safety/scam.yaml`` over the NFKC-normalised transcript (en, es,
+ar, prs and ps patterns, every one run on every text) ∪ verified model ``red_flags`` of the scam
+kinds (a model flag and a regex for the same signal id count once). A payment term inside a
+negated or anti-fraud sentence ("USCIS will never ask you to pay with gift cards",
+``negation_cues``) is not a hit, and a model payment flag quoting only such sentences is ignored.
+Guards (sender kind, document type, negative regex on the hit block, a ``.gov`` payment portal
+printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights; ``likely`` when
+``score ≥ 4`` or one of the ``likely_rules`` holds; ``possible`` when ``2 ≤ score < 4`` or a lone
+payment-app request on a private sender; else ``none``. The model's ``scam_signals`` are hints
+only and never score.
 
 Outputs: ``scam_risk``, ``scam_reasons`` (the fixed ``scam.*`` keys, weight desc then table order,
 ≤ 6), ``is_likely_scam`` and code ``RedFlag``s for regex-only signals (text from the pack, quote =
@@ -70,6 +74,9 @@ class Guard:
     negative_regex: re.Pattern[str] | None = None
     requires_sender_name: bool = False
     unless_any_of: frozenset[str] = frozenset()
+    gov_url_in_segment: bool = False
+    """The hit block prints a ``.gov``/``.mil`` address and no phone, e-mail or other address
+    (an agency's own payment portal: "pay online with PayPal at vacourts.gov")."""
 
 
 @dataclass(frozen=True)
@@ -85,6 +92,22 @@ class Signal:
     weight_with_secrecy: int | None = None
     secrecy_patterns: tuple[re.Pattern[str], ...] = ()
     weight_with_threat: int | None = None
+    negation: bool = False
+    """Matches in a negated or anti-fraud sentence ("USCIS will never ask you to pay with gift
+    cards") do not count (``ScamConfig.negation_cues``)."""
+
+
+@dataclass(frozen=True)
+class NegationCues:
+    """``scam.yaml`` ``negation_cues``: when a payment term sits in a sentence that negates the
+    request or describes fraud, it is agency anti-fraud boilerplate, not a demand."""
+
+    before: tuple[re.Pattern[str], ...] = ()
+    """Cue somewhere before the match in the same sentence ("will never ask you to pay by")."""
+    after: tuple[re.Pattern[str], ...] = ()
+    """Cue after the match in the same sentence ("… with gift cards is a scam")."""
+    breaks: re.Pattern[str] | None = None
+    """Words between a ``before`` cue and the match that end its scope ("… only gift cards")."""
 
 
 @dataclass(frozen=True)
@@ -106,6 +129,7 @@ class ScamConfig:
     likely_rules: tuple[str, ...]
     signals: tuple[Signal, ...]
     reviewed_by: Mapping[str, str | None]
+    negation_cues: NegationCues = field(default_factory=NegationCues)
 
     def signal(self, signal_id: str) -> Signal | None:
         """The signal with id ``signal_id`` from the table, or ``None`` when it is not listed."""
@@ -134,7 +158,18 @@ def _guard(raw: Mapping[str, Any]) -> Guard:
         negative_regex=re.compile(str(neg), re.IGNORECASE) if neg else None,
         requires_sender_name=bool(raw.get("requires_sender_name", False)),
         unless_any_of=frozenset(str(x) for x in raw.get("unless_any_of") or []),
+        gov_url_in_segment=bool(raw.get("gov_url_in_segment", False)),
     )
+
+
+def _negation_cues(raw: Any) -> NegationCues:
+    if not isinstance(raw, Mapping):
+        return NegationCues()
+    breaks = raw.get("breaks")
+    return NegationCues(
+        before=_patterns(raw.get("before")), after=_patterns(raw.get("after")),
+        breaks=re.compile(str(breaks), re.IGNORECASE) if breaks else None,
+    )  # fmt: skip
 
 
 def parse_config(data: Mapping[str, Any]) -> ScamConfig:
@@ -152,6 +187,7 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
                 weight_with_secrecy=raw.get("weight_with_secrecy"),
                 secrecy_patterns=_patterns(raw.get("secrecy_patterns")),
                 weight_with_threat=raw.get("weight_with_threat"),
+                negation=bool(raw.get("negation", False)),
             )
         )
     signals.append(  # model scam_payment_method flag whose quote names no known method
@@ -179,6 +215,7 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
         likely_rules=tuple(str(x) for x in data.get("likely_rules") or []),
         signals=tuple(signals),
         reviewed_by=dict(data.get("reviewed_by") or {}),
+        negation_cues=_negation_cues(data.get("negation_cues")),
     )  # fmt: skip
 
 
@@ -236,6 +273,78 @@ class ScamOutcome:
     def fired(self) -> list[str]:
         """Signal ids with a positive weight after guards."""
         return [sid for sid, h in self.hits.items() if h.weight > 0]
+
+
+_SENTENCE_END_RE = re.compile(r"[.!?;\n]")
+
+
+def _ends_sentence(text: str, i: int) -> bool:
+    """``text[i]`` (one of ``.!?;`` or a newline) ends a sentence; a decimal point ("1.5") or a
+    dot inside a word or domain ("uscis.gov") does not."""
+    if text[i] != ".":
+        return True
+    before = text[i - 1] if i > 0 else ""
+    after = text[i + 1] if i + 1 < len(text) else ""
+    return not ((before.isdigit() and after.isdigit()) or (before.isalnum() and after.isalnum()))
+
+
+def _sentence_bounds(text: str, start: int, end: int) -> tuple[int, int]:
+    """(start, end) of the sentence around ``text[start:end]``."""
+    head = 0
+    for m in _SENTENCE_END_RE.finditer(text, 0, start):
+        if _ends_sentence(text, m.start()):
+            head = m.end()
+    tail = len(text)
+    for m in _SENTENCE_END_RE.finditer(text, end):
+        if _ends_sentence(text, m.start()):
+            tail = m.start()
+            break
+    return head, tail
+
+
+def is_negated(text: str, start: int, end: int, cues: NegationCues) -> bool:
+    """True when the match ``text[start:end]`` sits in a sentence that negates the request or
+    describes fraud ("… will never ask you to pay with gift cards", "Nunca le pediremos pagos
+    con tarjetas de regalo", "anyone who asks for gift cards is a scammer") — unless a scope
+    break ("only", "instead", "but") stands between the negating cue and the match."""
+    head, tail = _sentence_bounds(text, start, end)
+    before = text[head:start]
+    for pattern in cues.before:
+        for m in pattern.finditer(before):
+            between = before[m.end() :]
+            if cues.breaks is None or not cues.breaks.search(between):
+                return True
+    after = text[end:tail]
+    return any(p.search(after) for p in cues.after)
+
+
+def _signal_match(sig: Signal, text: str, cues: NegationCues) -> bool:
+    """True when a pattern of ``sig`` matches ``text`` outside a negated sentence."""
+    for p in sig.patterns:
+        for m in p.finditer(text):
+            if not (sig.negation and is_negated(text, m.start(), m.end(), cues)):
+                return True
+    return False
+
+
+def is_anti_fraud_quote(quote: str | None, config: ScamConfig | None = None) -> bool:
+    """True when ``quote`` names a payment method only inside negated / anti-fraud sentences
+    ("USCIS will never ask you to pay by Western Union"): such a model red flag is boilerplate,
+    not a demand, and neither scores nor shows."""
+    if not quote:
+        return False
+    cfg = config or load_config()
+    text = normalize(quote)
+    seen = False
+    for sig in cfg.signals:
+        if not sig.negation:
+            continue
+        for p in sig.patterns:
+            for m in p.finditer(text):
+                seen = True
+                if not is_negated(text, m.start(), m.end(), cfg.negation_cues):
+                    return False
+    return seen
 
 
 def _agency_regex(names: Sequence[str]) -> re.Pattern[str]:
@@ -311,8 +420,13 @@ def _guard_applies(
     sender_kind: SenderKind,
     sender_as_written: str | None,
     fired_before: set[str],
+    gov_tlds: Sequence[str] = (".gov", ".mil"),
 ) -> bool:
     if guard.sender_kind and sender_kind.value not in guard.sender_kind:
+        return False
+    if guard.gov_url_in_segment and not (
+        hit.segment is not None and _gov_portal_only(hit.segment.text, gov_tlds)
+    ):
         return False
     if guard.document_type and (document_type is None or document_type.value not in
                                 guard.document_type):  # fmt: skip
@@ -324,6 +438,16 @@ def _guard_applies(
         if not texts or not all(guard.negative_regex.search(normalize(t)) for t in texts):
             return False
     return not (guard.unless_any_of & fired_before)
+
+
+def _gov_portal_only(text: str, gov_tlds: Sequence[str]) -> bool:
+    """The block prints at least one ``.gov``/``.mil`` address and no other contact (no phone,
+    e-mail or non-government address a payment could be sent to)."""
+    contacts = find_contacts(normalize(text), include_orgs=False)
+    urls = [c for c in contacts if c.kind == "url"]
+    if not urls or len(urls) != len(contacts):
+        return False
+    return all(is_gov_host(host_of(c.text), gov_tlds) for c in urls)
 
 
 def _match_signal(config: ScamConfig, kind: RedFlagKind, text: str) -> str:
@@ -358,9 +482,10 @@ def score_scam(
     cfg = config or load_config()
     hits: dict[str, SignalHit] = {}
     norm = [(seg, normalize(seg.text)) for seg in segments]
+    cues = cfg.negation_cues
     for sig in cfg.signals:
         for seg, text in norm:
-            if sig.patterns and any(p.search(text) for p in sig.patterns):
+            if sig.patterns and _signal_match(sig, text, cues):
                 hits[sig.id] = SignalHit(sig, segment=seg, from_regex=True)
                 break
     non_gov = cfg.signal("non_gov_domain")
@@ -371,6 +496,10 @@ def score_scam(
     for flag in model_flags:
         if not flag.verified or flag.kind not in MODEL_SCAM_KINDS:
             continue
+        if flag.kind is RedFlagKind.scam_payment_method and is_anti_fraud_quote(
+            flag.source_quote, cfg
+        ):
+            continue  # "USCIS will never ask you to pay with gift cards" is not a demand
         sid = _match_signal(cfg, flag.kind, f"{flag.source_quote or ''} {flag.text}")
         model_sig = cfg.signal(sid)
         if model_sig is None:
@@ -394,6 +523,7 @@ def score_scam(
             if _guard_applies(
                 guard, hit, document_type=document_type, sender_kind=sender_kind,
                 sender_as_written=sender_as_written, fired_before=fired_before - {hit.signal.id},
+                gov_tlds=cfg.gov_tlds,
             ):  # fmt: skip
                 hit.weight = guard.weight
                 break
@@ -516,9 +646,12 @@ __all__ = [
     "Segment",
     "Signal",
     "SignalHit",
+    "NegationCues",
     "find_non_gov_domains",
     "host_of",
+    "is_anti_fraud_quote",
     "is_gov_host",
+    "is_negated",
     "load_config",
     "parse_config",
     "retype_for_scam",

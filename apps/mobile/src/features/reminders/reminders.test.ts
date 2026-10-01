@@ -11,6 +11,7 @@ import type { NotificationPermission, NotificationsApi, ScheduleRequest } from '
 import type { DocumentRow, Reminder, StoredDocument } from '@/storage/index';
 import type { CapturedPage } from '@/store/session';
 
+import { formatClock, formatDay, formatFireTime, gregorianLocale, toWesternDigits } from './format';
 import { groupReminders, OWN_GROUP_KEY } from './groups';
 import { rescheduleMissing, setReminderEnabled } from './manage';
 import { computeFireTimes, nextStatedDate, notificationText, reminderEligibility, toIsoDay } from './schedule';
@@ -456,10 +457,70 @@ describe('S14 grouping and the Home next-date card', () => {
   });
 });
 
+describe('date wording: Gregorian calendar, Western digits (D-26)', () => {
+  // prs/ps/fa default to the Solar Hijri calendar ("15 Mizan 1405") and th to the Buddhist one
+  // ("2569"): a court date must read as the paper prints it — October 7, 2026.
+  it.each(['prs', 'ps', 'fa', 'ar', 'ur', 'th', 'my', 'es', 'en'])('%s: formatDay keeps 2026, day 7 and Western digits', (tag) => {
+    const text = formatDay('2026-10-07', tag);
+    expect(text).toContain('2026');
+    expect(text).toMatch(/\b7\b/);
+    expect(text).not.toMatch(/1405|2569/);
+    expect(text).not.toMatch(/[\u0660-\u0669\u06f0-\u06f9\u1040-\u1049]/);
+  });
+
+  it('English and Dari read as the Gregorian date', () => {
+    expect(formatDay('2026-10-07', 'en')).toBe('Wednesday, October 7, 2026');
+    const prs = formatDay('2026-10-07', 'prs');
+    expect(prs).not.toContain('میزان'); // Solar Hijri month "Mizan"
+    expect(prs).toContain('اکتوبر'); // October
+    const fire = formatFireTime(new Date(2026, 9, 4, 9, 0).toISOString(), 'prs');
+    expect(fire).toContain('2026');
+    expect(fire).toContain('9:00');
+    expect(fire).not.toMatch(/[\u06f0-\u06f9]/);
+    expect(formatClock(new Date(2026, 9, 4, 9, 5).toISOString(), 'ps')).toMatch(/9:05/);
+  });
+
+  it('helpers: locale extension, digit mapping, numeric fallback', () => {
+    expect(gregorianLocale('prs')).toBe('prs-u-ca-gregory-nu-latn');
+    expect(gregorianLocale('en-u-ca-gregory')).toBe('en-u-ca-gregory');
+    expect(toWesternDigits('۱۴۰۵ ٢٠٢٦ ၂၀၂၆ 12')).toBe('1405 2026 2026 12');
+    expect(formatDay('not a date', 'prs')).toBe('not a date');
+    expect(formatDay('2026-10-07', '###')).toBe('2026-10-07');
+  });
+});
+
 describe('opt-in save document', () => {
   const pages: CapturedPage[] = [
     { id: 'p1', uri: 'file:///p1.jpg', base64: 'QUJD', mimeType: 'image/jpeg', rotation: 0, masks: [], source: 'camera' },
   ];
+
+  it('never stores a page whose "Hide parts" boxes are not burned into its pixels (D-19)', () => {
+    const box = { x0: 0.1, y0: 0.1, x1: 0.5, y1: 0.2 };
+    const masked: CapturedPage[] = [
+      { ...pages[0], id: 'm1', base64: '/9j/UNMASKED_ORIGINAL_BYTES_WITH_SSN', masks: [box] },
+      { ...pages[0], id: 'm2', base64: 'UExBSU4=', masks: [] },
+    ];
+    // Native (masks travel as `masks[]`; the session page is the original photo): page 1 is dropped.
+    const native = buildStoredDocument({ analysis: analysis(), pages: masked, memberId: 'me', keepPages: true, hideIds: false, now: NOW, t });
+    expect(native.pages.map((p) => p.base64Jpeg)).toEqual(['UExBSU4=']);
+    expect(JSON.stringify(native)).not.toContain('UNMASKED_ORIGINAL_BYTES_WITH_SSN');
+    // Web display pages from `preparePages` have the boxes burned in: they may be kept.
+    const web = buildStoredDocument({
+      analysis: analysis(),
+      pages: masked,
+      memberId: 'me',
+      keepPages: true,
+      hideIds: false,
+      now: NOW,
+      t,
+      masksBurnedIn: true,
+    });
+    expect(web.pages.map((p) => p.page)).toEqual([1, 2]);
+    // A paper whose only page is masked keeps no images at all (the row says so).
+    const only = buildStoredDocument({ analysis: analysis(), pages: [masked[0]], memberId: 'me', keepPages: true, hideIds: false, now: NOW, t });
+    expect(only.pages).toEqual([]);
+    expect(only.doc.keepPages).toBe(false);
+  });
 
   it('keeps page images only when the setting is on', () => {
     const on = buildStoredDocument({ analysis: analysis(), pages, memberId: 'me', keepPages: true, hideIds: false, now: NOW, t });

@@ -22,6 +22,7 @@ from proxyhealth_api.contracts.enums import (
 )
 from proxyhealth_api.contracts.resources import ResourceMatchRequest, ResourceMatchResponse
 from proxyhealth_api.resources import matcher
+from proxyhealth_api.resources.loader import normalize_org_name
 from tests.unit._fixtures_wp3 import SEED_TODAY, make_repo, make_resource, real_meta, real_repo
 
 
@@ -351,3 +352,126 @@ def test_en_strings_override_meta_copy() -> None:
         req, real_repo(), en_strings={"why.for_medical_bill": "Bills!"}, today=SEED_TODAY
     )
     assert resp.results[0].why[1] == "Bills!"
+
+
+# ---- why chips never repeat (Phase 2B finding: "To report a scam" twice) ---------------------
+
+
+def _assert_no_repeated_chip(resp: ResourceMatchResponse) -> None:
+    for m in resp.results:
+        assert len(m.why_keys) == len(m.why) <= matcher.MAX_WHY_KEYS, m.resource.id
+        assert len(set(m.why_keys)) == len(m.why_keys), (m.resource.id, m.why_keys)
+        assert len(set(m.why)) == len(m.why), (m.resource.id, m.why)
+
+
+def test_scam_forced_entries_do_not_repeat_the_report_scam_chip() -> None:
+    resp = run(tags=["scam_report"], scam_risk="likely", language="en", limit=12)
+    _assert_no_repeated_chip(resp)
+    forced = [m for m in resp.results if ResourceTag.scam_report in m.resource.tags]
+    assert [m.resource.id for m in forced][:3] == ["dhs_oig", "uscis_scams", "ftc_reportfraud"]
+    for m in forced:
+        assert m.why_keys[0] == "why.report_scam"
+        assert "why.for_scam_report" not in m.why_keys
+        assert m.why.count("To report a scam") == 1
+    dhs = forced[0]
+    assert dhs.why_keys == ["why.report_scam", "why.anywhere_in_us", "why.speaks_your_language"]
+
+
+def test_scam_forced_entry_names_its_next_shared_tag_instead() -> None:
+    resp = run(
+        tags=["scam_report", "immigration_legal_help"], scam_risk="likely", language="en", limit=8
+    )
+    _assert_no_repeated_chip(resp)
+    eoir = next(m for m in resp.results if m.resource.id == "eoir_roster")
+    assert eoir.why_keys[:3] == [
+        "why.report_scam",
+        "why.for_immigration_legal_help",
+        "why.anywhere_in_us",
+    ]
+
+
+def test_crisis_forced_entries_do_not_repeat_the_help_right_now_chip() -> None:
+    resp = run(tags=["crisis"], emergency=True, language="en", limit=12)
+    _assert_no_repeated_chip(resp)
+    line = next(m for m in resp.results if m.resource.id == "988")
+    assert line.why_keys[0] == "why.crisis_line"
+    assert "why.for_crisis" not in line.why_keys
+    assert line.why.count("Help right now") == 1
+
+
+@pytest.mark.parametrize("tag", [t.value for t in ResourceTag])
+def test_no_card_repeats_a_chip_for_any_tag(tag: str) -> None:
+    for scam_risk, emergency in (("likely", True), ("likely", False), ("none", True)):
+        resp = run(
+            tags=[tag],
+            scam_risk=scam_risk,
+            emergency=emergency,
+            state="VA",
+            county="Fairfax",
+            language="en",
+            limit=12,
+        )
+        _assert_no_repeated_chip(resp)
+
+
+def test_keys_rendering_the_same_text_collapse_to_the_first() -> None:
+    req = ResourceMatchRequest(**EXAMPLE_A)
+    resp = matcher.match(
+        req,
+        real_repo(),
+        en_strings={"why.anywhere_in_us": "For hospital and doctor bills"},
+        today=SEED_TODAY,
+    )
+    irs = next(m for m in resp.results if m.resource.id == "irs_501r")
+    assert irs.why_keys == ["why.for_medical_bill"]
+    assert irs.why == ["For hospital and doctor bills"]
+
+
+# ---- institutions_as_written is bounded (Phase 2B finding: event-loop stall) -----------------
+
+
+def test_prepare_institutions_trims_bounds_and_dedupes() -> None:
+    long = "Inova " + "z" * 5000
+    got = matcher.prepare_institutions(
+        ["  Inova Health System ", long, "ab", "INOVA HEALTH SYSTEM, INC.", "The Hospital"]
+    )
+    assert [i.written for i in got] == [
+        "Inova Health System",
+        long[: matcher.MAX_INSTITUTION_CHARS],
+    ]
+    assert all(len(i.written) <= matcher.MAX_INSTITUTION_CHARS for i in got)
+    many = matcher.prepare_institutions([f"Org number {n}" for n in range(25)])
+    assert len(many) == matcher.MAX_INSTITUTIONS
+
+
+def test_long_institutions_are_normalised_once_per_request_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lengths: list[int] = []
+
+    def counting(value: str) -> str:
+        lengths.append(len(value))
+        return normalize_org_name(value)
+
+    monkeypatch.setattr("proxyhealth_api.resources.matcher.normalize_org_name", counting)
+    rng = random.Random(3)
+    letters = "abcdefghijklmnopqrstuvwxyz "
+    huge = ["".join(rng.choice(letters) for _ in range(50_000)) for _ in range(10)]
+    resp = run(
+        tags=["immigration_legal_help"], state="VA", language="en", institutions_as_written=huge
+    )
+    assert resp.results  # still a normal answer
+    assert max(lengths) <= matcher.MAX_INSTITUTION_CHARS  # never the raw 50k-char strings
+    request_side = [n for n in lengths if n == matcher.MAX_INSTITUTION_CHARS]
+    assert len(request_side) == 10  # once per request item, not once per resource
+
+
+def test_matching_long_institution_echo_is_bounded() -> None:
+    inova = real_repo().get("inova_fa")
+    assert inova is not None
+    written = inova.name + " " + "x" * 300_000
+    resp = run(**{**EXAMPLE_A, "institutions_as_written": [written]})
+    first = resp.results[0]
+    assert first.resource.id == "inova_fa"
+    assert first.why_keys[0] == "why.institution_match"
+    assert len(first.why[0]) <= len("Named on your paper ()") + matcher.MAX_INSTITUTION_CHARS

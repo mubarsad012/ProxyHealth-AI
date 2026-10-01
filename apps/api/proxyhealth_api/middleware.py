@@ -14,7 +14,8 @@ answers ``413`` the moment the stream passes it — in both cases before JSON pa
 
 The consent + tier gate is a FastAPI dependency because it needs the JSON body
 (``demo_sample_id``); the rate limit (``ratelimit.py``) is a dependency for the same reason.
-WP2's three gated routers attach both.
+WP2's three gated routers attach both. The gate also copies the body's contract field
+``client_platform`` (API_CONTRACT §3.5/§3.6) to ``request.state`` for the access log.
 """
 
 import hmac
@@ -46,7 +47,7 @@ _CONSENT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 CORS_ALLOW_HEADERS = [
     "Content-Type", "Accept-Language", "X-Consent-Version", "X-Install-Id", "X-Request-Id",
-    "X-App-Token", "X-Admin-Token", "X-Client-Platform", "If-None-Match",
+    "X-App-Token", "X-Admin-Token", "If-None-Match",
 ]  # fmt: skip
 CORS_EXPOSE_HEADERS = [
     "X-Request-Id", "X-Data-Use-Tier", "X-Contract-Version", "Retry-After", "ETag",
@@ -111,7 +112,7 @@ class RequestContextMiddleware:
                 return
             await self.app(scope, receive, send_wrapper)
         finally:
-            platform = headers.get("x-client-platform", "")
+            platform = state.get("client_platform")  # set by consent_and_tier_gate from the body
             log_event(
                 request_id=request_id,
                 route=_route_template(scope),
@@ -243,18 +244,21 @@ def install_middlewares(app: FastAPI, settings: Settings) -> None:
     )
 
 
-async def _demo_sample_id(request: Request) -> str | None:
+async def _json_object(request: Request) -> dict[str, Any] | None:
+    """The request body as a JSON object, or ``None`` (the route's own validation answers 400)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _known_demo_sample_id(request: Request, body: dict[str, Any]) -> str | None:
     """The body's ``demo_sample_id`` when it names a bundled fixture, else ``None``.
 
     Only an id that exists in ``app.state.fixtures`` exempts a request from the gate: an unknown
     id is treated like no id, so it cannot smuggle real pages past the 428/403 checks.
     """
-    try:
-        body = await request.json()
-    except Exception:
-        return None  # malformed JSON: the route's own validation answers 400
-    if not isinstance(body, dict):
-        return None
     value = body.get("demo_sample_id")
     if not isinstance(value, str) or not value.strip():
         return None
@@ -262,6 +266,25 @@ async def _demo_sample_id(request: Request) -> str | None:
     if fixtures is None or fixtures.get(value) is None:
         return None
     return value
+
+
+# Routes whose whole body is client material the server never swaps for the fixture on disk:
+# chat re-sends the analysis context (original_text, sender, summary, demands) plus the history and
+# the typed question, so a demo_sample_id there does not make the content a sample (D-01).
+_CLIENT_TEXT_ROUTES = frozenset({"/v1/chat"})
+# Free-text fields a demo request can still carry next to the fixture (the troubleshoot goal).
+_CLIENT_TEXT_FIELDS = ("user_goal",)
+
+
+def _carries_client_text(request: Request, body: dict[str, Any]) -> bool:
+    """True when a demo request still sends words the user typed (or a client-built analysis) that
+    the server does not replace with fixture data from disk — they would reach the model as is."""
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path
+    if route in _CLIENT_TEXT_ROUTES:
+        return True
+    return any(
+        isinstance(body.get(name), str) and bool(body[name].strip()) for name in _CLIENT_TEXT_FIELDS
+    )
 
 
 def consent_is_current(given: str | None, required: str) -> bool:
@@ -280,13 +303,25 @@ def consent_is_current(given: str | None, required: str) -> bool:
 async def consent_and_tier_gate(
     request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> None:
-    """428 without a current ``X-Consent-Version``; 403 on unpaid/mixed tiers (D-01).
+    """428 without a current ``X-Consent-Version``; 403 on unpaid/mixed tiers (D-01, D-02).
 
     A request whose ``demo_sample_id`` names a bundled fixture is exempt from both: the server
     loads the fixture from disk, so no user paper is needed. An unknown id gets no exemption.
+    On the ``unpaid``/``mixed`` tiers (Google may use and human-review what reaches those keys)
+    the exemption also requires that the demo request carries no client text the server keeps:
+    ``/v1/chat`` (client analysis context, history, question) and a troubleshoot ``user_goal``
+    are gated exactly like a real paper there, so sample questions are answered on paid/demo tiers
+    only (or with the dev-only ``ALLOW_UNPAID_REAL_DOCUMENTS`` and a current consent).
     """
-    if await _demo_sample_id(request) is not None:
-        return
+    body = await _json_object(request)
+    platform = body.get("client_platform") if body is not None else None
+    if isinstance(platform, str) and platform in _PLATFORMS:
+        request.state.client_platform = platform  # contract field; logged by the access log
+    tier = settings.data_use_tier
+    unpaid_keys = tier in (DataUseTier.unpaid, DataUseTier.mixed)
+    if body is not None and _known_demo_sample_id(request, body) is not None:
+        if not (unpaid_keys and _carries_client_text(request, body)):
+            return
     if not consent_is_current(request.headers.get("x-consent-version"), settings.consent_version):
         raise ApiError(
             ErrorCode.consent_required,
@@ -294,8 +329,7 @@ async def consent_and_tier_gate(
             "X-Consent-Version is missing or older than the current consent version.",
             details={"consent_version": settings.consent_version},
         )
-    tier = settings.data_use_tier
-    if tier not in (DataUseTier.unpaid, DataUseTier.mixed):
+    if not unpaid_keys:
         return
     if tier is DataUseTier.mixed:
         for index in settings.unbilled_slot_indexes:  # D-01: warn per request per unbilled slot
@@ -309,6 +343,7 @@ async def consent_and_tier_gate(
         raise ApiError(
             ErrorCode.unpaid_tier_real_documents_disabled,
             403,
-            "Real documents are disabled on the unpaid/mixed tier; use a demo_sample_id.",
+            "Real documents and typed text are disabled on the unpaid/mixed tier; use a "
+            "demo_sample_id without chat or a user_goal.",
             details={"data_use_tier": tier.value},
         )

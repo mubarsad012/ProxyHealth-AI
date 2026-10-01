@@ -2,10 +2,12 @@
 // analysis context (≤ 60 000 chars, oldest pages dropped first) and at most the last 8 turns; the
 // assistant bubble shows the answer, then the fixed refusal / "not in the paper" / referral
 // templates; quote chips; "Get help" for lawyer/housing referrals; `safety.emergency` opens S19;
-// a prompt tapped on S7 (`?q=`) is asked exactly once.
+// a prompt tapped on S7 (`?q=`) is asked exactly once; `demo_sample_id` comes from the analysis
+// (never a sample id left over in the session); a new answer is announced to screen readers.
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
+import { AccessibilityInfo } from 'react-native';
 
 import type { ApiClient } from '@/api/client';
 import type { AnalysisResult, ChatAnswer, ChatMessage, ChatRequest, PageText } from '@/api/types';
@@ -14,7 +16,9 @@ import { bundledPackFor, EN_PACK, t, translate, useI18n } from '@/i18n/store';
 import { useSession } from '@/store/session';
 
 import medicaidEn from '../../../assets/fixtures/medicaid_address_confirmation.result.en.json';
-import { assistantLines, ChatScreen } from './ChatScreen';
+import { forgetSampleOrigins, rememberSampleOrigin } from '@/features/analysis/sampleOrigin';
+
+import { answerAnnouncement, assistantLines, ChatScreen, turnListLiveProps } from './ChatScreen';
 import { buildChatRequest, compactOriginalText, historyForRequest } from './context';
 import { referShowsHelp, starterQuestions } from './refusalTemplates';
 import { useChatHistory } from './useChat';
@@ -80,16 +84,26 @@ function chatClient(reply: (req: ChatRequest) => ChatAnswer): { client: ApiClien
   return { client, log };
 }
 
-async function renderChat(client: ApiClient, initialQuestion?: string) {
+async function renderChat(client: ApiClient, initialQuestion?: string, a: AnalysisResult = analysis) {
   return render(
     <AppProviders client={client} staticMetrics>
-      <ChatScreen analysis={analysis} initialQuestion={initialQuestion} />
+      <ChatScreen analysis={a} initialQuestion={initialQuestion} />
     </AppProviders>,
   );
 }
 
+/** A saved real paper (not a sample): `model_meta.demo=false`, no `demo_sample` warning. */
+function realPaper(): AnalysisResult {
+  const a = JSON.parse(JSON.stringify(medicaidEn)) as AnalysisResult;
+  a.analysis_id = 'an_real_saved_paper';
+  a.warnings = a.warnings.filter((w) => w !== 'demo_sample');
+  a.model_meta = { ...a.model_meta, demo: false, provider: 'gemini', data_use_tier: 'paid' };
+  return a;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  forgetSampleOrigins();
   useChatHistory.getState().clear();
   useSession.getState().reset();
   useI18n.getState().setPack(EN_PACK);
@@ -219,5 +233,49 @@ describe('<ChatScreen>', () => {
     );
     await waitFor(() => expect(screen.getByText('The paper asks you to send proof of address.')).toBeTruthy());
     expect(log).toHaveLength(1);
+  });
+});
+
+describe('chat demo_sample_id (SEC-01)', () => {
+  it('a real saved paper never sends the sample id left over in the session', async () => {
+    useSession.getState().setDemoSampleId('medicaid_address_confirmation');
+    const paper = realPaper();
+    const { client, log } = chatClient(() => answer());
+    await renderChat(client, 'What does this paper ask for?', paper);
+    await waitFor(() => expect(log).toHaveLength(1));
+    expect(log[0].analysis.analysis_id).toBe('an_real_saved_paper');
+    expect(log[0].demo_sample_id).toBeNull();
+  });
+
+  it('a sample result made this session sends its own fixture id', async () => {
+    const s = JSON.parse(JSON.stringify(medicaidEn)) as AnalysisResult;
+    rememberSampleOrigin(s.analysis_id, 'medicaid_address_confirmation');
+    useSession.getState().setDemoSampleId('some_other_sample');
+    const { client, log } = chatClient(() => answer());
+    await renderChat(client, 'What does this paper ask for?', s);
+    await waitFor(() => expect(log).toHaveLength(1));
+    expect(log[0].demo_sample_id).toBe('medicaid_address_confirmation');
+  });
+});
+
+describe('chat answers are announced (S9 "new bubbles announced", COMPLIANCE §15 4.1.3)', () => {
+  it('native: announces the first answer line once the answer arrives', async () => {
+    const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    const { client } = chatClient(() => answer());
+    const screen = await renderChat(client, 'What does this paper ask for?');
+    await waitFor(() => expect(screen.getByText('The paper asks you to send proof of address.')).toBeTruthy());
+    await waitFor(() => expect(spy).toHaveBeenCalledWith('The paper asks you to send proof of address.'));
+    spy.mockRestore();
+  });
+
+  it('web: the turn list is a polite live log; native gets no web-only props', () => {
+    expect(turnListLiveProps('web')).toEqual({ role: 'log', 'aria-live': 'polite' });
+    expect(turnListLiveProps('ios')).toEqual({});
+    expect(turnListLiveProps('android')).toEqual({});
+  });
+
+  it('the announcement is the answer line without bidi controls, or the fixed template', () => {
+    expect(answerAnnouncement(answer({ answer: '\u2066October 14\u2069 is the date.' }), t)).toBe('October 14 is the date.');
+    expect(answerAnnouncement(answer({ answer: '', not_in_document: true }), t)).toBe(t('chat.not_in_document'));
   });
 });

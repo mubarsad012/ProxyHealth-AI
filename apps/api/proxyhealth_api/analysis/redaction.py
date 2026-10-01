@@ -26,7 +26,10 @@ from proxyhealth_api.contracts.enums import ErrorCode
 from proxyhealth_api.errors import ApiError
 
 JPEG_QUALITY = 90
-MAX_PIXELS = 40_000_000  # decompression-bomb guard; the client sends ≤ 1600 px edges (D-21)
+# Decompression-bomb and memory guard: the client sends ≤ 1600 px edges (≈ 2.6 MP, D-21); 12 MP
+# leaves a wide margin (a 4000 × 3000 photo) while one decode, EXIF transpose and mode change stay
+# near 200 MB instead of ~700 MB at 40 MP (the deploy runs 1 GiB instances).
+MAX_PIXELS = 12_000_000
 _ENCODE_FORMAT: dict[str, str] = {
     "image/jpeg": "JPEG",
     "image/png": "PNG",

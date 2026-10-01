@@ -19,7 +19,7 @@
 # Every list is a machine-assisted draft: `reviewed_by: null` until a native speaker signs off
 # (launch gate, DECISIONS Q6). A language without a list falls back to en + es and adds
 # warnings: [emergency_lexicon_unavailable].
-version: "2026-09-27"
+version: "2026-09-30"
 kinds: [chest_pain, breathing, overdose, poison, self_harm, stroke, bleeding, allergic, violence]
 fallback_languages: [en, es]
 languages:
@@ -29,11 +29,11 @@ languages:
     match: word
     exclude: ["poison control", "poison help", "poison center", "poison control center", "if swallowed", "if accidentally swallowed"]
     terms:
-      chest_pain: ["chest pain", "chest pains", "pain in my chest", "pain in the chest", "chest tightness", "tightness in my chest", "pressure in my chest", "heart attack", "chest hurt*", "chest is hurt*", "chest is tight", "chest feels tight"]
-      breathing: ["can't breathe", "cannot breathe", "can not breathe", "trouble breathing", "difficulty breathing", "hard to breathe", "short of breath", "shortness of breath", "not breathing", "stopped breathing", "choking", "gasping for air"]
-      overdose: ["overdose", "overdosed", "overdosing", "took too many pills", "too much medicine", "fentanyl", "naloxone", "narcan"]
-      poison: ["poisoned", "poisoning", "swallowed poison", "drank poison", "swallowed bleach", "drank bleach", "swallowed a battery", "carbon monoxide", "poison", "swallowed"]
-      self_harm: ["suicide", "suicidal", "kill myself", "killing myself", "end my life", "want to die", "hurt myself", "hurting myself", "self-harm", "self harm", "cut myself", "no reason to live"]
+      chest_pain: ["chest pain", "chest pains", "pain in my chest", "pain in the chest", "chest tightness", "tightness in my chest", "pressure in my chest", "heart attack", "chest hurt*", "chest is hurt*", "chest is tight", "chest feels tight", "crushing chest", "chest is killing me"]
+      breathing: ["can't breathe", "cannot breathe", "can not breathe", "trouble breathing", "difficulty breathing", "hard to breathe", "short of breath", "shortness of breath", "not breathing", "stopped breathing", "choking", "gasping for air", "can't breath*", "cannot breath*", "cant breath*", "can not breath*", "unable to breath*", "struggling to breath*", "can barely breath*", "hard to breath*"]
+      overdose: ["overdose", "overdosed", "overdosing", "took too many pills", "too much medicine", "fentanyl", "naloxone", "narcan", "overdos*", "took all my pills", "took all of my pills", "took all the pills", "took a lot of pills", "took too many", "took a bunch of pills", "too many pills", "swallowed pills", "swallowed all my pills", "whole bottle of pills", "bottle of pills"]
+      poison: ["poisoned", "poisoning", "swallowed poison", "drank poison", "swallowed bleach", "drank bleach", "swallowed a battery", "carbon monoxide", "poison", "swallowed", "drank cleaner", "drank chlorine", "swallowed chlorine", "ate poison", "drank antifreeze"]
+      self_harm: ["suicide", "suicidal", "kill myself", "killing myself", "end my life", "want to die", "hurt myself", "hurting myself", "self-harm", "self harm", "cut myself", "no reason to live", "suicid*", "don't want to live", "do not want to live", "dont want to live", "don't want to be alive", "do not want to be alive", "take my own life", "take my life", "end it all", "better off dead", "wish i was dead", "wish i were dead", "hang myself", "shoot myself"]
       stroke: ["stroke", "face drooping", "face is drooping", "slurred speech", "arm weakness", "sudden numbness", "numb on one side", "sudden confusion"]
       bleeding: ["heavy bleeding", "bleeding heavily", "severe bleeding", "won't stop bleeding", "bleeding won't stop", "bleeding will not stop", "lots of blood", "losing blood", "hemorrhage", "coughing up blood", "vomiting blood", "bleeding a lot", "bleeding badly", "bleeding so much", "can't stop bleeding", "cannot stop bleeding", "can't stop the bleeding"]
       allergic: ["anaphylaxis", "anaphylactic", "severe allergic reaction", "allergic reaction", "throat swelling", "throat is closing", "swollen tongue", "epipen"]
@@ -44,11 +44,11 @@ languages:
     match: word
     exclude: ["control de envenenamiento", "centro de toxicología", "centro de control de envenenamientos"]
     terms:
-      chest_pain: ["dolor de pecho", "dolor en el pecho", "presión en el pecho", "ataque al corazón", "infarto", "me duele el pecho"]
-      breathing: ["no puedo respirar", "no puede respirar", "dificultad para respirar", "falta de aire", "le falta el aire", "se está ahogando", "no respira"]
-      overdose: ["sobredosis", "tomó demasiadas pastillas", "demasiada medicina", "fentanilo", "naloxona"]
-      poison: ["envenenado", "envenenada", "envenenamiento", "intoxicación", "tragó veneno", "tragó cloro", "veneno", "se tragó"]
-      self_harm: ["suicidio", "suicidarme", "matarme", "quitarme la vida", "quiero morir", "hacerme daño", "lastimarme", "autolesión", "me quiero matar", "quiero matarme", "me voy a matar", "me quiero morir", "quiero morirme"]
+      chest_pain: ["dolor de pecho", "dolor en el pecho", "presión en el pecho", "ataque al corazón", "infarto", "me duele el pecho", "duele el pecho", "duele mucho el pecho", "dolor fuerte en el pecho", "opresión en el pecho", "me aprieta el pecho"]
+      breathing: ["no puedo respirar", "no puede respirar", "dificultad para respirar", "falta de aire", "le falta el aire", "se está ahogando", "no respira", "me ahogo", "se ahoga", "me cuesta respirar", "le cuesta respirar"]
+      overdose: ["sobredosis", "tomó demasiadas pastillas", "demasiada medicina", "fentanilo", "naloxona", "muchas pastillas", "demasiadas pastillas", "todas las pastillas", "todas mis pastillas", "un frasco de pastillas", "muchas píldoras", "demasiadas píldoras", "demasiados medicamentos", "muchos medicamentos"]
+      poison: ["envenenado", "envenenada", "envenenamiento", "intoxicación", "tragó veneno", "tragó cloro", "veneno", "se tragó", "tomó cloro", "bebió cloro", "tomó lejía", "bebió lejía", "tomó veneno", "bebió veneno", "tomó blanqueador", "tragó una pila", "tragó una batería"]
+      self_harm: ["suicidio", "suicidarme", "matarme", "quitarme la vida", "quiero morir", "hacerme daño", "lastimarme", "autolesión", "me quiero matar", "quiero matarme", "me voy a matar", "me quiero morir", "quiero morirme", "suicid*", "ya no quiero vivir", "no quiero vivir", "no quiero seguir viviendo", "quiero morir*", "acabar con mi vida", "terminar con mi vida", "me voy a quitar la vida", "me quiero quitar la vida"]
       stroke: ["derrame cerebral", "accidente cerebrovascular", "embolia", "cara caída", "habla arrastrada", "no puede hablar"]
       bleeding: ["sangrado abundante", "sangrando mucho", "hemorragia", "no para de sangrar", "mucha sangre", "no deja de sangrar", "sangra mucho"]
       allergic: ["reacción alérgica grave", "reacción alérgica", "anafilaxia", "se le cierra la garganta", "garganta hinchada", "lengua hinchada"]
@@ -119,11 +119,11 @@ languages:
     match: prefix
     exclude: ["مركز السموم", "مركز مكافحة السموم"]
     terms:
-      chest_pain: ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر", "نوبة قلبية", "أزمة قلبية"]
-      breathing: ["لا أستطيع التنفس", "لا يستطيع التنفس", "صعوبة في التنفس", "ضيق التنفس", "ضيق في التنفس", "اختناق"]
-      overdose: ["جرعة زائدة", "جرعة مفرطة", "تناول الكثير من الحبوب"]
-      poison: ["تسمم", "مسموم", "مادة سامة", "شرب مبيض"]
-      self_harm: ["انتحار", "الانتحار", "أريد أن أموت", "أقتل نفسي", "إيذاء النفس", "أؤذي نفسي"]
+      chest_pain: ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر", "نوبة قلبية", "أزمة قلبية", "ألم شديد في الصدر", "صدري يؤلمني", "يؤلمني صدري", "صدري يوجعني"]
+      breathing: ["لا أستطيع التنفس", "لا يستطيع التنفس", "صعوبة في التنفس", "ضيق التنفس", "ضيق في التنفس", "اختناق", "أتنفس", "لا يتنفس", "لا تتنفس", "ما يتنفس"]
+      overdose: ["جرعة زائدة", "جرعة مفرطة", "تناول الكثير من الحبوب", "حبوب كثيرة", "كل الحبوب", "كل حبوبي", "الكثير من الحبوب", "علبة حبوب", "بلعت حبوب", "بلع حبوب"]
+      poison: ["تسمم", "مسموم", "مادة سامة", "شرب مبيض", "شرب الكلور", "شرب كلور", "شرب سم", "بلع سم", "شرب الكلوركس"]
+      self_harm: ["انتحار", "الانتحار", "أريد أن أموت", "أقتل نفسي", "إيذاء النفس", "أؤذي نفسي", "انتحر", "أنتحر", "سأنتحر", "سانتحر", "ينتحر", "تنتحر", "سينتحر", "سأقتل نفسي", "أنهي حياتي", "لا أريد أن أعيش", "لا أريد العيش", "أتمنى الموت", "بدي موت"]
       stroke: ["سكتة دماغية", "جلطة دماغية", "تدلي الوجه", "صعوبة في الكلام", "تنميل في جانب واحد"]
       bleeding: ["نزيف حاد", "نزيف شديد", "نزيف لا يتوقف", "ينزف بشدة"]
       allergic: ["حساسية شديدة", "صدمة تأقية", "تورم الحلق", "تورم اللسان"]
@@ -224,11 +224,11 @@ languages:
     match: prefix
     exclude: []
     terms:
-      chest_pain: ["درد قفسه سینه", "درد سینه", "حمله قلبی"]
-      breathing: ["نفس کشیده نمی‌توانم", "نمی‌توانم نفس بکشم", "تنگی نفس", "مشکل تنفس", "نفسم بند"]
-      overdose: ["اوردوز", "مصرف بیش از حد دوا", "دوای زیاد خورده"]
-      poison: ["مسمومیت", "مسموم", "زهر خورده"]
-      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خود را بکشم", "به خود آسیب"]
+      chest_pain: ["درد قفسه سینه", "درد سینه", "حمله قلبی", "سینه‌ام درد", "سینه ام درد"]
+      breathing: ["نفس کشیده نمی‌توانم", "نمی‌توانم نفس بکشم", "تنگی نفس", "مشکل تنفس", "نفسم بند", "نفسم تنگ", "نفس نمی‌کشد", "نفس کشیده نمی‌تواند"]
+      overdose: ["اوردوز", "مصرف بیش از حد دوا", "دوای زیاد خورده", "تابلیت زیاد", "گولی زیاد", "قرص زیاد", "همه دواهایم", "همه تابلیت", "دوای زیاد خورد"]
+      poison: ["مسمومیت", "مسموم", "زهر خورده", "زهر خورد"]
+      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خود را بکشم", "به خود آسیب", "خودم را بکشم", "خودم را می‌کشم", "خود را می‌کشم", "خودمه بکشم", "خودم ره بکشم", "نمی‌خواهم زنده باشم", "نمی‌خواهم زندگی کنم", "زندگی نمی‌خواهم", "دلم می‌خواهد بمیرم"]
       stroke: ["سکته مغزی", "سکته", "کجی روی", "گپ زده نمی‌تواند"]
       bleeding: ["خونریزی شدید", "خون زیاد", "خونریزی بند نمی‌شود"]
       allergic: ["حساسیت شدید", "آلرژی شدید", "پندیدن گلو", "ورم زبان"]
@@ -239,11 +239,11 @@ languages:
     match: prefix
     exclude: []
     terms:
-      chest_pain: ["د سینې درد", "په سینه کې درد", "زړه حمله"]
-      breathing: ["ساه نشم اخیستلی", "د تنفس ستونزه", "ساه لنډی"]
-      overdose: ["اوورډوز", "له حده زیات دوا", "ډېر دوا"]
+      chest_pain: ["د سینې درد", "په سینه کې درد", "زړه حمله", "سینه مې درد", "سینه مې خوږیږي"]
+      breathing: ["ساه نشم اخیستلی", "د تنفس ستونزه", "ساه لنډی", "ساه نشم ایستلی", "ساه نه شم اخیستلی", "ساه نشي اخیستلی", "ساه نه شي اخیستلی", "ساه بندیږي", "ساه نه راځي"]
+      overdose: ["اوورډوز", "له حده زیات دوا", "ډېر دوا", "ډېرې ګولۍ", "ډیرې ګولۍ", "ټولې ګولۍ", "ډېرې دواګانې"]
       poison: ["مسمومیت", "زهر", "زهرجن"]
-      self_harm: ["ځان وژنه", "ځانوژنه", "غواړم مړ شم", "ځان ته زیان"]
+      self_harm: ["ځان وژنه", "ځانوژنه", "غواړم مړ شم", "ځان ته زیان", "ځان ووژنم", "ځان وژنم", "ځان به ووژنم", "ځان مړ کړم", "ژوند نه غواړم", "نه غواړم ژوندی اوسم"]
       stroke: ["د مغزو سکته", "سکته", "مخ کوږ شوی"]
       bleeding: ["سخت وینه بهیدل", "وینه نه بندیږي", "ډېره وینه"]
       allergic: ["سخته حساسیت", "الرژي", "ستونی پړسیدلی"]
@@ -256,9 +256,9 @@ languages:
     terms:
       chest_pain: ["درد قفسه سینه", "درد سینه", "حمله قلبی"]
       breathing: ["نمی‌توانم نفس بکشم", "تنگی نفس", "مشکل تنفسی", "خفگی"]
-      overdose: ["مصرف بیش از حد", "اوردوز", "قرص زیادی خورده"]
+      overdose: ["مصرف بیش از حد", "اوردوز", "قرص زیادی خورده", "قرص زیاد", "همه قرص‌هایم"]
       poison: ["مسمومیت", "مسموم شده", "سم خورده"]
-      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خودم را بکشم", "آسیب به خود"]
+      self_harm: ["خودکشی", "می‌خواهم بمیرم", "خودم را بکشم", "آسیب به خود", "خودم را می‌کشم", "نمی‌خواهم زنده باشم", "نمی‌خواهم زندگی کنم"]
       stroke: ["سکته مغزی", "افتادگی صورت", "اختلال در گفتار", "بی‌حسی یک طرف"]
       bleeding: ["خونریزی شدید", "خونریزی بند نمی‌آید", "خون زیادی"]
       allergic: ["واکنش آلرژیک شدید", "شوک آنافیلاکسی", "تورم گلو", "تورم زبان"]

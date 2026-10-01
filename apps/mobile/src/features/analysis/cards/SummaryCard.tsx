@@ -4,7 +4,6 @@
 
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Bidi } from '@/design/components/Bidi';
 import { Card } from '@/design/components/Card';
 import { Interpolated } from '@/design/components/Interpolated';
 import { AppText, Heading } from '@/design/components/Text';
@@ -14,7 +13,7 @@ import { useDirection } from '@/i18n/direction';
 import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 
 import { blockById } from '../pageImages';
-import type { ResultCardProps } from './shared';
+import { paperLangProps, type ResultCardProps, SourceText } from './shared';
 
 /** Show `body_en` under the body for Tier 3 packs or low translation confidence. */
 export function showEnglishBody(tier: number, translationConfidence: string, bodyEn: string, body: string): boolean {
@@ -71,10 +70,11 @@ export function SummaryCard({ analysis, handlers }: ResultCardProps) {
                 hitSlop={size.hitSlop}
                 disabled={!handlers.onOpenSource}
                 onPress={() => handlers.onOpenSource?.({ block: id, page: b.page })}
+                {...paperLangProps(analysis.detected_language, dir.dir)}
                 style={[styles.chip, { borderColor: colors.border }]}>
-                <Bidi dir="auto" variant="caption">
+                <SourceText lang={analysis.detected_language} variant="caption">
                   {`“${words}${b.text.split(/\s+/).length > 6 ? '…' : ''}”`}
-                </Bidi>
+                </SourceText>
               </Pressable>
             );
           })}
