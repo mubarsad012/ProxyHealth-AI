@@ -16,6 +16,7 @@ export type ChatMessage = Schemas['ChatMessage'];
 export type ChatRequest = Schemas['ChatRequest'];
 export type ChecklistItem = Schemas['ChecklistItem'];
 export type ClerkMessage = Schemas['ClerkMessage'];
+export type ClientTimeouts = Schemas['ClientTimeouts'];
 export type Confidence = Schemas['Confidence'];
 export type Cost = Schemas['Cost'];
 export type DataUseTier = Schemas['DataUseTier'];

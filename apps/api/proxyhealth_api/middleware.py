@@ -303,7 +303,10 @@ def consent_is_current(given: str | None, required: str) -> bool:
 async def consent_and_tier_gate(
     request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> None:
-    """428 without a current ``X-Consent-Version``; 403 on unpaid/mixed tiers (D-01, D-02).
+    """428 without a current ``X-Consent-Version``; 403 on the samples-only tiers (D-01, D-02):
+    ``unpaid``/``mixed`` (Gemini or ``openai_compat`` with ``OPENAI_COMPAT_DATA_TIER=unpaid``), and
+    ``attested`` outside development (``Settings.samples_only``). ``local``, ``paid``, ``demo`` and
+    ``attested`` in development pass after consent (free-ai-providers §5.2).
 
     A request whose ``demo_sample_id`` names a bundled fixture is exempt from both: the server
     loads the fixture from disk, so no user paper is needed. An unknown id gets no exemption.
@@ -318,7 +321,7 @@ async def consent_and_tier_gate(
     if isinstance(platform, str) and platform in _PLATFORMS:
         request.state.client_platform = platform  # contract field; logged by the access log
     tier = settings.data_use_tier
-    unpaid_keys = tier in (DataUseTier.unpaid, DataUseTier.mixed)
+    unpaid_keys = settings.samples_only
     if body is not None and _known_demo_sample_id(request, body) is not None:
         if not (unpaid_keys and _carries_client_text(request, body)):
             return
@@ -343,7 +346,7 @@ async def consent_and_tier_gate(
         raise ApiError(
             ErrorCode.unpaid_tier_real_documents_disabled,
             403,
-            "Real documents and typed text are disabled on the unpaid/mixed tier; use a "
+            "Real documents and typed text are disabled on this data-use tier; use a "
             "demo_sample_id without chat or a user_goal.",
             details={"data_use_tier": tier.value},
         )

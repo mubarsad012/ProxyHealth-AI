@@ -223,7 +223,7 @@ class AIService:
         # No slot served us: degraded path (D-07), then the honest error.
         if (
             cfg.tier is ModelTier.pro
-            and self.settings.allow_degraded
+            and self.settings.degraded_enabled
             and task in DEGRADABLE_TASKS
             and self._clock() < deadline
         ):
@@ -293,7 +293,7 @@ class AIService:
                         "The AI service rejected the request.",
                         details={"upstream": 400},
                     ) from None
-                if code in (401, 403):
+                if code in (401, 402, 403):  # 402: OpenRouter negative balance (§4.7)
                     keypool.report(slot, cfg.tier, outcome="4xx_fatal", code=code)
                     raise _NextSlot("4xx_fatal") from None
                 keypool.report(

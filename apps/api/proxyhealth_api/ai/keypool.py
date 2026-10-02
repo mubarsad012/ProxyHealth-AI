@@ -106,6 +106,9 @@ class KeyPool:
 
     ``soft_caps`` maps a tier to ``RPD_SOFT_CAP_*`` (``0`` = disabled). The constructor restores
     ``var/keypool.json`` when present, so a restart never forgets a burned daily quota.
+    ``data_use_tier`` overrides the tier computed from billing flags: ``AI_PROVIDER=openai_compat``
+    runs one synthetic slot whose tier is ``OPENAI_COMPAT_DATA_TIER`` (free-ai-providers §4.2
+    rule 7, §4.7).
     """
 
     def __init__(
@@ -115,12 +118,14 @@ class KeyPool:
         clock: Callable[[], datetime],
         *,
         soft_caps: Mapping[ModelTier, int] | None = None,
+        data_use_tier: DataUseTier | None = None,
     ) -> None:
         projects = [s.project for s in slots]
         if len(set(projects)) != len(projects):
             dupes = sorted({p for p in projects if projects.count(p) > 1})
             raise ValueError(f"GEMINI_KEYS projects must be distinct (D-07); duplicated: {dupes}")
         self.slots = slots
+        self.tier_override = data_use_tier
         self.var_dir = var_dir
         self.clock = clock
         self.soft_caps: dict[ModelTier, int] = {
@@ -279,6 +284,8 @@ class KeyPool:
         return result
 
     def data_use_tier(self) -> DataUseTier:
+        if self.tier_override is not None:
+            return self.tier_override
         if not self._slots:
             return DataUseTier.none
         billed = [s.config.billing for s in self._slots]

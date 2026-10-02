@@ -24,6 +24,11 @@ from proxyhealth_api.contracts.enums import (
 PHONE_PATTERN = r"^(\+[1-9]\d{6,14}|211|311|911|988|711)$"
 PhoneNumber = Annotated[str, StringConstraints(pattern=PHONE_PATTERN)]
 
+# ``ResourceMatchRequest.institutions_as_written`` caps (Phase 2C; ``resources.matcher`` applies the
+# same bounds for direct callers).
+MAX_INSTITUTIONS = 10
+MAX_INSTITUTION_CHARS = 200
+
 
 class Serves(BaseModel):
     """API_CONTRACT §3.8 — service area of a resource."""
@@ -101,7 +106,11 @@ class ResourceMatchRequest(BaseModel):
     county: str | None = None
     zip3: str | None = None
     language: LanguageTag
-    institutions_as_written: list[str] = Field(default_factory=list, max_length=10)
+    # Phase 2C caps: ≤ 10 names of ≤ 200 chars (``matcher.MAX_INSTITUTION_CHARS``; the analysis
+    # pipeline emits ≤ 120-char names, so a client echoing ``entities`` always fits).
+    institutions_as_written: list[
+        Annotated[str, StringConstraints(max_length=MAX_INSTITUTION_CHARS)]
+    ] = Field(default_factory=list, max_length=MAX_INSTITUTIONS)
     scam_risk: ScamRisk = ScamRisk.none
     emergency: bool = False
     limit: int = Field(default=8, ge=1, le=12)

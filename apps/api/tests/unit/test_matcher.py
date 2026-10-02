@@ -30,6 +30,16 @@ def run(**kwargs: Any) -> ResourceMatchResponse:
     return matcher.match(ResourceMatchRequest(**kwargs), real_repo(), today=SEED_TODAY)
 
 
+def run_direct(**kwargs: Any) -> ResourceMatchResponse:
+    """A direct (non-HTTP) caller: ``institutions_as_written`` skips the Phase 2C contract caps,
+    so the matcher's own bounds are what keeps the work small."""
+    institutions = kwargs.pop("institutions_as_written", [])
+    req = ResourceMatchRequest(**kwargs).model_copy(
+        update={"institutions_as_written": institutions}
+    )
+    return matcher.match(req, real_repo(), today=SEED_TODAY)
+
+
 def ids(resp: ResourceMatchResponse) -> list[str]:
     return [m.resource.id for m in resp.results]
 
@@ -457,7 +467,7 @@ def test_long_institutions_are_normalised_once_per_request_and_bounded(
     rng = random.Random(3)
     letters = "abcdefghijklmnopqrstuvwxyz "
     huge = ["".join(rng.choice(letters) for _ in range(50_000)) for _ in range(10)]
-    resp = run(
+    resp = run_direct(
         tags=["immigration_legal_help"], state="VA", language="en", institutions_as_written=huge
     )
     assert resp.results  # still a normal answer
@@ -470,7 +480,7 @@ def test_matching_long_institution_echo_is_bounded() -> None:
     inova = real_repo().get("inova_fa")
     assert inova is not None
     written = inova.name + " " + "x" * 300_000
-    resp = run(**{**EXAMPLE_A, "institutions_as_written": [written]})
+    resp = run_direct(**{**EXAMPLE_A, "institutions_as_written": [written]})
     first = resp.results[0]
     assert first.resource.id == "inova_fa"
     assert first.why_keys[0] == "why.institution_match"

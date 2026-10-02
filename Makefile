@@ -18,7 +18,7 @@ MYPY   := $(API)/.venv/bin/mypy
 EXPO_PUBLIC_API_URL ?= http://127.0.0.1:8000
 
 .PHONY: help dev api web types types-check sync sync-check test test-api lint-api test-mobile \
-        smoke export-web host-rules ci clean-web
+        smoke export-web host-rules ci clean-web local-ai-setup local-ai-check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
@@ -71,3 +71,15 @@ ci: ## the full CI sequence locally, stopping at the first failure (scripts/ci.s
 
 clean-web: ## remove the web build output
 	rm -rf $(MOBILE)/dist
+
+# Local AI (docs/LOCAL_AI.md): the developer runs these by hand; dev, test, smoke and ci never call them.
+# Extra flags go through ARGS, e.g.  make local-ai-setup ARGS=--dry-run
+ARGS ?=
+
+local-ai-setup: ## install Ollama + qwen3.5:4b on this Mac (asks before each download; ARGS=--dry-run)
+	@scripts/setup-local-ai.sh $(ARGS)
+
+local-ai-check: ## run a SAMPLE paper through the pipeline with the configured provider (provider_check.py)
+	@test -f $(API)/scripts/provider_check.py \
+	  || { echo "apps/api/scripts/provider_check.py is missing (it ships with the openai_compat provider)." >&2; exit 1; }
+	cd $(API) && .venv/bin/python scripts/provider_check.py $(ARGS)

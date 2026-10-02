@@ -311,6 +311,10 @@ export interface components {
         /**
          * AnalysisContext
          * @description API_CONTRACT §3.7 — subset of ``AnalysisResult`` the client re-sends with each question.
+         *
+         *     Each ``original_text`` page holds at most ``MAX_BLOCKS_PER_PAGE`` blocks of at most
+         *     ``MAX_BLOCK_CHARS`` characters (checked here, because ``PageText``/``TextBlock`` are shared
+         *     with the analysis output and its model schema).
          */
         AnalysisContext: {
             /** Analysis Id */
@@ -536,6 +540,41 @@ export interface components {
             translated: string;
         };
         /**
+         * ClientTimeouts
+         * @description How long the app waits for each kind of request before it gives up, in seconds.
+         *
+         *     The defaults are the app's fixed limits from before ``AI_PROVIDER=openai_compat``; a local
+         *     model is slower, so the server then sends limits that cover its own budget
+         *     (``FAILOVER_DEADLINE_S`` + ``OPENAI_COMPAT_TIMEOUT_S`` + a margin; free-ai-providers §4.6).
+         */
+        ClientTimeouts: {
+            /**
+             * Analyze S
+             * @default 120
+             */
+            analyze_s: number;
+            /**
+             * Chat S
+             * @default 30
+             */
+            chat_s: number;
+            /**
+             * Default S
+             * @default 30
+             */
+            default_s: number;
+            /**
+             * Language Pack S
+             * @default 60
+             */
+            language_pack_s: number;
+            /**
+             * Troubleshoot S
+             * @default 60
+             */
+            troubleshoot_s: number;
+        };
+        /**
          * Confidence
          * @description API_CONTRACT §1 — three-step confidence scale.
          * @enum {string}
@@ -549,10 +588,15 @@ export interface components {
         Cost: "free" | "sliding" | "paid" | "unknown";
         /**
          * DataUseTier
-         * @description API_CONTRACT §1 — Gemini data-use tier the server runs on (mirrors ``X-Data-Use-Tier``).
+         * @description API_CONTRACT §1 — data-use tier the server runs on (mirrors ``X-Data-Use-Tier``).
+         *
+         *     ``paid``/``unpaid``/``mixed``/``none`` come from the Gemini slot billing flags (D-01),
+         *     ``demo`` from the mock. ``local`` (an open-weight model on a loopback endpoint of the API host)
+         *     and ``attested`` (a hosted vendor whose API terms the operator attests say "no training";
+         *     development only) exist only with ``AI_PROVIDER=openai_compat`` (free-ai-providers §5.2).
          * @enum {string}
          */
-        DataUseTier: "paid" | "unpaid" | "mixed" | "demo" | "none";
+        DataUseTier: "paid" | "unpaid" | "mixed" | "demo" | "none" | "local" | "attested";
         /**
          * DateFormat
          * @description API_CONTRACT §1 — how dates are rendered for the user.
@@ -1270,7 +1314,7 @@ export interface components {
          * @description API_CONTRACT §1 — AI provider backing the server.
          * @enum {string}
          */
-        Provider: "gemini" | "mock";
+        Provider: "gemini" | "mock" | "openai_compat";
         /**
          * Quality
          * @description API_CONTRACT §3.5 — capture quality; ``readable=false`` is a 200, not an error.
@@ -1565,10 +1609,15 @@ export interface components {
          * @description API_CONTRACT §3.2 — capabilities and status the client reads at boot.
          */
         ServerConfig: {
+            /** Ai Model Label */
+            ai_model_label?: string | null;
+            /** Ai Vendor Name */
+            ai_vendor_name?: string | null;
             /** Api Version */
             api_version: string;
             /** Base Pack Version */
             base_pack_version: string;
+            client_timeouts?: components["schemas"]["ClientTimeouts"];
             /** Consent Version */
             consent_version: string;
             /** Contract Version */

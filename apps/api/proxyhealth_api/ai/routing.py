@@ -74,16 +74,21 @@ def route(
     degraded: bool = False,
     settings: Settings,
 ) -> RouteConfig:
-    tier, thinking, has_media, max_tokens = TABLE[task]
+    tier, thinking_row, has_media, max_tokens = TABLE[task]
+    thinking: ThinkingLevel | None = thinking_row
     if task in PAGE_DEPENDENT and pages > HIGH_THINKING_MAX_PAGES:
         thinking = ThinkingLevel.medium
-    model_id = settings.model_pro if tier is ModelTier.pro else settings.model_fast
+    # Model ids of the active provider (free-ai-providers §4.2 rule 6), so logs name the real one.
+    model_id = settings.active_model_pro if tier is ModelTier.pro else settings.active_model_fast
     if degraded and tier is ModelTier.pro:
         # D-07 degraded path: the fast model with MODEL_PRO_DEGRADED_THINKING; tier reports fast
         # so ``model_meta.tier="fast"`` (AI_PROMPTS §8.5) and the provider picks MODEL_FAST.
         tier = ModelTier.fast
-        model_id = settings.model_fast
+        model_id = settings.active_model_fast
         thinking = settings.model_pro_degraded_thinking
+    if settings.ai_provider == "openai_compat" and settings.openai_compat_reasoning != "mapped":
+        # §4.5: thinking is switched off (or left to the endpoint), so ``model_meta`` says none.
+        thinking = None
     guarded = guard_thinking(model_id, thinking)
     media: MediaResolution | None = None
     if has_media:

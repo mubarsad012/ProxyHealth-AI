@@ -8,13 +8,21 @@ from enum import IntEnum, StrEnum
 
 
 class DataUseTier(StrEnum):
-    """API_CONTRACT §1 — Gemini data-use tier the server runs on (mirrors ``X-Data-Use-Tier``)."""
+    """API_CONTRACT §1 — data-use tier the server runs on (mirrors ``X-Data-Use-Tier``).
+
+    ``paid``/``unpaid``/``mixed``/``none`` come from the Gemini slot billing flags (D-01),
+    ``demo`` from the mock. ``local`` (an open-weight model on a loopback endpoint of the API host)
+    and ``attested`` (a hosted vendor whose API terms the operator attests say "no training";
+    development only) exist only with ``AI_PROVIDER=openai_compat`` (free-ai-providers §5.2).
+    """
 
     paid = "paid"
     unpaid = "unpaid"
     mixed = "mixed"
     demo = "demo"
     none = "none"
+    local = "local"
+    attested = "attested"
 
 
 class Provider(StrEnum):
@@ -22,6 +30,7 @@ class Provider(StrEnum):
 
     gemini = "gemini"
     mock = "mock"
+    openai_compat = "openai_compat"
 
 
 class ModelTier(StrEnum):

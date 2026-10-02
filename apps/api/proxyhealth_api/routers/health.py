@@ -1,7 +1,7 @@
 """``GET /health`` (API_CONTRACT §3.1). No docstring on the route: it would enter openapi.json.
 
 ``keys_healthy`` counts slots healthy for the pro tier; ``status`` is ``degraded`` when the
-provider is gemini and no slot is healthy for either tier (or no pool could be built).
+provider is not the mock and no slot is healthy for either tier (or no pool could be built).
 """
 
 from typing import Annotated
@@ -25,7 +25,8 @@ async def health(
     keypool: Annotated[KeyPool | None, Depends(get_keypool)],
     resources: Annotated[ResourceRepo, Depends(get_resources)],
 ) -> HealthResponse:
-    keys_configured = len(settings.gemini_keys)
+    # openai_compat runs one synthetic slot (free-ai-providers §4.7); Gemini counts GEMINI_KEYS.
+    keys_configured = len(keypool.slots) if keypool is not None else len(settings.gemini_keys)
     if keypool is None:
         keys_healthy, any_healthy = 0, False
     else:

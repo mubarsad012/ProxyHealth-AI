@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from proxyhealth_api.contracts.analysis import (
     Demand,
@@ -27,9 +27,21 @@ from proxyhealth_api.contracts.enums import (
 MAX_CHAT_HISTORY = 8
 MAX_QUESTION_CHARS = 1000
 
+# Phase 2C caps on the re-sent context: the same bounds ``chat_pipeline.bounded_context`` applies
+# (≤ 60 pages × 400 blocks × 4 000 chars, ≤ 60 items per list; the longest accepted paper is a
+# 60-page PDF). A real analysis is far inside them; a padded body now gets ``400`` before any work.
+MAX_CONTEXT_PAGES = 60
+MAX_BLOCKS_PER_PAGE = 400
+MAX_BLOCK_CHARS = 4_000
+MAX_CONTEXT_ITEMS = 60
+
 
 class AnalysisContext(BaseModel):
-    """API_CONTRACT §3.7 — subset of ``AnalysisResult`` the client re-sends with each question."""
+    """API_CONTRACT §3.7 — subset of ``AnalysisResult`` the client re-sends with each question.
+
+    Each ``original_text`` page holds at most ``MAX_BLOCKS_PER_PAGE`` blocks of at most
+    ``MAX_BLOCK_CHARS`` characters (checked here, because ``PageText``/``TextBlock`` are shared
+    with the analysis output and its model schema)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -39,13 +51,23 @@ class AnalysisContext(BaseModel):
     detected_language: LanguageTag
     sender_as_written: str | None
     summary: SummaryCard
-    demands: list[Demand]
-    unverified: list[Demand]
-    plan_steps: list[PlanStep]
-    red_flags: list[RedFlag]
-    glossary: list[GlossaryTerm]
-    original_text: list[PageText]
+    demands: list[Demand] = Field(max_length=MAX_CONTEXT_ITEMS)
+    unverified: list[Demand] = Field(max_length=MAX_CONTEXT_ITEMS)
+    plan_steps: list[PlanStep] = Field(max_length=MAX_CONTEXT_ITEMS)
+    red_flags: list[RedFlag] = Field(max_length=MAX_CONTEXT_ITEMS)
+    glossary: list[GlossaryTerm] = Field(max_length=MAX_CONTEXT_ITEMS)
+    original_text: list[PageText] = Field(max_length=MAX_CONTEXT_PAGES)
     urgency: Urgency
+
+    @field_validator("original_text")
+    @classmethod
+    def _pages_bounded(cls, pages: list[PageText]) -> list[PageText]:
+        for page in pages:
+            if len(page.blocks) > MAX_BLOCKS_PER_PAGE:
+                raise ValueError(f"a page may hold at most {MAX_BLOCKS_PER_PAGE} blocks")
+            if any(len(block.text) > MAX_BLOCK_CHARS for block in page.blocks):
+                raise ValueError(f"a block may hold at most {MAX_BLOCK_CHARS} characters")
+        return pages
 
 
 class ChatMessage(BaseModel):

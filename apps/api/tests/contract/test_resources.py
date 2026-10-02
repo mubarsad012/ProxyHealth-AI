@@ -97,7 +97,9 @@ async def test_match_extra_field_is_400(client: httpx.AsyncClient) -> None:
 async def test_match_huge_institution_names_stay_cheap_and_bounded(
     client: httpx.AsyncClient,
 ) -> None:
-    # Phase 2B: 10 x 190k random chars (1.9 MB) used to hold the event loop for ~15 s.
+    # Phase 2B: 10 x 190k random chars (1.9 MB) used to hold the event loop for ~15 s. Phase 2C:
+    # the contract caps each name at 200 chars, so that body is a quick 400; names at the cap
+    # still match quickly.
     rng = random.Random(11)
     letters = string.ascii_letters + " "
     huge = ["".join(rng.choices(letters, k=190_000)) for _ in range(10)]
@@ -109,12 +111,21 @@ async def test_match_huge_institution_names_stay_cheap_and_bounded(
     }
     started = time.perf_counter()
     r = await client.post("/v1/resources/match", json=body)
+    assert r.status_code == 400, r.text[:300]
+    assert time.perf_counter() - started < 3.0
+    at_cap = [name[:200] for name in huge]
+    started = time.perf_counter()
+    r = await client.post("/v1/resources/match", json={**body, "institutions_as_written": at_cap})
     elapsed = time.perf_counter() - started
     assert r.status_code == 200, r.text[:300]
     assert elapsed < 3.0, f"match took {elapsed:.2f}s"
     resp = ResourceMatchResponse.model_validate(r.json())
     assert resp.results
     assert all(len(text) <= 300 for m in resp.results for text in m.why)
+    too_many = await client.post(
+        "/v1/resources/match", json={**body, "institutions_as_written": ["Inova"] * 11}
+    )
+    assert too_many.status_code == 400
 
 
 async def test_match_scam_cards_show_each_chip_once(client: httpx.AsyncClient) -> None:

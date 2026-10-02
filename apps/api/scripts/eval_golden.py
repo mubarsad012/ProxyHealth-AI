@@ -2,21 +2,24 @@
 
 Runs every document fixture through ``run_analysis`` (and the screenshot through
 ``run_troubleshoot``) with the configured provider — the mock by default, Gemini with
-``--provider gemini`` and billed keys — and reports per fixture: fact precision/recall against
+``--provider gemini`` and billed keys, or ``--provider openai_compat`` (a local Ollama/LM Studio
+model or another OpenAI-compatible endpoint from ``OPENAI_COMPAT_*``; free-ai-providers §4.10;
+no client timeout applies here) — and reports per fixture: fact precision/recall against
 the fixture's recorded ``out.en.json`` demands (match on ``kind`` + digit-normalised
 ``value_verbatim``), invented contacts in the *raw* model prose (before the scrubber), the quote
 verification rate, schema failures, analysis mode and latency. ``--readability`` applies the
 en.json heuristic (average sentence ≤ 12 words; no word > 3 syllables outside the allow-list) to
 every golden's ``summary_body_en``, ``clerk_need_en`` and English plan steps.
 
-    apps/api/.venv/bin/python apps/api/scripts/eval_golden.py [--provider mock|gemini]
+    apps/api/.venv/bin/python apps/api/scripts/eval_golden.py [--provider mock|gemini|openai_compat]
         [--fixture ID ...] [--lang TAG] [--readability] [--baseline FILE] [--write]
         [--allow-stale] [--json]
 
 Gates (exit 1): any invented contact; quote verification < 0.95; any schema failure; with
 ``--baseline``, precision down > 0.02 or recall down > 0.05 on any fixture; readability > 5 %
-offending sentences. Exit 2: bad arguments, or ``--provider gemini`` without keys, or live goldens
-from another prompt date without ``--allow-stale``. Content-free: prints and writes ids, counts
+offending sentences. Exit 2: bad arguments, ``--provider gemini`` without keys, an invalid
+``OPENAI_COMPAT_*`` configuration, or live goldens from another prompt date without
+``--allow-stale``. Content-free: prints and writes ids, counts
 and ratios only (``--write`` → ``var/eval/<date>.json``); never model text.
 """
 
@@ -43,6 +46,7 @@ from pydantic import BaseModel  # noqa: E402
 
 from proxyhealth_api.ai import prompt_loader  # noqa: E402
 from proxyhealth_api.ai.failover import AIService  # noqa: E402
+from proxyhealth_api.ai.keypool import KeyPool  # noqa: E402
 from proxyhealth_api.ai.provider import AIProvider, StructuredResult, Task  # noqa: E402
 from proxyhealth_api.analysis.contacts_filter import AllowList, find_contacts  # noqa: E402
 from proxyhealth_api.analysis.pipeline import PipelineDeps, run_analysis  # noqa: E402
@@ -125,8 +129,20 @@ def invented_contacts(raw: Sequence[BaseModel], transcript: str) -> int:
 
 
 async def evaluate(fx: Fixture, lang: str, settings: Settings, store: FixtureStore) -> Row:
-    row = Row(fx.id, lang)
     inner, keypool = build_provider(settings, store, lambda: datetime.now(UTC))
+    try:
+        return await _evaluate(fx, lang, settings, store, inner, keypool)
+    finally:
+        close = getattr(inner, "aclose", None)  # the openai_compat provider's httpx client
+        if close is not None:
+            await close()
+
+
+async def _evaluate(
+    fx: Fixture, lang: str, settings: Settings, store: FixtureStore, inner: AIProvider,
+    keypool: KeyPool | None,
+) -> Row:  # fmt: skip
+    row = Row(fx.id, lang)
     provider = Capturing(inner)
     moment = datetime.combine(fx.today, dtime(14, 0), tzinfo=UTC)
     deps = PipelineDeps(
@@ -222,7 +238,7 @@ RULES = RulesRepo.load(DATA_DIR / "rules")
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
-    ap.add_argument("--provider", choices=("mock", "gemini"), default=None)
+    ap.add_argument("--provider", choices=("mock", "gemini", "openai_compat"), default=None)
     ap.add_argument("--fixture", action="append", default=[])
     ap.add_argument("--lang", default="en")
     ap.add_argument("--readability", action="store_true")
@@ -239,17 +255,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"unknown fixture(s): {', '.join(unknown)}", file=sys.stderr)
         return 2
     env = Settings()
-    provider = args.provider or ("mock" if env.ai_provider == "mock" else "gemini")
+    provider = args.provider or (
+        env.ai_provider if env.ai_provider in ("mock", "openai_compat") else "gemini"
+    )
     with tempfile.TemporaryDirectory() as tmp:
         overrides: dict[str, Any] = {"ai_provider": provider}
         if provider == "mock":
             overrides |= {"var_dir": Path(tmp), "mock_latency_min_ms": 0,
                           "mock_latency_max_ms": 0}  # fmt: skip
-        settings = env.model_copy(update=overrides)
-        if provider == "gemini":
-            if not settings.gemini_keys:
-                print("GEMINI_KEYS is empty; live evaluation needs billed keys.", file=sys.stderr)
+        if provider == "openai_compat":
+            try:  # re-validated (not model_copy): the openai_compat boot rules must run
+                settings = Settings(ai_provider="openai_compat")
+            except ValueError as exc:
+                print(f"OPENAI_COMPAT_* configuration refused: {exc}", file=sys.stderr)
                 return 2
+        else:
+            settings = env.model_copy(update=overrides)
+        if provider == "gemini" and not settings.gemini_keys:
+            print("GEMINI_KEYS is empty; live evaluation needs billed keys.", file=sys.stderr)
+            return 2
+        if provider != "mock":
             old = stale(store, ids)
             if old and not args.allow_stale:
                 print(f"goldens from another prompt date: {old} (--allow-stale)", file=sys.stderr)

@@ -19,6 +19,7 @@ from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.ai.gemini import build_gemini_stack
 from proxyhealth_api.ai.keypool import KeyPool
 from proxyhealth_api.ai.mock import MockProvider
+from proxyhealth_api.ai.openai_compat import build_openai_compat_stack
 from proxyhealth_api.ai.provider import AIProvider
 from proxyhealth_api.ai.recording import wrap_if_enabled
 from proxyhealth_api.demo.fixtures import FixtureStore
@@ -44,12 +45,17 @@ def _utcnow() -> datetime:
 def build_provider(
     settings: Settings, fixtures: FixtureStore, clock: Callable[[], datetime]
 ) -> tuple[AIProvider, KeyPool | None]:
-    """Mock, or Gemini + key pool (CL-017), wrapped by WP7's recorder when enabled (CL-020).
+    """Mock, Gemini + key pool (CL-017) wrapped by WP7's recorder when enabled (CL-020), or the
+    ``openai_compat`` provider + its one-slot pool (free-ai-providers §4; never recorded: the
+    recorder is Gemini-only, so real papers on ``local``/``attested`` never become fixtures).
 
     ``AI_PROVIDER=gemini`` with zero slots (``ENV=development`` only) gets the 503 stand-in.
     """
     if settings.ai_provider == "mock":
         return MockProvider(fixtures, settings), None
+    if settings.ai_provider == "openai_compat":
+        compat, compat_pool = build_openai_compat_stack(settings, clock=clock)
+        return compat, compat_pool
     provider, keypool = build_gemini_stack(settings, clock=clock)
     return wrap_if_enabled(provider, settings), keypool
 
@@ -101,6 +107,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         keypool: KeyPool | None = getattr(app.state, "keypool", None)
         if keypool is not None:
             keypool.persist()
+        close = getattr(getattr(app.state, "provider", None), "aclose", None)
+        if close is not None:  # the openai_compat provider's httpx client
+            await close()
 
     app = FastAPI(
         title="ProxyHealth AI API",

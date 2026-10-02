@@ -1,15 +1,20 @@
 """Day-0 structured-output spike (D-06; AI_PROMPTS §9.4; BUILD_PLAN §5.2 steps 3 and 7).
 
 Sends every model-output schema to the live Gemini API through the real ``AIService`` +
-``KeyPool`` + ``GeminiProvider`` stack and reports, per fixture, which analysis mode worked:
+``KeyPool`` + ``GeminiProvider`` stack — or, with ``--provider openai_compat``, to the
+OpenAI-compatible endpoint from ``OPENAI_COMPAT_*`` (free-ai-providers §4.4, §4.10: run this
+against every fixture before trusting a local model) — and reports, per fixture, which analysis
+mode worked:
 ``single`` (``AnalysisModelOut`` in one call) or ``two_call`` (``TranscriptOut`` then
 ``ExplainOut``). Pin the printed recommendation in ``.env.example`` (``ANALYSIS_MODE``).
 
     apps/api/.venv/bin/python apps/api/scripts/spike_schema.py [--fixture ID ...] [--no-tasks]
-                                                                [--json]
+                                [--provider gemini|openai_compat] [--json]
 
-Exit codes: 0 every probe passed, 1 at least one probe failed, 2 ``GEMINI_KEYS`` is empty or an
-argument is wrong. Needs billed keys for anything but the synthetic fixtures (D-01).
+Exit codes: 0 every probe passed, 1 at least one probe failed, 2 ``GEMINI_KEYS`` is empty (Gemini),
+the ``OPENAI_COMPAT_*`` configuration is refused, or an argument is wrong. The fixtures are
+synthetic, so any data-use tier may run it (D-01). ``--provider`` defaults to ``openai_compat``
+when ``AI_PROVIDER=openai_compat``, else ``gemini``.
 
 Content-free by construction: it prints ids, statuses, HTTP codes, token counts and latencies —
 never model output, never a key — and writes nothing except the key pool's own
@@ -44,6 +49,10 @@ from proxyhealth_api.ai.failover import (  # noqa: E402
 )
 from proxyhealth_api.ai.gemini import GeminiProvider  # noqa: E402
 from proxyhealth_api.ai.keypool import KeyPool  # noqa: E402
+from proxyhealth_api.ai.openai_compat import (  # noqa: E402
+    OpenAICompatProvider,
+    build_openai_compat_stack,
+)
 from proxyhealth_api.ai.provider import AIProvider, Part, StructuredResult, Task  # noqa: E402
 from proxyhealth_api.contracts.enums import Legibility, ModelTier, ThinkingLevel  # noqa: E402
 from proxyhealth_api.contracts.model_out import (  # noqa: E402
@@ -327,7 +336,7 @@ async def run_spike(
     probe_tasks: bool = True,
     mode: str = "auto",
 ) -> SpikeReport:
-    report = SpikeReport(model_pro=settings.model_pro, model_fast=settings.model_fast)
+    report = SpikeReport(model_pro=settings.active_model_pro, model_fast=settings.active_model_fast)
     if probe_tasks:
         for task, (schema, text) in TEXT_PROBES.items():
             p, _ = await probe(service, recorder, task, schema, [Part.of_text(text)])
@@ -416,9 +425,25 @@ def load_settings() -> Settings:
 
 
 def build_service(settings: Settings) -> tuple[AIService, UpstreamRecorder]:
+    if settings.ai_provider == "openai_compat":
+        compat, keypool = build_openai_compat_stack(settings)
+        recorder = UpstreamRecorder(compat)
+        return AIService(recorder, keypool, settings), recorder
     recorder = UpstreamRecorder(GeminiProvider(list(settings.gemini_keys), settings))
-    keypool = KeyPool.from_settings(settings, lambda: datetime.now(UTC))
-    return AIService(recorder, keypool, settings), recorder
+    gemini_pool = KeyPool.from_settings(settings, lambda: datetime.now(UTC))
+    return AIService(recorder, gemini_pool, settings), recorder
+
+
+def compat_settings(settings: Settings) -> Settings | None:
+    """``settings`` as ``AI_PROVIDER=openai_compat``, re-validated so its boot rules run."""
+    if settings.ai_provider == "openai_compat":
+        return settings
+    data = settings.model_dump(exclude_unset=True) | {"ai_provider": "openai_compat"}
+    try:
+        return Settings(_env_file=None, **data)
+    except ValueError as exc:
+        print(f"spike_schema: OPENAI_COMPAT_* configuration refused: {exc}", file=sys.stderr)
+        return None
 
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -426,6 +451,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--fixture", action="append", default=[], help="only this fixture id")
     ap.add_argument("--no-tasks", action="store_true", help="skip the text-only schema probes")
     ap.add_argument("--mode", choices=["auto", "single", "two_call"], default="auto")
+    ap.add_argument("--provider", choices=["gemini", "openai_compat"], default=None)
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
     return ap.parse_args(argv)
 
@@ -436,7 +462,15 @@ def main(argv: Sequence[str] | None = None, *, settings: Settings | None = None)
     except SystemExit as exc:  # argparse error / --help
         return 0 if exc.code == 0 else 2
     settings = settings or load_settings()
-    if not settings.gemini_keys:
+    provider = args.provider or (
+        "openai_compat" if settings.ai_provider == "openai_compat" else "gemini"
+    )
+    if provider == "openai_compat":
+        compat = compat_settings(settings)
+        if compat is None:
+            return 2
+        settings = compat
+    elif not settings.gemini_keys:
         print(NO_KEYS_MESSAGE, file=sys.stderr)
         return 2
     fixtures = load_fixtures(ids=args.fixture)
@@ -445,11 +479,18 @@ def main(argv: Sequence[str] | None = None, *, settings: Settings | None = None)
         print(f"spike_schema: unknown or incomplete fixture(s): {missing}", file=sys.stderr)
         return 2
     service, recorder = build_service(settings)
-    report = asyncio.run(
-        run_spike(
-            service, recorder, settings, fixtures, probe_tasks=not args.no_tasks, mode=args.mode
-        )
-    )
+
+    async def spike() -> SpikeReport:
+        try:
+            return await run_spike(
+                service, recorder, settings, fixtures, probe_tasks=not args.no_tasks,
+                mode=args.mode,
+            )  # fmt: skip
+        finally:
+            if isinstance(recorder.inner, OpenAICompatProvider):
+                await recorder.inner.aclose()
+
+    report = asyncio.run(spike())
     print_report(report, as_json=args.json)
     return 0 if recommendation(report)[1] else 1
 

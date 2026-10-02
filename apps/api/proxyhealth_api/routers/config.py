@@ -42,6 +42,12 @@ async def config(
     resources: Annotated[ResourceRepo, Depends(get_resources)],
     rules: Annotated[RulesRepo, Depends(get_rules)],
 ) -> ServerConfig:
+    # openai_compat sends at most OPENAI_COMPAT_MAX_IMAGES pages per call (free-ai-providers §4.8).
+    image_cap = (
+        settings.openai_compat_max_images
+        if settings.ai_provider == "openai_compat"
+        else max(settings.max_pages, settings.max_pdf_pages)
+    )
     slots = (
         keypool.summary()
         if keypool is not None
@@ -55,16 +61,16 @@ async def config(
         provider=settings.provider,
         data_use_tier=settings.data_use_tier,
         models=ModelsInfo(
-            fast=settings.model_fast,
-            pro=settings.model_pro,
+            fast=settings.active_model_fast,
+            pro=settings.active_model_pro,
             pro_degraded_thinking=settings.model_pro_degraded_thinking,
         ),
         features=settings.features,
         limits=Limits(
-            max_pages=settings.max_pages,
+            max_pages=min(settings.max_pages, image_cap),
             max_page_bytes=settings.max_page_bytes,
             max_pdf_bytes=settings.max_pdf_bytes,
-            max_pdf_pages=settings.max_pdf_pages,
+            max_pdf_pages=min(settings.max_pdf_pages, image_cap),
             max_request_bytes=settings.max_request_bytes,
             max_upstream_inline_bytes=settings.max_upstream_inline_bytes,
             max_chat_history=settings.max_chat_history,
@@ -80,4 +86,7 @@ async def config(
         key_slots=slots,
         region_notice="us_only",
         server_time=datetime.now(UTC),
+        ai_model_label=settings.ai_model_label,
+        ai_vendor_name=settings.ai_vendor_name,
+        client_timeouts=settings.client_timeouts,
     )

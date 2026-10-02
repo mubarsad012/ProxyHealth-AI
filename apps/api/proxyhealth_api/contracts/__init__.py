@@ -53,6 +53,7 @@ from proxyhealth_api.contracts.common import (
     Zip3,
 )
 from proxyhealth_api.contracts.config import (
+    ClientTimeouts,
     FeatureFlags,
     HealthResponse,
     KeySlotSummary,
@@ -224,6 +225,7 @@ __all__ = [
     "TextBlock",
     "TranslatedPage",
     # §3.1–3.2 status
+    "ClientTimeouts",
     "FeatureFlags",
     "HealthResponse",
     "KeySlotSummary",

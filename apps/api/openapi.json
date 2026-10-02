@@ -43,7 +43,7 @@
       },
       "AnalysisContext": {
         "additionalProperties": false,
-        "description": "API_CONTRACT §3.7 — subset of ``AnalysisResult`` the client re-sends with each question.",
+        "description": "API_CONTRACT §3.7 — subset of ``AnalysisResult`` the client re-sends with each question.\n\nEach ``original_text`` page holds at most ``MAX_BLOCKS_PER_PAGE`` blocks of at most\n``MAX_BLOCK_CHARS`` characters (checked here, because ``PageText``/``TextBlock`` are shared\nwith the analysis output and its model schema).",
         "properties": {
           "analysis_id": {
             "title": "Analysis Id",
@@ -56,6 +56,7 @@
             "items": {
               "$ref": "#/components/schemas/Demand"
             },
+            "maxItems": 60,
             "title": "Demands",
             "type": "array"
           },
@@ -72,6 +73,7 @@
             "items": {
               "$ref": "#/components/schemas/GlossaryTerm"
             },
+            "maxItems": 60,
             "title": "Glossary",
             "type": "array"
           },
@@ -79,6 +81,7 @@
             "items": {
               "$ref": "#/components/schemas/PageText"
             },
+            "maxItems": 60,
             "title": "Original Text",
             "type": "array"
           },
@@ -86,6 +89,7 @@
             "items": {
               "$ref": "#/components/schemas/PlanStep"
             },
+            "maxItems": 60,
             "title": "Plan Steps",
             "type": "array"
           },
@@ -93,6 +97,7 @@
             "items": {
               "$ref": "#/components/schemas/RedFlag"
             },
+            "maxItems": 60,
             "title": "Red Flags",
             "type": "array"
           },
@@ -114,6 +119,7 @@
             "items": {
               "$ref": "#/components/schemas/Demand"
             },
+            "maxItems": 60,
             "title": "Unverified",
             "type": "array"
           },
@@ -714,6 +720,43 @@
         "title": "ClerkMessage",
         "type": "object"
       },
+      "ClientTimeouts": {
+        "description": "How long the app waits for each kind of request before it gives up, in seconds.\n\nThe defaults are the app's fixed limits from before ``AI_PROVIDER=openai_compat``; a local\nmodel is slower, so the server then sends limits that cover its own budget\n(``FAILOVER_DEADLINE_S`` + ``OPENAI_COMPAT_TIMEOUT_S`` + a margin; free-ai-providers §4.6).",
+        "properties": {
+          "analyze_s": {
+            "default": 120,
+            "minimum": 1.0,
+            "title": "Analyze S",
+            "type": "integer"
+          },
+          "chat_s": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Chat S",
+            "type": "integer"
+          },
+          "default_s": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Default S",
+            "type": "integer"
+          },
+          "language_pack_s": {
+            "default": 60,
+            "minimum": 1.0,
+            "title": "Language Pack S",
+            "type": "integer"
+          },
+          "troubleshoot_s": {
+            "default": 60,
+            "minimum": 1.0,
+            "title": "Troubleshoot S",
+            "type": "integer"
+          }
+        },
+        "title": "ClientTimeouts",
+        "type": "object"
+      },
       "Confidence": {
         "description": "API_CONTRACT §1 — three-step confidence scale.",
         "enum": [
@@ -736,13 +779,15 @@
         "type": "string"
       },
       "DataUseTier": {
-        "description": "API_CONTRACT §1 — Gemini data-use tier the server runs on (mirrors ``X-Data-Use-Tier``).",
+        "description": "API_CONTRACT §1 — data-use tier the server runs on (mirrors ``X-Data-Use-Tier``).\n\n``paid``/``unpaid``/``mixed``/``none`` come from the Gemini slot billing flags (D-01),\n``demo`` from the mock. ``local`` (an open-weight model on a loopback endpoint of the API host)\nand ``attested`` (a hosted vendor whose API terms the operator attests say \"no training\";\ndevelopment only) exist only with ``AI_PROVIDER=openai_compat`` (free-ai-providers §5.2).",
         "enum": [
           "paid",
           "unpaid",
           "mixed",
           "demo",
-          "none"
+          "none",
+          "local",
+          "attested"
         ],
         "title": "DataUseTier",
         "type": "string"
@@ -2641,7 +2686,8 @@
         "description": "API_CONTRACT §1 — AI provider backing the server.",
         "enum": [
           "gemini",
-          "mock"
+          "mock",
+          "openai_compat"
         ],
         "title": "Provider",
         "type": "string"
@@ -3286,6 +3332,7 @@
           },
           "institutions_as_written": {
             "items": {
+              "maxLength": 200,
               "type": "string"
             },
             "maxItems": 10,
@@ -3537,6 +3584,30 @@
       "ServerConfig": {
         "description": "API_CONTRACT §3.2 — capabilities and status the client reads at boot.",
         "properties": {
+          "ai_model_label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Model Label"
+          },
+          "ai_vendor_name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Vendor Name"
+          },
           "api_version": {
             "title": "Api Version",
             "type": "string"
@@ -3544,6 +3615,9 @@
           "base_pack_version": {
             "title": "Base Pack Version",
             "type": "string"
+          },
+          "client_timeouts": {
+            "$ref": "#/components/schemas/ClientTimeouts"
           },
           "consent_version": {
             "title": "Consent Version",

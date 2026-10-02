@@ -249,19 +249,23 @@ async def test_huge_context_is_bounded_and_compacted_in_linear_time(
 async def test_huge_chat_request_answers_quickly(
     client: httpx.AsyncClient, consent_headers: dict[str, str]
 ) -> None:
+    """Phase 2C contract caps: a context at the bound (60 pages) is answered quickly; a padded one
+    (2 000 pages) is refused with ``400`` before any work."""
     import time
 
     data = await context_for(client, "medicaid_address_confirmation")
-    big = _padded(AnalysisContext.model_validate(data), 2000).model_dump(mode="json")
-    started = time.perf_counter()
-    r = await client.post(
-        "/v1/chat",
-        json={"analysis": big, "messages": [], "question": "When is it due?",
-              "target_language": "en"},  # fmt: skip
-        headers=consent_headers,
-    )
-    assert r.status_code == 200, r.text
-    assert time.perf_counter() - started < 5.0
+    ctx = AnalysisContext.model_validate(data)
+    for pages, status in ((60, 200), (2000, 400)):
+        big = _padded(ctx, pages).model_dump(mode="json")
+        started = time.perf_counter()
+        r = await client.post(
+            "/v1/chat",
+            json={"analysis": big, "messages": [], "question": "When is it due?",
+                  "target_language": "en"},  # fmt: skip
+            headers=consent_headers,
+        )
+        assert r.status_code == status, r.text
+        assert time.perf_counter() - started < 5.0
 
 
 @pytest.mark.parametrize(

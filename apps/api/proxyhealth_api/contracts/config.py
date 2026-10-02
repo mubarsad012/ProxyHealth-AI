@@ -65,6 +65,21 @@ class Limits(BaseModel):
     translate_full_max_pages: int = 4
 
 
+class ClientTimeouts(BaseModel):
+    """How long the app waits for each kind of request before it gives up, in seconds.
+
+    The defaults are the app's fixed limits from before ``AI_PROVIDER=openai_compat``; a local
+    model is slower, so the server then sends limits that cover its own budget
+    (``FAILOVER_DEADLINE_S`` + ``OPENAI_COMPAT_TIMEOUT_S`` + a margin; free-ai-providers §4.6).
+    """
+
+    analyze_s: int = Field(default=120, ge=1)
+    troubleshoot_s: int = Field(default=60, ge=1)
+    language_pack_s: int = Field(default=60, ge=1)
+    chat_s: int = Field(default=30, ge=1)
+    default_s: int = Field(default=30, ge=1)
+
+
 class KeySlotSummary(BaseModel):
     """API_CONTRACT §3.2 — key-pool counts only (no key material)."""
 
@@ -112,3 +127,7 @@ class ServerConfig(BaseModel):
     key_slots: KeySlotSummary
     region_notice: Literal["us_only"] = "us_only"
     server_time: datetime
+    # free-ai-providers §5.2/§5.3: ``{model}`` / ``{vendor}`` in the tier's consent copy.
+    ai_model_label: str | None = Field(default=None, max_length=60)
+    ai_vendor_name: str | None = Field(default=None, max_length=60)
+    client_timeouts: ClientTimeouts = Field(default_factory=ClientTimeouts)
