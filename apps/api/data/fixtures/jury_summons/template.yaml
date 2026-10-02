@@ -87,14 +87,17 @@ out:
     geo_state: VA
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una citación para jurado de Circuit Court of Sample County, Virginia. Necesito ayuda con: una citación para jurado - contestar el formulario antes de su fecha límite. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "Citación para jurado de la Corte de Circuito del Condado de Sample"
-    summary_body: "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del 23 de octubre de 2026 y presentarse el 16 de noviembre de 2026 a las 8:00 AM."
+    summary_body: "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del October 23, 2026 y presentarse el November 16, 2026 a las 8:00 AM."
     demands:
-      d1: {text: "Conteste el cuestionario y envíelo antes del 23 de octubre de 2026."}
-      d2: {text: "La citación da como fecha para presentarse el 16 de noviembre de 2026 a las 8:00 AM."}
+      d1: {text: "Conteste el cuestionario y envíelo antes del October 23, 2026."}
+      d2: {text: "La citación da como fecha para presentarse el November 16, 2026 a las 8:00 AM."}
       d3: {text: "Teléfono de la Oficina del Jurado, de su papel: (703) 555-0181."}
     plan_steps:
-      s1: {text: "Conteste cada pregunta del cuestionario y envíelo por correo antes del 23 de octubre de 2026."}
+      s1: {text: "Conteste cada pregunta del cuestionario y envíelo por correo antes del October 23, 2026."}
       s2: {text: "Llame a la Oficina del Jurado si tiene preguntas sobre las fechas."}
       s3: {text: "Si tiene dudas sobre la pregunta de ciudadanía, pregunte a un abogado con licencia o a un representante acreditado por el DOJ."}
     glossary:
@@ -106,8 +109,11 @@ out:
       - "¿Cómo devuelvo el cuestionario?"
       - "¿Hay intérprete en la corte?"
     translated_pages:
-      - "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: 25 de septiembre de 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del 23 de octubre de 2026.\nFecha para presentarse: 16 de noviembre de 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
+      - "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: September 25, 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del October 23, 2026.\nFecha para presentarse: November 16, 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک احضاریه هیئت منصفه از Circuit Court of Sample County, Virginia. در این مورد کمک لازم دارم: یک احضاریه هیئت منصفه - جواب دادن به فورم پیش از تاریخ آخر آن. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "احضاریه هیئت منصفه از محکمه ناحیه Sample"
     summary_body: "این احضاریه هیئت منصفه از محکمه ناحیه Sample است. از شما می‌خواهد تا October 23, 2026 یک فورم را جواب دهید و در November 16, 2026 ساعت 8:00 AM حاضر شوید."
     demands:
@@ -129,6 +135,9 @@ out:
     translated_pages:
       - "محکمه ناحیه Sample، ویرجینیا\nدفتر مدیر هیئت منصفه\nتاریخ: September 25, 2026\nاحضاریه برای خدمت در هیئت منصفه\nبدین وسیله شما برای خدمت در هیئت منصفه احضار می‌شوید.\nلطفاً پرسشنامه صلاحیت عضو هیئت منصفه را پر کنید و تا October 23, 2026 پس بفرستید.\nتاریخ حضور: November 16, 2026 ساعت 8:00 AM، اتاق تجمع هیئت منصفه، محکمه ناحیه Sample.\nسوال 4. آیا شما شهروند ایالات متحده هستید؟ [ ] بلی [ ] نخیر\nبه هر سوال راست جواب دهید. پس نفرستادن پرسشنامه ممکن است باعث جریمه شود.\nبرای خواستن تاریخ نو یا معافیت، با دفتر هیئت منصفه به نمبر (703) 555-0181 زنگ بزنید."
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: استدعاء لهيئة المحلفين من Circuit Court of Sample County, Virginia. أحتاج إلى مساعدة في: استدعاء لهيئة المحلفين - الإجابة على النموذج قبل موعده النهائي. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "استدعاء لهيئة المحلفين من محكمة مقاطعة Sample"
     summary_body: "هذا استدعاء لهيئة المحلفين من محكمة مقاطعة Sample. يطلب منك الإجابة على نموذج قبل October 23, 2026 والحضور في November 16, 2026 الساعة 8:00 AM."
     demands:

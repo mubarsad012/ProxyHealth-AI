@@ -19,7 +19,7 @@ Rules for every word below (COMPLIANCE_PRIVACY §5.4, §17):
 | B2 | Operator legal name, postal address, privacy e-mail in the policy | both | user — COMPLIANCE_PRIVACY Q15 | `apps/mobile/public/privacy/index.html` has no `TODO` left |
 | B3 | Bundle id / package and web host confirmed (placeholders `org.proxyhealth.app`, `https://proxyhealth.expo.app/privacy`) | both | user — DECISIONS Q4 | `app.json` `ios.bundleIdentifier` / `android.package`; `PRIVACY_POLICY_URL` |
 | B4 | Paid tier live: every `GEMINI_KEYS` slot `billing:true`, distinct projects; `GET /v1/config` on the production API returns `data_use_tier: "paid"` | both | user — DECISIONS Q1 | dated screenshot of Cloud Billing per project in `docs/RUNBOOK.md` |
-| B5 | iOS vault excluded from iCloud backup and verified on a dev build | Apple 5.1.3(ii) | user — COMPLIANCE_PRIVACY Q16 | RUNBOOK dev-build log; until then ship Android first |
+| B5 | iOS vault excluded from iCloud backup and verified on a dev build | Apple 5.1.3(ii) | user — COMPLIANCE_PRIVACY Q16 | RUNBOOK dev-build log; until then ship Android first. **Open on 2026-10-01**: not implemented (SDK 57 has no API; needs a config plugin/native module — COMPLIANCE_PRIVACY §10.2). The App Store description's "Papers you save stay only on this phone" becomes true on iOS only when B5 closes. |
 | B6 | Counsel review: UPL framing, FDA display exclusion, HBNR memo, state paragraphs, this listing | both | user — Q3 | COMPLIANCE_PRIVACY §18.1–§18.6 ticked with names and dates |
 | B7 | Title length: DECISIONS §13 title is 37 characters; both consoles cap the name at 30 (verify) | both | architect — DECISIONS §14 CL-060 | the fallback in §1 is accepted or the title is shortened |
 | B8 | SDK 58 upgrade before store submission (ARCHITECTURE §5.3) | both | WP0 install window | `npx expo config --type prebuild` green on SDK 58 |
@@ -87,7 +87,7 @@ What happens to your paper
 Your photo is sent to Google's AI (Gemini) to be read. Our server does not keep it. Google does not use your paper to improve its products. Google keeps a short safety log for a limited time, then deletes it. Papers you save stay only on this phone. You can delete everything any time. You see this before your first photo is sent, and you can say "Not now".
 
 What it does not do
-It does not decide anything for you. It does not fill in forms, invent phone numbers or guess dates. For legal papers: This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer or a DOJ-accredited representative can advise you. For medical papers: This explains what your paper says. It is not medical advice. Ask your doctor, nurse or pharmacist what it means for you.
+It does not decide anything for you. It does not fill in forms, invent phone numbers or guess dates. For legal papers: This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer can advise you. For an immigration case, a DOJ-accredited representative can too. For medical papers: This explains what your paper says. It is not medical advice. Ask your doctor, nurse or pharmacist what it means for you.
 
 No account. No ads. No trackers. This app is for adults 18 and older.
 ```

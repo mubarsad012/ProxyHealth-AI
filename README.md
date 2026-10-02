@@ -2,14 +2,14 @@
 
 One codebase for iOS, Android and the web. Photograph a letter, bill, notice or form; the app reads it, translates it, explains it in three calm cards anchored to the exact words on the page, and points the reader to help a person verified.
 
-> **Information, not advice.** ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms. Only a licensed professional — a lawyer or DOJ-accredited representative, a doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell someone what it means for them.
+> **Information, not advice.** ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms. Only a licensed professional — a lawyer (or, for an immigration case, a DOJ-accredited representative), a doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell someone what it means for them.
 
 | | |
 |---|---|
-| **Status (2026-09-29)** | Phase 1 built and merged (`85e1e68`): API core, Gemini provider with key failover, the full analysis/safety pipeline, resources, fixtures and the mobile app (web walk-through verified end to end in Dari with zero keys). Phase 2 (integration, store preparation) in progress. The API test suite passes (`make test`; the live tests skip without keys); ruff and strict mypy are clean; mobile `tsc`, `jest`, `expo lint`, web export and `expo config --type prebuild` are green. |
+| **Status (2026-10-01)** | Phase 1 built and merged (`85e1e68`): API core, Gemini provider with key failover, the full analysis/safety pipeline, resources, fixtures and the mobile app (web walk-through verified end to end in Dari with zero keys). Phase 2A (dev tooling, CI, store docs, artwork; `3eccd27`) and 2B (audit and hardening; `95e620f`) merged; Phase 2C (leftovers plus S5/S11/S16 should-haves) in progress. iOS store submission stays blocked on the iCloud-backup gate (COMPLIANCE_PRIVACY §10.2); Android first. The API test suite passes (`make test`; the live tests skip without keys); ruff and strict mypy are clean; mobile `tsc`, `jest`, `expo lint`, web export and `expo config --type prebuild` are green. |
 | **Try it** | `make dev`, then open <http://localhost:8081>. Zero API keys: `AI_PROVIDER=mock` serves 17 synthetic sample papers and 1 portal screenshot end to end. |
 | **Models** | `MODEL_PRO=gemini-3.8-flash` (document analysis, screenshot help) · `MODEL_FAST=gemini-3.5-flash-lite` (language packs, chat, tagging, rewrites). Env-configurable; `gemini-1.5`/`2.0`/`2.5` and `-latest` IDs are refused at boot. |
-| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only. |
+| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only; typed text (chat questions, a troubleshoot goal) is refused there too, even about a sample, so `features.chat` is off and the app hides the chat box. |
 | **Stores** | Not submitted. Android development build first, iOS after an organization Apple account; see [Store roadmap](#store-roadmap) and [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md). |
 
 ## Contents
@@ -35,7 +35,7 @@ One codebase for iOS, Android and the web. Photograph a letter, bill, notice or 
 
 ProxyHealth AI is a *paper decoder with a caseworker's manners*. Immigrants and other underserved adults receive hospital bills, USCIS and immigration-court notices, leases and eviction papers, Medicaid and SNAP letters, school forms and IRS notices — often in a language they do not read, with the one date that matters buried on page three. You photograph the paper (or pick a photo or a PDF) and get three cards in your own language: **What is this?**, **What is it asking for?** and **Your step-by-step plan**. Every date, amount, requested document and contact is shown next to the exact words on the page it came from, with a confidence chip; anything the AI saw but could not confirm on the page is listed separately and never drives urgency or reminders.
 
-It is information, not advice, and that is enforced in code rather than in a footer: the model never writes disclaimers, never sets urgency, never computes a date and never emits a phone number, URL or organization name. Boundary sentences are fixed copy chosen by document category (for legal papers: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer or a DOJ-accredited representative can advise you."). The app is for adults 18 and older (a Gemini terms requirement), never asks anyone's immigration status, and never stores a paper, image or transcript on the server. Rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md) §0, §4, §5.
+It is information, not advice, and that is enforced in code rather than in a footer: the model never writes disclaimers, never sets urgency, never computes a date and never emits a phone number, URL or organization name. Boundary sentences are fixed copy chosen by document category (for legal papers: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer can advise you. For an immigration case, a DOJ-accredited representative can too."). The app is for adults 18 and older (a Gemini terms requirement), never asks anyone's immigration status, and never stores a paper, image or transcript on the server. Rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md) §0, §4, §5.
 
 ## Features
 
@@ -188,8 +188,9 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `CORS_ORIGINS` | `http://localhost:8081` | Comma list; add the web host. `make dev` passes `http://localhost:8081,http://127.0.0.1:8081`. |
 | `APP_TOKEN` · `ADMIN_TOKEN` | empty | Require `X-App-Token` · enable `/v1/admin/keys`. |
 | `INSTALL_HASH_SECRET` | random per process | HMAC secret for install-id hashing (set it in production). |
-| `RATE_LIMIT_ANALYZE_PER_HOUR` / `_PER_DAY` · `RATE_LIMIT_IP_PER_MINUTE` | `20` / `100` · `60` | Soft limits per install / per IP class. |
-| `CONSENT_VERSION` | `2026-09-24` | Bump when consent copy changes (clients re-consent). |
+| `RATE_LIMIT_ANALYZE_PER_HOUR` / `_PER_DAY` · `RATE_LIMIT_IP_PER_MINUTE` / `_PER_DAY` | `20` / `100` · `60` / `1000` | Soft limits per install (when `X-Install-Id` is sent) / per IP class (`/24`, `/48`; every model-calling request). 429 `details.bucket` says which. |
+| `TRUSTED_PROXY_HOPS` | `0` (the Dockerfile sets `1`) | Proxies that append to `X-Forwarded-For`; Cloud Run 1, behind an external HTTPS load balancer 2 (DEPLOYMENT §1.2). |
+| `CONSENT_VERSION` | `2026-10-01` | Bump when consent copy changes (clients re-consent). |
 | `PRIVACY_POLICY_URL` | `https://proxyhealth.expo.app/privacy` | The public HTML policy (`apps/mobile/public/privacy/index.html`). |
 | `VAR_DIR` · `LANGPACK_CACHE_TTL_DAYS` | `./var` · `180` | Runtime state (never user content) · pack cache age. |
 | `MOCK_LATENCY_MIN_MS` / `_MAX_MS` · `MOCK_PHASH_MAX_HAMMING` | `300` / `900` · `10` | Mock latency · sample-photo match threshold. |
@@ -272,8 +273,8 @@ Base URL `EXPO_PUBLIC_API_URL`; `/health` plus versioned routes under `/v1`; JSO
 | GET | `/health` · `/v1/config` | — | liveness; tier, features, limits, consent version, policy URL, languages |
 | GET · POST | `/v1/language-packs/{tag}` · `/v1/language-packs` | — · fast | bundled/cached pack (ETag/304) · generate a pack for a typed language |
 | POST | `/v1/analyze` | pro | pages + target language → `AnalysisResult` (consent header; 403 on unpaid without `demo_sample_id`) |
-| POST | `/v1/troubleshoot` | pro | screenshot + goal → steps, cautions, scam risk |
-| POST | `/v1/chat` | fast | analysis context + question → grounded answer or typed refusal |
+| POST | `/v1/troubleshoot` | pro | screenshot + goal → steps, cautions, scam risk (on unpaid, a sample only with a blank goal) |
+| POST | `/v1/chat` | fast | analysis context + question → grounded answer or typed refusal; a sample's context is rebuilt on the server; 403 on unpaid/mixed; distress words → the fixed emergency lines even if the model fails |
 | POST · GET | `/v1/resources/match` · `/v1/resources[/{id}]` | — | vetted help with checklist and national fallbacks |
 | GET | `/v1/rules` | — | the 12 cited deadline rules |
 | POST | `/v1/quicksheet/pdf` | — | text-only PDF (nothing stored) |
@@ -356,4 +357,4 @@ Questions only the user can answer: [`docs/DECISIONS.md`](docs/DECISIONS.md) §1
 
 ---
 
-*ProxyHealth AI explains what your paper says. It is not legal, medical, housing or benefits advice, and it is not a medical device. Only a licensed professional — a lawyer or DOJ-accredited representative, your doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell you what it means for you.*
+*ProxyHealth AI explains what your paper says. It is not legal, medical, housing or benefits advice, and it is not a medical device. Only a licensed professional — a lawyer (or, for an immigration case, a DOJ-accredited representative), your doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell you what it means for you.*

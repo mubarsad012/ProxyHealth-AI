@@ -53,15 +53,7 @@ key:privacy.notice.no_ads        # COMPLIANCE §4.5 / §16, reused verbatim in t
 key:settings.developer           # developer-only section, never shown when EXPO_PUBLIC_APP_ENV=production
 
 # --- pending: plain-language rewrites requested from the en.json owner (suggestions in DECISIONS §14 CL-059)
-# 2026-09-30 (Phase 2B): 15 rewrites landed with the en.json merge (CL-074). The 9 below each need a
-# lockstep change outside en.json first (a resources _meta.yaml text, a fixture/mock string or a test
-# that quotes the old English) — proposed copy and the files to change are listed in DECISIONS CL-074.
-pending:clerk.generic_need           # "understanding"
-pending:help.always                  # "available"
-pending:notes.county_unknown         # 16-word sentence
-pending:prepare.bring_school_records # "evaluations"
-pending:warning.org_removed_inline   # "organization"
-pending:why.for_lab_results          # "understanding"
-pending:why.for_naturalization       # "applications"
-pending:prepare.bring_proof_rent_utilities  # "utility" (e.g. "Your rent, power, gas and water bills")
-pending:why.for_utility_shutoff      # "utility" (e.g. "For power, gas or water shutoff notices")
+# 2026-09-30 (Phase 2B): 15 rewrites landed with the en.json merge (CL-074).
+# 2026-10-01 (Phase 2C, COPY): the last 9 landed together with their lockstep changes
+# (_meta.yaml texts, the mock/fixture clerk need line, test_contacts_filter ORG, help.test.tsx).
+# None are pending now; add a line here only for a string that fails and is queued for a rewrite.

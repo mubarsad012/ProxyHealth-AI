@@ -10,7 +10,9 @@ tag — sets ``Safety.emergency`` so the client shows the fixed emergency card f
 target language without a list adds ``warnings: [emergency_lexicon_unavailable]``. The bias is to
 over-trigger: a language's ``exclude`` phrases ("Poison Control", "If swallowed") are removed
 only from printed text (``texts``), never from what the user typed (``user_texts``: the chat
-question, the troubleshoot ``user_goal``). Pure functions; nothing logged.
+question, the troubleshoot ``user_goal``). A language's optional ``proclitics`` (Arabic و ف ب ل ك,
+written attached to the next word) may stand before a term, so "ولا أستطيع التنفس" matches "لا
+أستطيع التنفس". Pure functions; nothing logged.
 """
 
 from __future__ import annotations
@@ -69,16 +71,25 @@ def _escape_part(part: str) -> str:
     return "".join(_ACCENT_CLASS.get(ch) or re.escape(ch) for ch in part)
 
 
-def _term_regex(term: str, mode: MatchMode) -> str:
+def _term_regex(term: str, mode: MatchMode, proclitics: str = "") -> str:
+    """One term as a regex. ``proclitics`` (an alternation of attached one-letter prefixes such
+    as Arabic و/ف/ب/ل/ك) may stand before the term's first word: "ولا أستطيع التنفس" ("and I
+    cannot breathe") then matches the term "لا أستطيع التنفس"."""
     raw = normalize_for_match(term)
     open_end = raw.endswith("*")
     raw = raw.rstrip("*")
     body = r"\s*".join(_escape_part(part) for part in raw.split(" ") if part)
     if mode == "substring":
         return body
+    lead = rf"(?:{proclitics}){{0,2}}" if proclitics else ""
     if mode == "prefix" or open_end:
-        return rf"(?<!\w){body}"
-    return rf"(?<!\w){body}(?!\w)"
+        return rf"(?<!\w){lead}{body}"
+    return rf"(?<!\w){lead}{body}(?!\w)"
+
+
+def _proclitic_alternation(values: Iterable[object]) -> str:
+    folded = [normalize_for_match(str(v)).strip() for v in values]
+    return "|".join(re.escape(v) for v in dict.fromkeys(folded) if v)
 
 
 @dataclass(frozen=True)
@@ -127,11 +138,12 @@ def parse_lexicon(data: Mapping[str, Any]) -> Lexicon:
         if raw_mode not in ("word", "prefix", "substring"):
             raise ValueError(f"emergency.yaml: {tag}: unknown match mode {raw_mode!r}")
         mode = cast(MatchMode, raw_mode)
+        proclitics = _proclitic_alternation(raw.get("proclitics") or [])
         patterns: dict[str, re.Pattern[str]] = {}
         for kind, terms in (raw.get("terms") or {}).items():
             if kind not in kinds:
                 raise ValueError(f"emergency.yaml: {tag}: unknown kind {kind!r}")
-            alts = [_term_regex(str(t), mode) for t in terms or [] if str(t).strip()]
+            alts = [_term_regex(str(t), mode, proclitics) for t in terms or [] if str(t).strip()]
             if alts:
                 patterns[str(kind)] = re.compile("|".join(alts))
         languages[str(tag)] = LanguageLexicon(

@@ -100,11 +100,14 @@ out:
     geo_city: Alexandria
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: un aviso de mi arrendador, de Oak Hollow Property Management LLC. Necesito ayuda con: un aviso de mi arrendador sobre la renta - lo que dice y la fecha que tiene. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "Aviso del arrendador sobre renta no pagada"
-    summary_body: "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del 8 de octubre de 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte."
+    summary_body: "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del October 8, 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte."
     demands:
-      d1: {text: "El aviso dice que usted debe $1,450.00 de renta de septiembre de 2026."}
-      d2: {text: "El aviso da el 8 de octubre de 2026 como la fecha para pagar el monto completo."}
+      d1: {text: "El aviso dice que usted debe $1,450.00 de renta de September 2026."}
+      d2: {text: "El aviso da el October 8, 2026 como la fecha para pagar el monto completo."}
       d3: {text: "El aviso también menciona 14 días desde la fecha del aviso. Pregunte al arrendador qué fecha significa."}
       d4: {text: "Teléfono de la oficina, de su papel: (703) 555-0175."}
     plan_steps:
@@ -120,8 +123,11 @@ out:
       - "¿Dónde y cómo puedo pagar los $1,450.00?"
       - "¿Me dará un recibo cuando pague?"
     translated_pages:
-      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
+      - "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: September 24, 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de September 2026.\nDebe pagar el monto completo antes del October 8, 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک اطلاعیه از صاحب‌خانه‌ام، از Oak Hollow Property Management LLC. در این مورد کمک لازم دارم: یک اطلاعیه از صاحب‌خانه‌ام درباره کرایه - اینکه چه می‌گوید و تاریخ روی آن. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "اطلاعیه صاحب‌خانه درباره کرایه پرداخت‌نشده"
     summary_body: "صاحب‌خانه شما، Oak Hollow Property Management LLC، می‌گوید شما $1,450.00 کرایه بدهکار هستید و باید تا October 8, 2026 پرداخت کنید یا خانه را ترک کنید. این یک هشدار از صاحب‌خانه است. حکم محکمه نیست."
     demands:
@@ -144,6 +150,9 @@ out:
     translated_pages:
       - "Oak Hollow Property Management LLC\nOak Hollow Apartments - الکساندریا، ویرجینیا\nتاریخ: September 24, 2026\nاطلاعیه 14 روزه پرداخت کرایه یا تخلیه\nبه: SAMPLE TENANT، Oak Hollow Apartments، واحد 12\nشما $1,450.00 کرایه ماه September 2026 را بدهکار هستید.\nشما باید تمام مبلغ را تا October 8, 2026 پرداخت کنید، ورنه قرارداد کرایه شما ختم می‌شود.\nاگر کرایه در ظرف 14 روز از تاریخ این اطلاعیه پرداخت نشود، صاحب‌خانه ممکن است در محکمه قضیه تخلیه ثبت کند.\nاین اطلاعیه طبق کود ویرجینیا § 55.1-1245 داده می‌شود.\nدر دفتر کرایه پرداخت کنید یا برای سوال به (703) 555-0175 زنگ بزنید.\nامضا: مدیر ملک، Oak Hollow Property Management LLC"
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: إشعار من المالك، من Oak Hollow Property Management LLC. أحتاج إلى مساعدة في: إشعار من المالك عن الإيجار - ماذا يقول والتاريخ المذكور فيه. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "إشعار من المالك عن إيجار غير مدفوع"
     summary_body: "يقول مالك السكن، Oak Hollow Property Management LLC، إن عليك $1,450.00 إيجارًا وإن عليك الدفع قبل October 8, 2026 أو الخروج. هذا تحذير من المالك. ليس أمرًا من المحكمة."
     demands:

@@ -5,7 +5,7 @@
     "appended_line_keys": [],
     "english": "Hello. I speak Spanish. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: un aviso de mi arrendador, de Oak Hollow Property Management LLC. Necesito ayuda con: un aviso de mi arrendador sobre la renta - lo que dice y la fecha que tiene. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -27,7 +27,7 @@
       "span_ids": [
         "p1b6"
       ],
-      "text": "El aviso dice que usted debe $1,450.00 de renta de septiembre de 2026.",
+      "text": "El aviso dice que usted debe $1,450.00 de renta de September 2026.",
       "value_verbatim": "$1,450.00",
       "verification_note": "exact",
       "verified": true
@@ -58,7 +58,7 @@
       "span_ids": [
         "p1b7"
       ],
-      "text": "El aviso da el 8 de octubre de 2026 como la fecha para pagar el monto completo.",
+      "text": "El aviso da el October 8, 2026 como la fecha para pagar el monto completo.",
       "value_verbatim": "October 8, 2026",
       "verification_note": "exact",
       "verified": true
@@ -534,7 +534,7 @@
         },
         {
           "key": "bring_proof_rent_utilities",
-          "text_en": "Your rent and utility bills"
+          "text_en": "Your rent, power, gas and water bills"
         },
         {
           "key": "bring_notice",
@@ -622,7 +622,7 @@
   "sender_as_written": "Oak Hollow Property Management LLC",
   "sender_kind": "landlord",
   "summary": {
-    "body": "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del 8 de octubre de 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte.",
+    "body": "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del October 8, 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte.",
     "body_en": "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order.",
     "span_ids": [
       "p1b1",
@@ -635,7 +635,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
+      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: September 24, 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de September 2026.\nDebe pagar el monto completo antes del October 8, 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
     }
   ],
   "translation_confidence": "medium",

@@ -107,17 +107,20 @@ out:
     geo_city: Fairfax
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una factura médica de Inova Health System. Necesito ayuda con: una factura del hospital - el monto, de qué es y ayuda para pagarla. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "Factura del hospital Inova marcada como aviso final"
-    summary_body: "Esta es una factura de Inova Health System por una visita de emergencia el 2 de julio de 2026. Dice que el monto a pagar es $1,240.00 antes del 28 de octubre de 2026. También dice que hay ayuda financiera."
+    summary_body: "Esta es una factura de Inova Health System por una visita de emergencia el July 2, 2026. Dice que el monto a pagar es $1,240.00 antes del October 28, 2026. También dice que hay ayuda financiera."
     demands:
       d1: {text: "La factura dice que el monto a pagar es $1,240.00."}
-      d2: {text: "La factura pide el pago antes del 28 de octubre de 2026."}
+      d2: {text: "La factura pide el pago antes del October 28, 2026."}
       d3: {text: "La factura dice que hay ayuda financiera. Puede preguntar por ella antes de pagar."}
       d4: {text: "Teléfono para preguntas sobre esta factura, de su papel: (703) 555-0142."}
     plan_steps:
       s1: {text: "Pida al hospital una factura detallada con cada cargo."}
       s2: {text: "Pregunte por la ayuda financiera antes de pagar. Los hospitales con un programa dejan que la gente la solicite."}
-      s3: {text: "Llame al número de la factura con sus preguntas antes del 28 de octubre de 2026."}
+      s3: {text: "Llame al número de la factura con sus preguntas antes del October 28, 2026."}
       s4: {text: "Un consejero financiero del hospital puede revisar la factura con usted."}
     glossary:
       "Statement": "Un papel que muestra lo que usted debe en una cuenta."
@@ -130,8 +133,11 @@ out:
       - "¿Cómo solicito la ayuda financiera?"
       - "¿Mi seguro pagó parte de esta factura?"
     translated_pages:
-      - "Inova Health System\nServicios Financieros para Pacientes - Fairfax, VA\nFecha del estado de cuenta: 20 de septiembre de 2026\nNúmero de cuenta: ******5678\nAVISO FINAL\nPaciente: SAMPLE PATIENT\nFecha del servicio: 2 de julio de 2026 - Visita al departamento de emergencias\nMonto a pagar: $1,240.00\nPague antes del 28 de octubre de 2026.\nEste es su aviso final. Pague el monto para evitar que su cuenta se envíe a una agencia de cobranza.\nHay ayuda financiera disponible. Pregúntenos por nuestra política de ayuda financiera antes de pagar.\n¿Preguntas sobre esta factura? Llame a Cuentas de Pacientes al (703) 555-0142.\nATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.\nAviso: Si habla árabe, tiene servicios gratuitos de ayuda con el idioma."
+      - "Inova Health System\nServicios Financieros para Pacientes - Fairfax, VA\nFecha del estado de cuenta: September 20, 2026\nNúmero de cuenta: ******5678\nAVISO FINAL\nPaciente: SAMPLE PATIENT\nFecha del servicio: July 2, 2026 - Visita al departamento de emergencias\nMonto a pagar: $1,240.00\nPague antes del October 28, 2026.\nEste es su aviso final. Pague el monto para evitar que su cuenta se envíe a una agencia de cobranza.\nHay ayuda financiera disponible. Pregúntenos por nuestra política de ayuda financiera antes de pagar.\n¿Preguntas sobre esta factura? Llame a Cuentas de Pacientes al (703) 555-0142.\nATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.\nAviso: Si habla árabe, tiene servicios gratuitos de ayuda con el idioma."
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک بل صحی از Inova Health System. در این مورد کمک لازم دارم: یک بل شفاخانه - مبلغ آن، اینکه برای چیست، و کمک برای پرداخت آن. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "بل شفاخانه Inova با نشان اطلاعیه نهایی"
     summary_body: "این یک بل از Inova Health System برای مراجعه عاجل در July 2, 2026 است. می‌گوید مبلغ قابل پرداخت $1,240.00 تا October 28, 2026 است. همچنین می‌گوید کمک مالی موجود است."
     demands:
@@ -157,6 +163,9 @@ out:
     translated_pages:
       - "Inova Health System\nخدمات مالی مریضان - Fairfax, VA\nتاریخ صورت‌حساب: September 20, 2026\nنمبر حساب: ******5678\nاطلاعیه نهایی\nمریض: SAMPLE PATIENT\nتاریخ خدمت: July 2, 2026 - مراجعه به بخش عاجل\nمبلغ قابل پرداخت: $1,240.00\nلطفاً تا October 28, 2026 پرداخت کنید.\nاین اطلاعیه نهایی شماست. لطفاً مبلغ را پرداخت کنید تا حساب شما به یک شرکت جمع‌آوری قرض فرستاده نشود.\nکمک مالی موجود است. پیش از پرداخت درباره پالیسی کمک مالی ما بپرسید.\nسوال درباره این بل؟ با حساب‌های مریضان به نمبر (703) 555-0142 زنگ بزنید.\nتوجه: اگر به هسپانوی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است.\nتوجه: اگر به عربی صحبت می‌کنید، خدمات رایگان کمک زبانی برای شما موجود است."
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: فاتورة طبية من Inova Health System. أحتاج إلى مساعدة في: فاتورة مستشفى - المبلغ، وسببها، والمساعدة في دفعها. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "فاتورة مستشفى Inova مكتوب عليها إشعار نهائي"
     summary_body: "هذه فاتورة من Inova Health System لزيارة طوارئ في July 2, 2026. تقول إن المبلغ المستحق $1,240.00 قبل October 28, 2026. وتقول أيضًا إن المساعدة المالية متوفرة."
     demands:

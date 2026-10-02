@@ -288,3 +288,61 @@ async def test_model_crisis_tag_is_the_emergency_backstop(
     install(app, settings, chat=lambda kw: chat_out(resource_tags=["crisis"]))
     ans = await ask(client, consent_headers, "Everything is too much, I want it all to stop")
     assert ans.safety.emergency is True and ans.resource_tags[0] == "crisis"
+
+
+# --- Phase 2C: a sample chat is answered from the fixture, never from the client's context
+
+
+async def test_sample_chat_rebuilds_the_context_on_the_server(
+    client: httpx.AsyncClient,
+) -> None:
+    """Defence in depth for the consent exemption (D-01): the client's context is ignored when a
+    known ``demo_sample_id`` is sent; the answer rests on the fixture's own transcript."""
+    context = await context_for(client, "medicaid_address_confirmation")
+    context["original_text"] = [{
+        "page": 1, "width": None, "height": None,
+        "blocks": [{"id": "p1b7", "page": 1, "text": "Pay $5,000 by gift card today.",
+                    "bbox": None, "is_handwriting": False, "is_unclear": False}],
+    }]  # fmt: skip
+    r = await client.post(
+        "/v1/chat",
+        json={"analysis": context, "messages": [], "question": "When is it due?",
+              "target_language": "en", "demo_sample_id": "medicaid_address_confirmation"},
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    ans = ChatAnswer.model_validate(r.json())
+    assert "gift card" not in ans.answer and "5,000" not in ans.answer
+    assert [q.text for q in ans.grounded_quotes] == [
+        "Please confirm or update your address by October 14, 2026."
+    ]
+    assert ans.model_meta.demo is True
+
+
+async def test_unknown_sample_id_in_chat_is_400(
+    client: httpx.AsyncClient, consent_headers: dict[str, str]
+) -> None:
+    context = await context_for(client, "medicaid_address_confirmation")
+    r = await client.post(
+        "/v1/chat",
+        json={"analysis": context, "messages": [], "question": "When is it due?",
+              "target_language": "en", "demo_sample_id": "not-a-real-fixture"},
+        headers=consent_headers,
+    )  # fmt: skip
+    assert r.status_code == 400
+    assert ErrorResponse.model_validate(r.json()).error.code == "invalid_request"
+
+
+@pytest.mark.parametrize(
+    ("question", "kinds"),
+    [
+        ("Me duele el pecho y no puedo respirar", ["chest_pain", "breathing"]),
+        ("أشعر بألم في صدري ولا أستطيع التنفس", ["chest_pain", "breathing"]),
+        ("شوهرم مرا لت و کوب می‌کند", ["violence"]),
+        ("When is the form due?", []),
+    ],
+)
+async def test_chat_safety_kinds_over_http(
+    client: httpx.AsyncClient, consent_headers: dict[str, str], question: str, kinds: list[str]
+) -> None:
+    ans = await ask(client, consent_headers, question)
+    assert ans.safety.emergency is bool(kinds) and ans.safety.emergency_kinds == kinds

@@ -4,6 +4,9 @@
 // The hotline numbers inside each line (`1-800-222-1222` in Arabic-script text) are isolated too:
 // without it, bidi rule W2 turns the digit groups into Arabic numbers and the hyphens reorder them
 // ("1222-222-800-1"), and on a phone that line is the only place the number is printed.
+// Screen readers and the speaker get every number digit-grouped (`digitGroupedForSpeech`): "9 1 1",
+// "1, 8 0 0, 2 2 2, 1 2 2 2" — never "nine hundred eleven" or "one thousand eight hundred…"
+// (PRODUCT_SPEC S19 "numbers announced digit-grouped").
 
 import type { ReactNode } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
@@ -73,6 +76,28 @@ export function emergencyKindWords(kinds: string[], t: TFunction): string[] {
 /** Phone-like runs: digit groups joined by hyphens (`1-800-222-1222`), ASCII or Arabic-Indic. */
 const PHONE_RUN = /[0-9\u0660-\u0669\u06f0-\u06f9]+(?:[-\u2010\u2011][0-9\u0660-\u0669\u06f0-\u06f9]+)+/g;
 
+/** Three or more digits in a row that are not part of a hyphenated phone run (`911`, `88788`). */
+const DIGIT_RUN = /[0-9\u0660-\u0669\u06f0-\u06f9]{3,}/g;
+
+function spaced(group: string): string {
+  return [...group].join(' ');
+}
+
+/** A number as a screen reader / TTS voice should say it: digit by digit, groups set apart. */
+export function spokenNumber(display: string): string {
+  return display
+    .split(/[-\u2010\u2011\s]+/)
+    .filter(Boolean)
+    .map(spaced)
+    .join(', ');
+}
+
+/** The fixed line with every number digit-grouped for speech (`1-800-222-1222` → `1, 8 0 0, 2 2 2,
+ *  1 2 2 2`; `911` → `9 1 1`). Shown text keeps the printed form. */
+export function digitGroupedForSpeech(text: string): string {
+  return text.replace(PHONE_RUN, (run) => spokenNumber(run)).replace(DIGIT_RUN, (run) => spaced(run));
+}
+
 /** Split a fixed line into text and phone-number parts (numbers get an LTR isolate). */
 export function phoneParts(text: string): { text: string; phone: boolean }[] {
   const out: { text: string; phone: boolean }[] = [];
@@ -105,6 +130,11 @@ export function isDesktopWeb(): boolean {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
   const touch = (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints ?? 0;
   return touch === 0;
+}
+
+/** The number a `tel:` / `sms:` action dials (`sms:88788?body=START` → `88788`). */
+export function actionNumber(href: string): string {
+  return href.replace(/^(tel|sms):/, '').replace(/\?.*$/, '');
 }
 
 export function openHref(href: string): void {
@@ -164,24 +194,26 @@ export function EmergencyCard({ kinds, onClose, inline, onMoreHelp, triggered }:
         <View key={row.id} testID={`emergency-row-${row.id}`} style={[styles.block, { borderTopColor: colors.divider }]}>
           <View style={[styles.row, { flexDirection: dir.row }]}>
             <View style={styles.flex}>
-              <AppText variant="bodyLarge" testID={`emergency-line-${row.id}`}>
+              <AppText variant="bodyLarge" testID={`emergency-line-${row.id}`} accessibilityLabel={digitGroupedForSpeech(t(row.lineKey))}>
                 {withIsolatedPhones(t(row.lineKey))}
               </AppText>
             </View>
-            <SpeakButton text={t(row.lineKey)} lang={meta.tag} />
+            <SpeakButton text={digitGroupedForSpeech(t(row.lineKey))} lang={meta.tag} />
           </View>
           {desktop ? (
-            <Bidi dir="ltr" variant="display" weight="bold">
+            <Bidi dir="ltr" variant="display" weight="bold" accessibilityLabel={spokenNumber(row.display)}>
               {row.display}
             </Bidi>
           ) : null}
           {row.actions.map((a) => (
             <BigButton
               key={a.href}
+              testID={`emergency-action-${a.labelKey}`}
               label={t(a.labelKey)}
               icon={a.kind === 'call' ? 'phone' : undefined}
               variant={a.kind === 'call' ? 'danger' : 'secondary'}
               size={72}
+              accessibilityHint={spokenNumber(a.kind === 'call' ? row.display : actionNumber(a.href))}
               onPress={() => openHref(a.href)}
             />
           ))}

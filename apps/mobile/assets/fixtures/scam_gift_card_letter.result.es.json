@@ -3,9 +3,9 @@
   "category": "immigration",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "Hello. I speak Spanish. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
+    "english": "Hello. I speak Spanish. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: una carta de U.S. Immigration Services Department. Necesito ayuda con: leer un papel que recibí. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -363,7 +363,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: 29 de septiembre de 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
+      "text": "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: September 29, 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
     }
   ],
   "translation_confidence": "medium",

@@ -2,7 +2,9 @@
 // `enableTorch`, `ref.takePictureAsync({ quality, exif })`, `useCameraPermissions()`), shutter
 // labelled with the page number, torch toggle, "Pick from photos", "Pick a PDF", thumbnail strip
 // in document order, Done → S5. Web skips the live camera: the pickers are the first statement
-// of each press handler (browser user-gesture rule).
+// of each press handler (browser user-gesture rule). Native: each shot / picked file is compressed
+// on arrival and its temp original deleted (`arrival.ts`); a pick the page rules refuse (page cap,
+// photos + PDF) has its temp files deleted at once. Thumbnails are cached in memory only.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -26,8 +28,17 @@ import { newPageId } from '@/lib/ids';
 import { useOnline } from '@/lib/network';
 import { type CapturedPage, useSession } from '@/store/session';
 
+import { useCompressOnArrival } from './arrival';
+import { PAGE_IMAGE_KEY } from './choices';
+import { discardPageFiles } from './compress';
 import { usePickImage } from './index';
 import { pagesAfterPick, type PickOutcome } from './pageQueue';
+
+/** Picked pages the page rules did not take (page cap, photos + PDF, PDF too large). */
+export function refusedPages(picked: readonly CapturedPage[], kept: readonly CapturedPage[]): CapturedPage[] {
+  const ids = new Set(kept.map((p) => p.id));
+  return picked.filter((p) => !ids.has(p.id));
+}
 
 function announce(key: string, vars?: Record<string, string | number>) {
   try {
@@ -70,8 +81,10 @@ export function CaptureScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const maxPages = limits?.max_pages ?? 12;
   const atCap = pages.length >= maxPages;
+  useCompressOnArrival();
 
-  const apply = (o: PickOutcome) => {
+  const apply = (o: PickOutcome, picked: readonly CapturedPage[] = []) => {
+    for (const p of refusedPages(picked, o.pages)) discardPageFiles(p);
     const s = useSession.getState();
     // A real capture ends any sample session.
     if (s.demoSampleId) s.setDemoSampleId(null);
@@ -84,13 +97,16 @@ export function CaptureScreen() {
   };
 
   const fromLibrary = (e?: unknown) => {
-    void pick.pickFromLibrary(e).then((picked) => apply(pagesAfterPick(useSession.getState().pages, picked, limits)));
+    void pick.pickFromLibrary(e).then((picked) => apply(pagesAfterPick(useSession.getState().pages, picked, limits), picked));
   };
   const fromPdf = (e?: unknown) => {
-    void pick.pickPdf(e).then((pdf) => apply(pagesAfterPick(useSession.getState().pages, pdf ? [pdf] : [], limits)));
+    void pick.pickPdf(e).then((pdf) => {
+      const picked = pdf ? [pdf] : [];
+      apply(pagesAfterPick(useSession.getState().pages, picked, limits), picked);
+    });
   };
   const webPhoto = (e?: unknown) => {
-    void pick.takePhoto(e).then((picked) => apply(pagesAfterPick(useSession.getState().pages, picked, limits)));
+    void pick.takePhoto(e).then((picked) => apply(pagesAfterPick(useSession.getState().pages, picked, limits), picked));
   };
 
   const shutter = async () => {
@@ -108,7 +124,7 @@ export function CaptureScreen() {
         masks: [],
         source: 'camera',
       };
-      apply(pagesAfterPick(useSession.getState().pages, [page], limits));
+      apply(pagesAfterPick(useSession.getState().pages, [page], limits), [page]);
       const n = useSession.getState().pages.length;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       announce('a11y.page_added', { n });
@@ -135,7 +151,13 @@ export function CaptureScreen() {
           {p.mimeType === 'application/pdf' ? (
             <Icon name="papers" color={colors.primary} size={40} />
           ) : (
-            <Image source={{ uri: p.uri }} contentFit="cover" style={styles.thumbImg} accessibilityLabel={t('a11y.page_added', { n: i + 1 })} />
+            <Image
+              source={{ uri: p.uri }}
+              cachePolicy="memory"
+              contentFit="cover"
+              style={styles.thumbImg}
+              accessibilityLabel={t(PAGE_IMAGE_KEY, { n: i + 1, count: pages.length })}
+            />
           )}
           <Bidi dir="ltr" variant="caption" weight="bold">
             {String(i + 1)}

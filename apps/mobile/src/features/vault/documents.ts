@@ -102,6 +102,19 @@ function jpegBase64(page: CapturedPage): string | null {
   return page.base64.replace(/^data:image\/jpeg;base64,/, '');
 }
 
+/** A row to store, with `analysis: null` allowed ("Save to read later", "Save as proof"). */
+export type SavableDocument = Omit<StoredDocument, 'analysis'> & { analysis: AnalysisResult | null };
+
+/**
+ * The one bridge to the storage type: `StoredDocument.analysis` is typed `AnalysisResult`
+ * (storage/index.ts, WP4) although the vault stores and returns `null` for rows without an
+ * analysis (storage/rows.ts `analysis_json: string | null`; readers check it). Callers build a
+ * `SavableDocument` and never cast null themselves (CL-076(b) asks WP4 to widen the type).
+ */
+export function toStoredDocument(doc: SavableDocument): StoredDocument {
+  return doc as StoredDocument;
+}
+
 export function buildStoredDocument(input: BuildDocumentInput): { doc: StoredDocument; pages: StoredPageInput[] } {
   const { analysis, now, t } = input;
   const id = analysis?.analysis_id ?? input.documentId;
@@ -123,7 +136,7 @@ export function buildStoredDocument(input: BuildDocumentInput): { doc: StoredDoc
     });
   }
   const title = documentTitle(stored, t, now);
-  const doc: StoredDocument = {
+  const doc: SavableDocument = {
     id,
     memberId: input.memberId,
     title: input.hideIds ? maskIdText(title) : title,
@@ -132,10 +145,10 @@ export function buildStoredDocument(input: BuildDocumentInput): { doc: StoredDoc
     createdAt: now.toISOString(),
     nextDateIso: nextStatedDate(stored, now),
     pageCount: input.pages.length || stored?.quality?.pages_received || 0,
-    analysis: stored as AnalysisResult,
+    analysis: stored,
     keepPages: pageInputs.length > 0,
   };
-  return { doc, pages: pageInputs };
+  return { doc: toStoredDocument(doc), pages: pageInputs };
 }
 
 /** S12 order: papers with an upcoming date first (soonest first), then newest first. */

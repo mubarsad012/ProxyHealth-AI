@@ -1,6 +1,6 @@
 // Chat feature (ARCHITECTURE §3 features/chat; PRODUCT_SPEC S9; API_CONTRACT §3.7).
 
-export { assistantLines, ChatScreen, type ChatScreenProps } from './ChatScreen';
+export { assistantLines, ChatScreen, type ChatScreenProps, emergencyHref } from './ChatScreen';
 export {
   analysisContext,
   buildChatRequest,
@@ -10,5 +10,14 @@ export {
   historyForRequest,
   MAX_CONTEXT_CHARS,
 } from './context';
-export { referKey, referShowsHelp, refusalKey, starterQuestions } from './refusalTemplates';
-export { type ChatTurn, turnsToMessages, useChat, useChatHistory, type UseChat } from './useChat';
+export { CHAT_UNAVAILABLE_KEY, referKey, referShowsHelp, refusalKey, starterQuestions } from './refusalTemplates';
+export {
+  chatAvailable,
+  type ChatTurn,
+  isChatOffError,
+  turnsToMessages,
+  useChat,
+  useChatHistory,
+  type UseChat,
+  type UseChatOptions,
+} from './useChat';

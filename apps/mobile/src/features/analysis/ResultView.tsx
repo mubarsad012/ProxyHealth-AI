@@ -13,6 +13,7 @@ import { AppText } from '@/design/components/Text';
 import { UrgencyBanner } from '@/design/components/UrgencyBanner';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
+import { CHAT_UNAVAILABLE_KEY } from '@/features/chat/refusalTemplates';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { SpeakRow } from '@/features/speech/SpeakRow';
 import { useDirection } from '@/i18n/direction';
@@ -29,6 +30,7 @@ import type { ResultHandlers } from './cards/shared';
 import { SummaryCard } from './cards/SummaryCard';
 import { disclaimerKey, FOOTER_KEYS, resultBanners, sampleAsOfNoteKey, type BannerSpec } from './disclaimers';
 import { UnverifiedSection } from './unverifiedSection';
+import { useLocalizedUrgency } from './estimatedDate';
 import { drivingDemand, firstPrintedPhone } from './urgencyCopy';
 
 export interface ResultViewHandlers extends ResultHandlers {
@@ -46,6 +48,8 @@ export interface ResultViewProps {
   handlers: ResultViewHandlers;
   /** Offline: "Ask about this paper" is disabled with `state.offline_disabled`. */
   offline?: boolean;
+  /** `/v1/config` `features.chat=false` (unpaid / mixed tier): the ask row explains instead. */
+  chatUnavailable?: boolean;
 }
 
 const TONE_KIND: Record<BannerSpec['tone'], BannerKind> = {
@@ -59,7 +63,7 @@ export function askPrompts(a: Pick<AnalysisResult, 'questions_to_ask'>): string[
   return a.questions_to_ask.map((q) => q.trim()).filter(Boolean).slice(0, 2);
 }
 
-export function ResultView({ analysis, pages, handlers, offline }: ResultViewProps) {
+export function ResultView({ analysis, pages, handlers, offline, chatUnavailable }: ResultViewProps) {
   const t = useT();
   const bt = useBidiText();
   const meta = usePackMeta();
@@ -81,6 +85,8 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
   const disc = disclaimerKey(analysis.disclaimer_kind);
   const banners = resultBanners(analysis, { machineTranslated: meta.machineTranslated, uiTag: meta.tag });
   const asOfNote = sampleAsOfNoteKey(analysis);
+  const urgency = useLocalizedUrgency(analysis.urgency);
+  const askOff = Boolean(offline || chatUnavailable);
   return (
     <View testID="result-view" style={styles.stack}>
       {emergency.triggered ? (
@@ -94,7 +100,7 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
       ) : null}
       <ScamCard {...cardProps} />
       <WarningChips {...cardProps} />
-      <UrgencyBanner urgency={analysis.urgency} onRemind={onRemind} onVerify={onVerify} />
+      <UrgencyBanner urgency={urgency} onRemind={onRemind} onVerify={onVerify} />
       {asOfNote ? (
         <AppText variant="caption" color="textMuted" testID="demo-as-of-note">
           {t(asOfNote)}
@@ -120,11 +126,16 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
             icon="help"
             variant="secondary"
             size={56}
-            disabled={offline}
+            disabled={askOff}
             onPress={() => handlers.onAsk?.()}
           />
           {offline ? <AppText color="textMuted">{t('state.offline_disabled')}</AppText> : null}
-          {askPrompts(analysis).length ? (
+          {chatUnavailable ? (
+            <AppText color="textMuted" testID="ask-unavailable">
+              {t(CHAT_UNAVAILABLE_KEY)}
+            </AppText>
+          ) : null}
+          {askPrompts(analysis).length && !chatUnavailable ? (
             <View style={[styles.prompts, { flexDirection: dir.row }]}>
               {askPrompts(analysis).map((q, i) => (
                 <Pressable
@@ -132,9 +143,9 @@ export function ResultView({ analysis, pages, handlers, offline }: ResultViewPro
                   testID={`ask-prompt-${i}`}
                   role="button"
                   accessibilityLabel={q}
-                  disabled={offline}
+                  disabled={askOff}
                   onPress={() => handlers.onAsk?.(q)}
-                  style={[styles.prompt, { borderColor: colors.primary, opacity: offline ? 0.5 : 1 }]}>
+                  style={[styles.prompt, { borderColor: colors.primary, opacity: askOff ? 0.5 : 1 }]}>
                   <AppText variant="caption" color="primary" weight="bold" lang={analysis.target_language}>
                     {bt(q)}
                   </AppText>

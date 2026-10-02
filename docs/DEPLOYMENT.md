@@ -68,7 +68,7 @@ gcloud run deploy proxyhealth-api \
   --set-secrets "GEMINI_KEYS=GEMINI_KEYS:latest,INSTALL_HASH_SECRET=INSTALL_HASH_SECRET:latest,ADMIN_TOKEN=ADMIN_TOKEN:latest"
 ```
 
-Why these values (ARCHITECTURE §5.3): one worker per instance because the key pool and rate limits are in-process state (the image's `CMD` runs `--workers 1 --limit-concurrency 32`); request timeout 120 s covers `FAILOVER_DEADLINE_S=100`; min instances 0 (1 during demos to avoid cold starts); no persistent disk — `VAR_DIR=/app/var` lives in the container's memory-backed filesystem, so key-pool cooldowns are re-learned after a cold start and generated language packs are regenerated on demand. `--max-instances` caps spend: each instance has its own key-pool view, so keep it small.
+Why these values (ARCHITECTURE §5.3): one worker per instance because the key pool and rate limits are in-process state (the image's `CMD` runs `--workers 1 --limit-concurrency 32`); request timeout 120 s covers `FAILOVER_DEADLINE_S=100`; min instances 0 (1 during demos to avoid cold starts); no persistent disk — `VAR_DIR=/app/var` lives in the container's memory-backed filesystem, so key-pool cooldowns are re-learned after a cold start and generated language packs are regenerated on demand. `--max-instances` caps spend: each instance has its own key-pool view, so keep it small. Rate limiting (D-08): the image sets `TRUSTED_PROXY_HOPS=1` (`apps/api/Dockerfile`) because Cloud Run's (and Fly.io's) front end appends the real client address to `X-Forwarded-For`; the server rate-limits the `/24` / `/48` class of the entry that many places from the right and never trusts entries further left. Behind an **external HTTPS load balancer** in front of Cloud Run there are two appending proxies: set `TRUSTED_PROXY_HOPS=2` there (with 1 every user would share the load balancer's bucket; with too many a client could pick its own class). The per-IP-class buckets (`RATE_LIMIT_IP_PER_MINUTE=60`, `RATE_LIMIT_IP_PER_DAY=1000`) apply to every model-calling request; a large carrier NAT or shared IPv6 `/48` shares one bucket, so raise them if real users see `429 rate_limited` with `details.bucket = "ip_class"` (RUNBOOK §2.3).
 
 Production guards the server enforces at boot (COMPLIANCE_PRIVACY §2.4): every `GEMINI_KEYS` slot `billing:true` (unless `ALLOW_UNPAID_KEYS=1`, which a store deployment must never set); `ALLOW_UNPAID_REAL_DOCUMENTS` refused; model IDs validated. Never set `ALLOW_UNPAID_KEYS`, `ALLOW_UNPAID_REAL_DOCUMENTS` or `LOG_LEVEL=debug` in production.
 
@@ -125,7 +125,7 @@ apps/api/.venv/bin/python apps/api/scripts/smoke.py --base-url https://<demo-api
 
 - **Fly.io**: `fly launch --no-deploy` in `apps/api`, `internal_port = 8080`, `[http_service] auto_stop_machines = true`, `fly secrets set GEMINI_KEYS=… INSTALL_HASH_SECRET=… ADMIN_TOKEN=…`, env as §1.2; one machine size `shared-cpu-1x` / 1 GB; request timeout ≥ 120 s.
 - **Render**: Docker web service from `apps/api/Dockerfile`, env group with the §1.2 variables, secrets as secret env vars, health check path `/health`.
-- Any host: HTTPS only, no request-body logging, logs kept 30/7 days as §1.3, one worker per instance.
+- Any host: HTTPS only, no request-body logging, logs kept 30/7 days as §1.3, one worker per instance; set `TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For` in front of uvicorn (the image's `1` fits Cloud Run and Fly.io, whose front end appends one entry; check any other host's proxy chain before relying on it; `0` only when uvicorn is reached directly).
 
 ---
 
@@ -242,7 +242,7 @@ npx eas-cli@latest submit --profile production --platform android   # service-ac
 npx eas-cli@latest submit --profile production --platform ios       # ascAppId + org appleTeamId
 ```
 
-Before the first production build: SDK 58 upgrade in a WP0 install window (`npx expo install expo@^58.0.0 --fix`; `File.write` becomes async; iOS RTL follows `I18nManager` — ARCHITECTURE §5.3); the Android merged-manifest check (RUNBOOK §7.2); the iOS gates (RUNBOOK §7.3). Free plan budget: 15 Android + 15 iOS builds a month, 45-minute timeout. Permission strings, `ios.privacyManifests` and `ios.infoPlist` are baked into the binary: changing them needs a new build and submission, not an OTA update. Never create or edit `apps/mobile/ios/` or `apps/mobile/android/`.
+Before the first production build: SDK 58 upgrade in a WP0 install window (`npx expo install expo@^58.0.0 --fix`; `File.write` becomes async; iOS RTL follows `I18nManager` — ARCHITECTURE §5.3); the Android merged-manifest check (RUNBOOK §7.2); the iOS gates (RUNBOOK §7.3). **iOS status 2026-10-01: blocked** — the vault and SQLite folders are not yet excluded from iCloud backup (no SDK 57 API; needs a config plugin or native module in an install window plus a dev-build check — COMPLIANCE_PRIVACY §10.2), so the `ios` production build and `submit --platform ios` wait; ship Android first. Free plan budget: 15 Android + 15 iOS builds a month, 45-minute timeout. Permission strings, `ios.privacyManifests` and `ios.infoPlist` are baked into the binary: changing them needs a new build and submission, not an OTA update. Never create or edit `apps/mobile/ios/` or `apps/mobile/android/`.
 
 ### 3.3 Store configuration already in `app.json`
 
@@ -272,5 +272,5 @@ Rotation and leak handling: RUNBOOK §2.
 2. Production API deployed (§1.2) with every guard; `GET /v1/config` → `paid`, `consent_version` = the page's printed version, `privacy_policy_url` = the live `/privacy`.
 3. Web exported with the production API URL and deployed with the §2.2 headers; `/privacy/` loads without JavaScript; on any host other than EAS Hosting, `make host-rules` applied and `web-host-rules.py --verify <host>` green (§2.3).
 4. `CORS_ORIGINS` = the web host only.
-5. EAS `production` build; manifest check logged; STORE_LISTING §0 blockers cleared; COMPLIANCE_PRIVACY §18 ticked.
+5. EAS `production` build; manifest check logged; STORE_LISTING §0 blockers cleared (B5, the iOS iCloud-backup exclusion, is still open on 2026-10-01 — Android only until it closes); COMPLIANCE_PRIVACY §18 ticked.
 6. Tag the commit (`v1.0.0-rc1` per BUILD_PLAN §6) — the orchestrator/maintainer does git operations.

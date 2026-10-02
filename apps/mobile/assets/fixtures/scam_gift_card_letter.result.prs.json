@@ -3,9 +3,9 @@
   "category": "immigration",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
+    "english": "Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦prs⟧ Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+    "translated": "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک نامه از U.S. Immigration Services Department. در این مورد کمک لازم دارم: خواندن کاغذی که به دستم رسیده. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [

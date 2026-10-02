@@ -14,11 +14,11 @@
   "translated_pages": [
     {
       "page": 1,
-      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: 24 de septiembre de 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de septiembre de 2026.\nDebe pagar el monto completo antes del 8 de octubre de 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
+      "text": "Oak Hollow Property Management LLC\nOak Hollow Apartments - Alexandria, Virginia\nFecha: September 24, 2026\nAVISO DE 14 DÍAS PARA PAGAR LA RENTA O DESALOJAR\nPara: SAMPLE TENANT, Oak Hollow Apartments, Unidad 12\nUsted debe una renta de $1,450.00 de September 2026.\nDebe pagar el monto completo antes del October 8, 2026, o su contrato terminará.\nSi la renta no se paga dentro de 14 días de la fecha de este aviso, el arrendador puede presentar un caso de desalojo en la corte.\nEste aviso se da según el Código de Virginia § 55.1-1245.\nPague en la oficina de arrendamiento o llame al (703) 555-0175 si tiene preguntas.\nFirmado: Administrador de la propiedad, Oak Hollow Property Management LLC"
     }
   ],
   "summary_title": "Aviso del arrendador sobre renta no pagada",
-  "summary_body": "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del 8 de octubre de 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte.",
+  "summary_body": "Su arrendador, Oak Hollow Property Management LLC, dice que usted debe $1,450.00 de renta y que debe pagar antes del October 8, 2026 o mudarse. Es una advertencia del arrendador. No es una orden de la corte.",
   "summary_body_en": "Your landlord, Oak Hollow Property Management LLC, says you owe $1,450.00 in rent and must pay by October 8, 2026 or move out. This is a warning from the landlord. It is not a court order.",
   "summary_span_ids": [
     "p1b1",
@@ -29,7 +29,7 @@
     {
       "id": "d1",
       "kind": "amount",
-      "text": "El aviso dice que usted debe $1,450.00 de renta de septiembre de 2026.",
+      "text": "El aviso dice que usted debe $1,450.00 de renta de September 2026.",
       "value_verbatim": "$1,450.00",
       "source_quote": "You owe rent of $1,450.00 for September 2026.",
       "span_ids": [
@@ -50,7 +50,7 @@
     {
       "id": "d2",
       "kind": "deadline",
-      "text": "El aviso da el 8 de octubre de 2026 como la fecha para pagar el monto completo.",
+      "text": "El aviso da el October 8, 2026 como la fecha para pagar el monto completo.",
       "value_verbatim": "October 8, 2026",
       "source_quote": "You must pay the full amount by October 8, 2026, or your lease will be terminated.",
       "span_ids": [

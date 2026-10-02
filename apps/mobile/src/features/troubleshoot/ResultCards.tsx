@@ -151,8 +151,8 @@ export function TroubleshootResultCards({
             <ChipRow>
               {result.scam_reasons
                 .filter((r) => keyExists(`scam.${r}`))
-                .map((r) => (
-                  <Chip key={r} text={t(`scam.${r}`)} icon="alert" tone="danger" />
+                .map((r, i) => (
+                  <Chip key={`${r}-${i}`} text={t(`scam.${r}`)} icon="alert" tone="danger" />
                 ))}
             </ChipRow>
           ) : null}
@@ -166,8 +166,8 @@ export function TroubleshootResultCards({
           {t('state.cannot_tell')}
         </AppText>
       ) : null}
-      {warnings.map((k) => (
-        <AppText key={k} variant="caption" color="warning">
+      {warnings.map((k, i) => (
+        <AppText key={`${k}-${i}`} variant="caption" color="warning">
           {t(k)}
         </AppText>
       ))}
@@ -201,8 +201,8 @@ export function TroubleshootResultCards({
       ) : null}
       {result.cautions?.length ? (
         <Card id="ts-cautions" headingKey="troubleshoot.card_cautions" speakText={result.cautions.join(' ')}>
-          {result.cautions.map((c) => (
-            <AppText key={c}>{c}</AppText>
+          {result.cautions.map((c, i) => (
+            <AppText key={`${c}-${i}`}>{c}</AppText>
           ))}
         </Card>
       ) : null}

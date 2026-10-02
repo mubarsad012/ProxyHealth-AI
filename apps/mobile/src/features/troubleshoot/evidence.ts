@@ -4,7 +4,7 @@
 // never keeps it. The row has no analysis (like "Save to read later", PRODUCT_SPEC §9.3), so the
 // model's text about the screen is not stored; the image is the proof.
 
-import type { AnalysisResult } from '@/api/types';
+import { type SavableDocument, toStoredDocument } from '@/features/vault/documents';
 import { newDocumentId } from '@/lib/ids';
 import type { StoredDocument, StoredPageInput, Vault } from '@/storage';
 import { ME_MEMBER_ID } from '@/storage/rows';
@@ -20,7 +20,7 @@ export function buildEvidenceDocument(
   shot: Screenshot,
   opts: { title: string; now: Date; memberId?: string; id?: string },
 ): { doc: StoredDocument; pages: StoredPageInput[] } {
-  const doc: StoredDocument = {
+  const doc: SavableDocument = {
     id: opts.id ?? newDocumentId(),
     memberId: opts.memberId ?? ME_MEMBER_ID,
     title: opts.title,
@@ -30,11 +30,11 @@ export function buildEvidenceDocument(
     nextDateIso: null,
     pageCount: 1,
     // No analysis is kept for a scam check (same shape as a "read later" row).
-    analysis: null as unknown as AnalysisResult,
+    analysis: null,
     keepPages: true,
   };
   const base64Jpeg = shot.base64.replace(/^data:image\/jpeg;base64,/, '');
-  return { doc, pages: [{ page: 1, base64Jpeg }] };
+  return { doc: toStoredDocument(doc), pages: [{ page: 1, base64Jpeg }] };
 }
 
 /** Save the screenshot to the vault; resolves the new document id. */

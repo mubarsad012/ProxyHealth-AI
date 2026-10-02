@@ -22,7 +22,8 @@ export function pageImageFor(analysis: AnalysisResult, pages: readonly CapturedP
   }
   const images = pages.filter((p) => p.mimeType !== 'application/pdf');
   const img = images[page - 1];
-  if (!img) return null;
+  // A stored paper's gap (a page kept without its image, `isPageGap`) is quote-only.
+  if (!img || !img.uri) return null;
   return {
     uri: img.uri,
     width: text?.width ?? img.width ?? null,

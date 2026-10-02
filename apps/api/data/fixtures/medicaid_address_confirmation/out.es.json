@@ -14,11 +14,11 @@
   "translated_pages": [
     {
       "page": 1,
-      "text": "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: 10 de septiembre de 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del 14 de octubre de 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
+      "text": "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: September 10, 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del October 14, 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
     }
   ],
   "summary_title": "Medicaid le pide confirmar su dirección",
-  "summary_body": "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del 14 de octubre de 2026. Si no lo hace, puede perder los papeles de su renovación.",
+  "summary_body": "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del October 14, 2026. Si no lo hace, puede perder los papeles de su renovación.",
   "summary_body_en": "This letter is from Virginia Medicaid. It asks you to confirm your mailing address by October 14, 2026. If you do not, you may miss your renewal papers.",
   "summary_span_ids": [
     "p1b1",
@@ -29,7 +29,7 @@
     {
       "id": "d1",
       "kind": "deadline",
-      "text": "Confirme o actualice su dirección antes del 14 de octubre de 2026.",
+      "text": "Confirme o actualice su dirección antes del October 14, 2026.",
       "value_verbatim": "October 14, 2026",
       "source_quote": "Please confirm or update your address by October 14, 2026.",
       "span_ids": [
@@ -86,7 +86,7 @@
     },
     {
       "id": "s2",
-      "text": "Entre por internet, llame o envíe el formulario adjunto antes del 14 de octubre de 2026.",
+      "text": "Entre por internet, llame o envíe el formulario adjunto antes del October 14, 2026.",
       "kind": "submit_online",
       "resource_tags": [
         "change_of_address"
@@ -127,7 +127,7 @@
   "red_flags": [],
   "questions_to_ask": [
     "¿La dirección que tienen de mí es correcta?",
-    "¿Qué pasa si mi formulario llega después del 14 de octubre?",
+    "¿Qué pasa si mi formulario llega después del October 14?",
     "¿Puedo confirmar mi dirección por teléfono?"
   ],
   "clerk_need_en": "a Medicaid letter asking me to confirm my address by October 14, 2026",

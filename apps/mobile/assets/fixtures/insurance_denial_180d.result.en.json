@@ -51,7 +51,7 @@
         "anchor_quote": "Date of this notice: April 20, 2026",
         "formula": "April 20, 2026 + 180 calendar days",
         "kind": "estimated",
-        "localized_line": null,
+        "localized_line": "October 17, 2026",
         "rule_id": "aca_internal_appeal_180d",
         "rule_source_url": "https://www.healthcare.gov/appeal-insurance-company-decision/internal-appeals/",
         "rule_verification": "verified",

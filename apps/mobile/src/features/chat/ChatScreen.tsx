@@ -1,6 +1,11 @@
 // S9 — Ask about this paper (`/result/[id]/chat`). Grounded answers with quote chips (→ S8),
 // fixed refusal/referral templates, suggested-question chips, a speaker and "Was this clear?" on
-// every assistant bubble. `ChatAnswer.safety.emergency` opens the S19 card over the chat.
+// every assistant bubble. `ChatAnswer.safety.emergency` opens the S19 card over the chat FIRST:
+// the modal is pushed before the answer joins the history (D-14), and the answer is not announced
+// over it (the card announces `a11y.emergency_shown`).
+// Unpaid / mixed tier (`/v1/config` `features.chat=false`, D-01): every turn would get 403, so the
+// box, the chips and the S7 prompt are replaced by one plain line (`chat.unavailable_unpaid`).
+// The question field follows the in-app text size (`useTextStyle`).
 // New answers are announced (PRODUCT_SPEC S9 "new bubbles announced", D-28, COMPLIANCE §15 4.1.3):
 // native speaks the answer's first line (`announceForAccessibility`); web — where that call is a
 // no-op in react-native-web — puts the turns in a polite `role="log"` live region.
@@ -17,7 +22,7 @@ import { Interpolated } from '@/design/components/Interpolated';
 import { Screen } from '@/design/components/Screen';
 import { SpeakButton } from '@/design/components/SpeakButton';
 import { ErrorState } from '@/design/components/States';
-import { AppText } from '@/design/components/Text';
+import { AppText, useTextStyle } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { emergencyTrigger } from '@/features/emergency';
@@ -26,8 +31,22 @@ import { useDirection } from '@/i18n/direction';
 import { useBidiText, usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
 
-import { referKey, referShowsHelp, refusalKey, starterQuestions } from './refusalTemplates';
+import { CHAT_UNAVAILABLE_KEY, referKey, referShowsHelp, refusalKey, starterQuestions } from './refusalTemplates';
 import { type ChatTurn, useChat } from './useChat';
+
+/** The S19 route for a chat answer that triggered the emergency card. */
+export function emergencyHref(kinds: readonly string[]): Href {
+  return (kinds.length ? `/emergency?kinds=${kinds.join(',')}` : '/emergency') as Href;
+}
+
+function announce(line: string) {
+  if (!line || Platform.OS === 'web') return;
+  try {
+    AccessibilityInfo.announceForAccessibility(line);
+  } catch {
+    // best-effort announcement
+  }
+}
 
 /** Compare sentences without case, spacing, bidi isolates or joiners. */
 function sentenceKey(text: string): string {
@@ -80,7 +99,8 @@ function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: Analysi
   const lines = a ? assistantLines(a, t) : [turn.text];
   const text = stripIsolates(lines.join(' '));
   // Honest TTS line (D-26) under this bubble's speaker when the pack's own voice is missing.
-  const voice = useTtsFallbackNotice(meta.tag);
+  const speakLang = mine ? meta.tag : analysis.target_language || meta.tag;
+  const voice = useTtsFallbackNotice(speakLang);
   return (
     <View
       testID={`chat-${turn.id}`}
@@ -113,7 +133,7 @@ function Bubble({ turn, analysis, onQuote }: { turn: ChatTurn; analysis: Analysi
       ) : null}
       {mine ? null : (
         <View style={[styles.tools, { flexDirection: dir.row }]}>
-          <SpeakButton text={text} lang={meta.tag} onResolved={voice.onResolved} />
+          <SpeakButton text={text} lang={speakLang} onResolved={voice.onResolved} />
           <View style={styles.flex}>
             <FeedbackRow surface="chat" documentType={analysis.document_type} documentCategory={analysis.category} modelId={a?.model_meta.model_id ?? null} />
           </View>
@@ -139,7 +159,13 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
   const { colors } = useTheme();
   const dir = useDirection();
   const { online } = useOnline();
-  const chat = useChat(analysis);
+  const inputText = useTextStyle('body');
+  const chat = useChat(analysis, {
+    onEmergency: (kinds) => {
+      router.push(emergencyHref(kinds));
+      announce(t('a11y.emergency_shown'));
+    },
+  });
   const [draft, setDraft] = useState('');
   const askedInitial = useRef(false);
   const last = [...chat.turns].reverse().find((x) => x.answer)?.answer ?? null;
@@ -151,30 +177,20 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
   const ask = (q: string) => {
     setDraft('');
     void chat.send(q).then((answer) => {
-      const trig = emergencyTrigger(answer?.safety);
-      if (trig.triggered) {
-        router.push(`/emergency?kinds=${trig.kinds.join(',')}` as Href);
-        return;
-      }
-      const line = answer ? answerAnnouncement(answer, t) : '';
-      if (line && Platform.OS !== 'web') {
-        try {
-          AccessibilityInfo.announceForAccessibility(line);
-        } catch {
-          // best-effort announcement
-        }
-      }
+      // The emergency card was already opened by `onEmergency`; its own announcement stands.
+      if (!answer || emergencyTrigger(answer.safety).triggered) return;
+      announce(answerAnnouncement(answer, t));
     });
   };
 
   useEffect(() => {
     const q = initialQuestion?.trim();
-    if (!q || askedInitial.current || !online) return;
+    if (!q || askedInitial.current || !online || !chat.available) return;
     askedInitial.current = true;
     ask(q);
     // `ask` is recreated every render; the ref makes this run once per screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuestion, online]);
+  }, [initialQuestion, online, chat.available]);
 
   const footer = (
     <View style={styles.inputWrap}>
@@ -188,7 +204,11 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
           maxLength={chat.maxQuestion}
           multiline
           onChangeText={setDraft}
-          style={[styles.input, { borderColor: colors.border, color: colors.text, textAlign: dir.textAlign, writingDirection: dir.writingDirection }]}
+          style={[
+            styles.input,
+            inputText,
+            { borderColor: colors.border, color: colors.text, textAlign: dir.textAlign, writingDirection: dir.writingDirection },
+          ]}
         />
         <BigButton label={t('btn.send')} icon="chevron-right" variant="primary" size={56} disabled={!online || chat.sending || !draft.trim()} onPress={() => ask(draft)} />
       </View>
@@ -197,6 +217,23 @@ export function ChatScreen({ analysis, initialQuestion }: ChatScreenProps) {
       </AppText>
     </View>
   );
+
+  if (!chat.available) {
+    // Unpaid / mixed tier: no box, no chips, no error — one plain line; earlier turns stay readable.
+    return (
+      <Screen back testID="chat-screen">
+        <AppText color="textMuted">{t('chat.scope')}</AppText>
+        <AppText role="status" weight="bold" testID="chat-unavailable">
+          {t(CHAT_UNAVAILABLE_KEY)}
+        </AppText>
+        <View testID="chat-turns" style={styles.turns}>
+          {chat.turns.map((turn) => (
+            <Bubble key={turn.id} turn={turn} analysis={analysis} onQuote={openQuote} />
+          ))}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen back footer={footer} testID="chat-screen">
@@ -239,5 +276,5 @@ const styles = StyleSheet.create({
   chip: { minHeight: size.minTouch, justifyContent: 'center', borderWidth: 2, borderRadius: radius.pill, paddingHorizontal: space.md },
   inputWrap: { gap: space.xs },
   inputRow: { alignItems: 'flex-end', gap: space.sm },
-  input: { flex: 1, minHeight: size.button, maxHeight: 160, borderWidth: 2, borderRadius: radius.md, padding: space.md, fontSize: 18 },
+  input: { flex: 1, minHeight: size.button, maxHeight: 240, borderWidth: 2, borderRadius: radius.md, padding: space.md },
 });

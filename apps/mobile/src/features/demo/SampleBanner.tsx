@@ -1,4 +1,5 @@
-// "This is a sample paper. Nothing of yours was sent." (`banner.demo_sample`, PRODUCT_SPEC §12.2).
+// The sample-paper banner (`banner.demo_sample`, PRODUCT_SPEC §12.2; the copy lives in en.json and
+// is not quoted here, so this comment cannot go stale when the reviewed sentence changes).
 // With no props it shows while the current scan is a sample (`session.demoSampleId`) or the
 // current result came from one (`model_meta.demo`); pass `analysis` for results read from the
 // vault, or `force` on screens that are always about a sample.

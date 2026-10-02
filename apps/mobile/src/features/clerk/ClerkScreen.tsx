@@ -1,7 +1,8 @@
 // S10 — Show the clerk (`/result/[id]/clerk`, `id = generic` for the no-analysis card; D-18,
 // PRODUCT_SPEC §8). The card is ALWAYS LTR English, forced high contrast (black on white, 7:1+),
-// ≥ 24 pt body / 32 pt greeting, no font-scaling cap. `session.clerkMode` hides the header and tab
-// bar; the only exit is the 1.5 s hold on "Back to me" (in the user's language and direction).
+// ≥ 24 pt body / 32 pt greeting, no font-scaling cap, times the in-app text size (Settings → Text
+// size), and the "own words" field follows that setting too. `session.clerkMode` hides the header
+// and tab bar; the only exit is the 1.5 s hold on "Back to me" (in the user's language and direction).
 
 import * as Clipboard from 'expo-clipboard';
 import { type Href, router, Stack } from 'expo-router';
@@ -12,7 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AnalysisResult } from '@/api/types';
 import { BigButton } from '@/design/components/BigButton';
 import { Icon } from '@/design/components/Icon';
-import { AppText } from '@/design/components/Text';
+import { AppText, useTextStyle } from '@/design/components/Text';
+import { useTheme } from '@/design/theme';
 import { palette, radius, size, space } from '@/design/tokens';
 import { hasEnglishVoice } from '@/features/speech/fallback';
 import { useDirection } from '@/i18n/direction';
@@ -37,8 +39,14 @@ const HC = palette.highContrast;
 /** Web DOM attributes RN does not type (`dir`, `lang`). */
 const LTR_EN_WEB = (Platform.OS === 'web' ? { dir: 'ltr', lang: 'en' } : {}) as object;
 
+/** Card sizes (pt) at the in-app text size: 24 / 32 at "Normal", scaled up for Large / Extra large. */
+export function clerkFontSize(greeting: boolean, textFactor: number): number {
+  return Math.round((greeting ? 32 : 24) * Math.max(1, textFactor));
+}
+
 function CardText({ children, greeting }: { children: string; greeting?: boolean }) {
-  const fontSize = greeting ? 32 : 24;
+  const { textFactor } = useTheme();
+  const fontSize = clerkFontSize(Boolean(greeting), textFactor);
   const family = fontFamilyFor('NotoSans', greeting ? 'bold' : 'regular');
   return (
     <Text
@@ -106,6 +114,7 @@ export function ClerkScreen({ analysis }: ClerkScreenProps) {
   const [need, setNeed] = useState<ClerkNeed>({ kind: 'default' });
   const [own, setOwn] = useState('');
   const [englishVoice, setEnglishVoice] = useState(false);
+  const inputText = useTextStyle('body');
   const card: ClerkCard = analysis ? clerkCardFromAnalysis(analysis, t) : genericClerkCard(meta.tag, need, t);
 
   useEffect(() => {
@@ -179,7 +188,7 @@ export function ClerkScreen({ analysis }: ClerkScreenProps) {
                   setOwn(v);
                   setNeed(v.trim() ? { kind: 'own', text: v } : { kind: 'default' });
                 }}
-                style={[styles.input, { textAlign: dir.textAlign, writingDirection: dir.writingDirection }]}
+                style={[styles.input, inputText, { color: HC.text, textAlign: dir.textAlign, writingDirection: dir.writingDirection }]}
               />
             </View>
           )}
@@ -224,5 +233,5 @@ const styles = StyleSheet.create({
   disclosure: { minHeight: size.minTouch, alignItems: 'center', gap: space.sm },
   flex: { flex: 1 },
   disclosureBody: { marginTop: space.sm, padding: space.lg, borderWidth: 2, borderColor: HC.border, borderRadius: radius.md, backgroundColor: HC.background },
-  input: { minHeight: size.button, borderWidth: 2, borderColor: HC.border, borderRadius: radius.md, padding: space.md, fontSize: 18, color: HC.text },
+  input: { minHeight: size.button, borderWidth: 2, borderColor: HC.border, borderRadius: radius.md, padding: space.md },
 });

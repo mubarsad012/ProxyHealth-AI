@@ -1,16 +1,23 @@
 """``run_chat`` — one grounded follow-up answer (BUILD_PLAN §4.1; AI_PROMPTS §5.4, §11).
 
 Stateless: the client re-sends the stored ``AnalysisContext`` and the last ≤ 8 turns; images
-are never re-sent. Order: context compaction (≤ 60 000 chars, §5.4.3) → one ``chat`` call (fast,
+are never re-sent. A chat about a sample paper (a known ``demo_sample_id``) ignores the client's
+context: the server rebuilds it from the fixture's recorded output in the request language
+(``sample_context``, the zero-key mock pipeline, never a model call), so client text never stands
+in for a sample (defence in depth for the consent exemption, D-01). Order: emergency lexicon over
+what the reader typed (in every bundled language) → context compaction (≤ 60 000 chars, §5.4.3)
+→ one ``chat`` call (fast,
 ``low``) → grounding check (every ``grounded_span_ids`` id must exist in ``original_text``; none
 left → ``not_in_document``) → contact scrubber (only contacts printed on the paper survive) →
 phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a referral) →
 injection guard (typed instructions + a failing answer → ``out_of_scope``) → a
 ``not_in_document`` answer that is not a refusal carries the pack's fixed ``chat.not_in_document``
-sentence exactly once (``with_not_in_document``; the client never adds it) → emergency lexicon over
-the question and the turns (plus the model's ``crisis`` tag) → tags → disclaimers and warnings.
-The model is never asked to compute a date: the context shows the app's own labelled dates only.
-Nothing here writes to disk or logs content (ARCHITECTURE §7).
+sentence exactly once (``with_not_in_document``; the client never adds it) → printed forms
+(dates the paper prints keep their printed spelling, digits stay Western; ``prose_dates``) → the
+model's ``crisis`` tag joins the lexicon result in ``ChatAnswer.safety`` (D-14: the client opens
+the fixed emergency card first) → tags → disclaimers and warnings. The model is never asked to
+compute a date: the context shows the app's own labelled dates only. Nothing here writes to disk
+or logs content (ARCHITECTURE §7).
 """
 
 from __future__ import annotations
@@ -19,20 +26,27 @@ import difflib
 import re
 import time
 import unicodedata
+import weakref
 from collections.abc import Sequence
+from dataclasses import replace
 
 from starlette.concurrency import run_in_threadpool
 
 from proxyhealth_api.ai import prompt_loader as prompt
+from proxyhealth_api.ai.failover import AIService
+from proxyhealth_api.ai.mock import MockProvider
 from proxyhealth_api.ai.provider import Part, Task
+from proxyhealth_api.ai.routing import route
 from proxyhealth_api.analysis import (
     contacts_filter,
     disclaimers,
     emergency,
     injection,
     phrasing,
+    prose_dates,
     tagging,
 )
+from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.pipeline import (
     PipelineDeps,
     RewriteBudget,
@@ -40,18 +54,22 @@ from proxyhealth_api.analysis.pipeline import (
     demo_of,
     elapsed_ms,
     english,
+    fixture_for,
     generate,
     hints_for,
     make_rewriter,
     model_meta,
     parsed_as,
     prompt_base_vars,
+    run_analysis,
     translator,
 )
-from proxyhealth_api.contracts.analysis import Demand
+from proxyhealth_api.contracts.analysis import AnalyzeRequest, Demand
 from proxyhealth_api.contracts.chat import AnalysisContext, ChatAnswer, ChatRequest, Quote
-from proxyhealth_api.contracts.common import PageText, TextBlock
+from proxyhealth_api.contracts.common import ModelMeta, PageText, TextBlock
 from proxyhealth_api.contracts.enums import (
+    AnalysisMode,
+    DataUseTier,
     DateKind,
     DocumentType,
     ModelQuality,
@@ -62,6 +80,8 @@ from proxyhealth_api.contracts.enums import (
     WarningCode,
 )
 from proxyhealth_api.contracts.model_out import ChatModelOut
+from proxyhealth_api.demo.fixtures import Fixture, FixtureStore
+from proxyhealth_api.errors import ApiError
 
 MAX_CONTEXT_CHARS = 60_000
 # Bounds on what one chat turn reads from the re-sent context (the contract itself has no caps):
@@ -293,13 +313,132 @@ def with_not_in_document(answer: str, fixed: str, *variants: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text)
 
 
+# ----------------------------------------------------------------------------- sample papers
+
+CONTEXT_FIELDS: tuple[str, ...] = tuple(AnalysisContext.model_fields)
+# Rebuilt sample contexts per fixture store: (fixture id, recorded language, rules table) → the
+# context. Fixtures and DEMO_AS_OF are fixed, so the mock pipeline returns the same result every
+# time; the keys are bounded by the bundled fixtures × their recorded languages.
+_SAMPLE_CONTEXTS: weakref.WeakKeyDictionary[
+    FixtureStore, dict[tuple[str, str, int], AnalysisContext]
+] = weakref.WeakKeyDictionary()
+
+
+def sample_language(fixture: Fixture, target: str) -> str:
+    """The recorded language a sample's context is rebuilt in: ``target`` when the fixture has a
+    recording for it (exact tag, then base tag), else English (the model still answers in the
+    target language; English labels are true for every reader)."""
+    recorded = fixture.languages
+    if target in recorded:
+        return target
+    base = target.split("-")[0].lower()
+    for tag in recorded:
+        if tag.lower() == base:
+            return tag
+    return "en" if "en" in recorded or not recorded else recorded[0]
+
+
+async def sample_context(deps: PipelineDeps, demo_sample_id: str, target: str) -> AnalysisContext:
+    """The ``AnalysisContext`` of a sample paper rebuilt on the server from the fixture's recorded
+    output: the zero-key mock pipeline over the committed fixture (no model call, whatever the
+    configured provider), projected to the context fields. An unknown id or a screenshot id is a
+    ``400`` (as for ``/v1/analyze``). Cached per fixture store; nothing written anywhere."""
+    fixture = fixture_for(deps, demo_sample_id, "document")
+    lang = sample_language(fixture, target)
+    cache = _SAMPLE_CONTEXTS.setdefault(deps.fixtures, {})
+    key = (fixture.id, lang, id(deps.rules))
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    settings = deps.settings.model_copy(
+        update={"mock_latency_min_ms": 0, "mock_latency_max_ms": 0}
+    )
+    mock = replace(
+        deps, settings=settings, ai=AIService(MockProvider(deps.fixtures, settings), None, settings)
+    )
+    result = await run_analysis(
+        AnalyzeRequest(
+            pages=[], target_language=lang, client_platform="web", demo_sample_id=fixture.id,
+            analysis_id=f"sample-{fixture.id}-{lang}",
+        ),
+        mock,
+    )  # fmt: skip
+    ctx = AnalysisContext.model_validate({k: getattr(result, k) for k in CONTEXT_FIELDS})
+    cache[key] = ctx
+    return ctx
+
+
+def scan_reader_words(
+    req: ChatRequest, detected_language: str | None
+) -> emergency.EmergencyOutcome:
+    """D-14 over the chat turn: what the reader typed (the question and their earlier turns, every
+    bundled language's list, ``exclude`` phrases kept) and the earlier assistant turns."""
+    return emergency.detect_emergency(
+        [m.text for m in req.messages if m.role == "assistant"],
+        detected_language=detected_language, target_language=req.target_language,
+        user_texts=[req.question, *(m.text for m in req.messages if m.role == "user")],
+    )  # fmt: skip
+
+
+# Fixed emergency copy (the S19 card's own lines) per lexicon kind; 911 always comes first.
+EMERGENCY_LINE_KEYS: tuple[tuple[frozenset[str], str], ...] = (
+    (frozenset({"self_harm"}), "emergency.988"),
+    (frozenset({"overdose", "poison"}), "emergency.poison"),
+    (frozenset({"violence"}), "emergency.dv"),
+)
+
+
+def emergency_only_answer(
+    req: ChatRequest,
+    deps: PipelineDeps,
+    ctx: AnalysisContext,
+    emerg: emergency.EmergencyOutcome,
+    t: Translator,
+    started: float,
+) -> ChatAnswer:
+    """The answer when the model call failed or was blocked but the reader's words hit the
+    emergency lexicon: the fixed emergency lines in the target language (no model text), the
+    ``crisis`` tag and ``safety.emergency`` so the client opens the card first. ``model_meta``
+    names the route that was asked."""
+    kinds = set(emerg.safety.emergency_kinds)
+    lines = [t("emergency.911")] + [t(key) for wanted, key in EMERGENCY_LINE_KEYS if kinds & wanted]
+    cfg = route(Task.chat, settings=deps.settings)
+    mock = deps.ai.provider.name is Provider.mock
+    meta = ModelMeta(
+        provider=deps.ai.provider.name, tier=cfg.tier, model_id=cfg.model_id,
+        thinking_level=cfg.thinking, quality=ModelQuality.full,
+        analysis_mode=AnalysisMode.mock if mock else AnalysisMode.single,
+        data_use_tier=DataUseTier.demo if mock else deps.data_use_tier,
+        demo=demo_of(deps, req.demo_sample_id), latency_ms=elapsed_ms(started),
+    )  # fmt: skip
+    final = disclaimers.final_warnings(
+        list(emerg.warnings), degraded=False, data_use_tier=meta.data_use_tier, demo=meta.demo
+    )
+    return ChatAnswer(
+        request_id=deps.request_id, answer=" ".join(lines), grounded_span_ids=[],
+        grounded_quotes=[], not_in_document=False, refusal_kind=RefusalKind.none,
+        refer_to_professional=ReferTo.none, distress_acknowledged=True, suggested_questions=[],
+        resource_tags=[ResourceTag.crisis], safety=emerg.safety,
+        disclaimer_kind=disclaimers.disclaimer_kind(ctx.category), warnings=final,
+        model_meta=meta,
+    )  # fmt: skip
+
+
 async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     started = time.perf_counter()
     deadline_at = deps.ai.request_deadline()
+    # A sample paper's context comes from the fixture on disk, never from the client.
+    source = (
+        await sample_context(deps, req.demo_sample_id, req.target_language)
+        if req.demo_sample_id
+        else req.analysis
+    )
     # Bounded first (pages, blocks, lists), and the CPU-bound rendering runs off the event loop.
-    ctx = bounded_context(req.analysis)
+    ctx = bounded_context(source)
     target = req.target_language
     t = translator(deps, target)
+    # D-14 first: the reader's own words, in every bundled language, before any model call.
+    emerg = scan_reader_words(req, ctx.detected_language)
     # A sample paper's context carries dates computed as of DEMO_AS_OF; the prompt's "today" must
     # agree with them (demo/as_of.py).
     today = analysis_today(deps.clock(), None, sample=bool(req.demo_sample_id))
@@ -311,13 +450,20 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     }
     # The mock answers from the structured context (AI_PROMPTS §10.1); Gemini gets the text only.
     lead = [Part.of_text(ctx.model_dump_json())] if deps.ai.provider.name is Provider.mock else []
-    outcome = await generate(
-        deps, Task.chat, [], vars, deadline_at=deadline_at, lead=lead,
-        hints=hints_for(
-            demo_sample_id=req.demo_sample_id, target_language=target, question=req.question
-        ),
-    )  # fmt: skip
-    out = parsed_as(outcome, ChatModelOut)
+    try:
+        outcome = await generate(
+            deps, Task.chat, [], vars, deadline_at=deadline_at, lead=lead,
+            hints=hints_for(
+                demo_sample_id=req.demo_sample_id, target_language=target, question=req.question
+            ),
+        )  # fmt: skip
+        out = parsed_as(outcome, ChatModelOut)
+    except ApiError:
+        # A blocked or failed model call must not hide the emergency card from a reader in
+        # distress (D-14): the fixed emergency lines answer instead; otherwise the error stands.
+        if not emerg.safety.emergency:
+            raise
+        return emergency_only_answer(req, deps, ctx, emerg, t, started)
     warnings: list[WarningCode] = list(outcome.warnings)
 
     # Grounding check (replaces span verification for chat).
@@ -365,14 +511,18 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     elif refusal in REFER_REQUIRED and refer is ReferTo.none:
         refer = phrasing.refer_to_for(ctx.category)
 
-    # Emergency lexicon: the reader's words (every language's list) and the earlier assistant
-    # turns; the model's ``crisis`` tag (chat prompt: life-safety situation) is the backstop for
-    # words no list holds (D-14: false negatives are not acceptable).
-    emerg = emergency.detect_emergency(
-        [m.text for m in req.messages if m.role == "assistant"],
-        detected_language=ctx.detected_language, target_language=target,
-        user_texts=typed, model_flag=ResourceTag.crisis.value in out.resource_tags,
-    )  # fmt: skip
+    # D-26 / rule 7: a date the paper prints keeps its printed spelling; digits stay Western.
+    printed = prose_dates.printed_forms(paper_text, ctx.detected_language, ctx.demands)
+    answer = prose_dates.as_printed(answer, printed, target)
+    suggested = [prose_dates.as_printed(q, printed, target) for q in suggested]
+
+    # The model's ``crisis`` tag (chat prompt: life-safety situation) is the backstop for words
+    # no list holds (D-14: false negatives are not acceptable).
+    if ResourceTag.crisis.value in out.resource_tags and not emerg.safety.emergency:
+        emerg = emergency.EmergencyOutcome(
+            safety=emerg.safety.model_copy(update={"emergency": True}), warnings=emerg.warnings,
+            languages_scanned=emerg.languages_scanned, model_only=True,
+        )  # fmt: skip
     warnings += [*emerg.warnings, *scrubber.warnings()]
     tags = tagging.finalize_tags(
         out.resource_tags, document_type=DocumentType.unknown, readable=True,

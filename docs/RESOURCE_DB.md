@@ -155,7 +155,7 @@ The matcher, the prompts (`ai/prompts/tag.md`, `analyze.md`) and the DB share th
 | `daca_tps` | DACA / TPS re-registration | "For DACA and TPS" | uscis_tps, immlawhelp, just_neighbors |
 | `work_permit` | EAD (I-765) questions | "For work permits" | uscis_i765, uscis_contact, asap |
 | `green_card` | I-90 / I-751 / permanent-resident cards | "For Green Card questions" | uscis_replace_green_card, uscis_contact |
-| `naturalization` | N-400, interview, oath | "For citizenship applications" | uscis_naturalization, uscis_contact |
+| `naturalization` | N-400, interview, oath | "For citizenship forms" | uscis_naturalization, uscis_contact |
 | `change_of_address` | AR-11 / EOIR-33 moves | "For reporting a move" | uscis_address, eoir_forms |
 | `fee_waiver` | fee questions and waivers (incl. "no waiver" notices) | "For fee questions" | eoir_forms, uscis_hr1_fees, uscis_forms_free |
 | `afghan_specific` | Afghan parolees / SIV / re-parole | "For Afghan newcomers" | uscis_afghan, orr_afghan_benefits, afghanevac |
@@ -170,7 +170,7 @@ The matcher, the prompts (`ai/prompts/tag.md`, `analyze.md`) and the DB share th
 | `medicaid_renewal` | Medicaid/CHIP renewals and notices | "For Medicaid letters" | medicaid_state, healthcare_gov, insurekidsnow |
 | `prescription_help` | prescription labels, cost, interpreter at pharmacy (*fallback-only* for cost help; see §13) | "For prescriptions" | hrsa_fqhc, neighborhood_health, hhs_ocr_lep (via pins) |
 | `primary_care_uninsured` | low-cost clinics | "For low-cost clinics" | hrsa_fqhc, neighborhood_health, fairfax_chcn |
-| `lab_results` | understanding lab reports | "For understanding lab results" | medlineplus_labs |
+| `lab_results` | understanding lab reports | "For questions about lab results" | medlineplus_labs |
 | `vaccine_records` | find/replace vaccine records; school requirements | "For vaccine records" | cdc_iis, school_vaccine_requirements, hrsa_fqhc |
 | `language_access` | interpreter rights, discrimination by language | "For interpreter rights" | hhs_ocr_lep, doj_title_vi, ayuda |
 | `food` | food banks, pantries | "For food help" | feeding_america, cafb, 211, snap_state, nvfs, fairfax_csp |
@@ -182,7 +182,7 @@ The matcher, the prompts (`ai/prompts/tag.md`, `analyze.md`) and the DB share th
 | `housing_counseling` | HUD counselors, tenant rights | "For housing counseling" | hud_counselor, usa_housing_help, va_eviction_helpline, nvfs |
 | `eviction` | pay-or-quit, summons, unlawful detainer | "For eviction notices" | hud_counselor, lawhelp, lsc_find, va_courts_landlord_tenant, va_eviction_helpline, lajc, fairfax_sheriff_eviction |
 | `rent_assistance` | emergency rent help | "For rent help" | 211, fairfax_csp, nvfs, usa_housing_help |
-| `utility_shutoff` | shutoff notices, LIHEAP | "For utility shutoff notices" | liheap, 211, fairfax_csp |
+| `utility_shutoff` | shutoff notices, LIHEAP | "For power, gas or water shutoff notices" | liheap, 211, fairfax_csp |
 | `section8` | HCV/PHA recertification | "For Section 8 and housing vouchers" | hud_pha |
 | `school_enrollment` | enrolling a child, records, residency | "For school enrollment" | plyler_explainer, nche_mckinney_vento, shc_liaison_directory, cdc_iis |
 | `special_education` | IEP / 504 | "For IEP and 504 plans" | pti_centers, ed_idea |
@@ -285,7 +285,7 @@ The matcher returns English strings in three places (`ResourceMatch.why`, `Check
 | Key | English |
 |---|---|
 | `notes.set_region_for_local_help` | "Set your state in Settings to see help near you." |
-| `notes.county_unknown` | "Add the first 3 digits of your ZIP code in Settings to see more local help." |
+| `notes.county_unknown` | "Add the first 3 digits of your ZIP code in Settings. Then you will see more local help." |
 | `notes.no_local_results` | "We do not have local listings for your area yet. These national services help anyone." |
 | `notes.lsc_restricted_explained` | "Some legal aid offices can only help people with certain immigration papers." (response-level line; the per-card `status_note.lsc_restricted` sentence and the `help.lsc_alternative` link are rendered on the card itself — PRODUCT_SPEC S11) |
 | `notes.resource_text_english_only` | "Some listing details are in English." |
@@ -334,7 +334,7 @@ The matcher returns English strings in three places (`ResourceMatch.why`, `Check
 | `bring_tax_return` | "Your last tax return, if you have one" |
 | `bring_proof_address` | "Proof of where you live (a bill or lease with your name)" |
 | `bring_proof_va_address` | "Proof of your Virginia address" |
-| `bring_proof_rent_utilities` | "Your rent and utility bills" |
+| `bring_proof_rent_utilities` | "Your rent, power, gas and water bills" |
 | `bring_the_bill` | "The bill or account number" |
 | `bring_itemized_bill_request` | "Ask for an itemized bill" |
 | `bring_insurance_card` | "Your insurance card, if you have one" |
@@ -344,7 +344,7 @@ The matcher returns English strings in three places (`ResourceMatch.why`, `Check
 | `bring_shutoff_notice` | "The shutoff notice" |
 | `bring_hours_log` | "A list of the days and hours you worked" |
 | `bring_employer_info` | "Your employer's name, address, and phone" |
-| `bring_school_records` | "Your child's school papers (report cards, evaluations)" |
+| `bring_school_records` | "Your child's school papers (report cards, test results)" |
 | `bring_vaccine_record` | "Your child's vaccine record, if you have it" |
 | `bring_passport_or_two_ids` | "Your passport, or two other ID documents" |
 | `bring_name_of_helper` | "The full name of the person or office you want to check" |
@@ -810,7 +810,7 @@ checklist:
   bring_tax_return: "Your last tax return, if you have one"
   bring_proof_address: "Proof of where you live (a bill or lease with your name)"
   bring_proof_va_address: "Proof of your Virginia address"
-  bring_proof_rent_utilities: "Your rent and utility bills"
+  bring_proof_rent_utilities: "Your rent, power, gas and water bills"
   bring_the_bill: "The bill or account number"
   bring_itemized_bill_request: "Ask for an itemized bill"
   bring_insurance_card: "Your insurance card, if you have one"
@@ -820,7 +820,7 @@ checklist:
   bring_shutoff_notice: "The shutoff notice"
   bring_hours_log: "A list of the days and hours you worked"
   bring_employer_info: "Your employer's name, address, and phone"
-  bring_school_records: "Your child's school papers (report cards, evaluations)"
+  bring_school_records: "Your child's school papers (report cards, test results)"
   bring_vaccine_record: "Your child's vaccine record, if you have it"
   bring_passport_or_two_ids: "Your passport, or two other ID documents"
   bring_name_of_helper: "The full name of the person or office you want to check"
@@ -834,7 +834,7 @@ why:
   why.for_daca_tps: "For DACA and TPS"
   why.for_work_permit: "For work permits"
   why.for_green_card: "For Green Card questions"
-  why.for_naturalization: "For citizenship applications"
+  why.for_naturalization: "For citizenship forms"
   why.for_change_of_address: "For reporting a move"
   why.for_fee_waiver: "For fee questions"
   why.for_afghan_specific: "For Afghan newcomers"
@@ -849,7 +849,7 @@ why:
   why.for_medicaid_renewal: "For Medicaid letters"
   why.for_prescription_help: "For prescriptions"
   why.for_primary_care_uninsured: "For low-cost clinics"
-  why.for_lab_results: "For understanding lab results"
+  why.for_lab_results: "For questions about lab results"
   why.for_vaccine_records: "For vaccine records"
   why.for_language_access: "For interpreter rights"
   why.for_food: "For food help"
@@ -861,7 +861,7 @@ why:
   why.for_housing_counseling: "For housing counseling"
   why.for_eviction: "For eviction notices"
   why.for_rent_assistance: "For rent help"
-  why.for_utility_shutoff: "For utility shutoff notices"
+  why.for_utility_shutoff: "For power, gas or water shutoff notices"
   why.for_section8: "For Section 8 and housing vouchers"
   why.for_school_enrollment: "For school enrollment"
   why.for_special_education: "For IEP and 504 plans"
@@ -889,7 +889,7 @@ why:
   why.crisis_line: "Help right now"
 notes:
   notes.set_region_for_local_help: "Set your state in Settings to see help near you."
-  notes.county_unknown: "Add the first 3 digits of your ZIP code in Settings to see more local help."
+  notes.county_unknown: "Add the first 3 digits of your ZIP code in Settings. Then you will see more local help."
   notes.no_local_results: "We do not have local listings for your area yet. These national services help anyone."
   notes.lsc_restricted_explained: "Some legal aid offices can only help people with certain immigration papers."
   notes.resource_text_english_only: "Some listing details are in English."

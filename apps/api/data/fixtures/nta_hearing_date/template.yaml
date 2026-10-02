@@ -93,10 +93,13 @@ out:
     geo_zip: "22030"
     legibility: good
   es:
-    summary_title: "Aviso de Comparecencia ante la corte de inmigración el 7 de octubre de 2026"
-    summary_body: "Este papel inicia un caso en la corte de inmigración. Dice lo que el gobierno afirma sobre usted y le ordena presentarse ante un juez el 7 de octubre de 2026 a las 8:30 AM. Todavía no hay nada decidido."
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: un Aviso de Comparecencia (Notice to Appear) de Executive Office for Immigration Review - Immigration Court. Necesito ayuda con: un Aviso de Comparecencia ante la corte de inmigración - confirmar la fecha de la audiencia y encontrar un abogado. Por favor, hable despacio o escríbalo. Gracias."
+    summary_title: "Aviso de Comparecencia ante la corte de inmigración el October 7, 2026"
+    summary_body: "Este papel inicia un caso en la corte de inmigración. Dice lo que el gobierno afirma sobre usted y le ordena presentarse ante un juez el October 7, 2026 a las 8:30 AM. Todavía no hay nada decidido."
     demands:
-      d1: {text: "Vaya a la corte de inmigración el 7 de octubre de 2026 a las 8:30 AM."}
+      d1: {text: "Vaya a la corte de inmigración el October 7, 2026 a las 8:30 AM."}
       d2: {text: "La dirección de la corte está impresa en su papel."}
       d3: {text: "El papel dice que avise a la corte de cualquier dirección nueva dentro de cinco días hábiles, con el Formulario EOIR-33."}
     plan_steps:
@@ -110,12 +113,15 @@ out:
       "alleges": "Dice que algo es verdad. El juez todavía no lo ha decidido."
       "EOIR-33": "El formulario de la corte para avisar su nueva dirección."
     questions_to_ask:
-      - "¿Mi audiencia sigue siendo el 7 de octubre de 2026 a las 8:30 AM?"
+      - "¿Mi audiencia sigue siendo el October 7, 2026 a las 8:30 AM?"
       - "¿Dónde encuentro ayuda legal gratis antes de la audiencia?"
       - "¿Cómo envío el Formulario EOIR-33 si me mudo?"
     translated_pages:
-      - "Departamento de Justicia de los Estados Unidos\nOficina Ejecutiva de Revisión de Casos de Inmigración - Corte de Inmigración\nFormulario I-862\nAVISO DE COMPARECENCIA\nEn un proceso de expulsión según la sección 240 de la Ley de Inmigración y Nacionalidad\nDemandado: SAMPLE RESPONDENT\nEl Departamento de Seguridad Nacional afirma que:\n1. Usted no es ciudadano ni nacional de los Estados Unidos.\n2. Usted entró a los Estados Unidos por un lugar desconocido en una fecha desconocida.\nSE LE ORDENA presentarse ante un juez de inmigración en 100 Sample Plaza, Suite 200, Fairfax, VA 22030 el 7 de octubre de 2026 a las 8:30 AM.\nUsted puede tener representación en este proceso, sin costo para el Gobierno, por un abogado u otra persona autorizada.\nFalta de comparecencia: Si no asiste a la audiencia en la hora y el lugar indicados, se puede dictar una orden de expulsión en su ausencia.\nDebe avisar a la Corte de Inmigración de cualquier cambio de dirección dentro de cinco días hábiles, usando el Formulario EOIR-33."
+      - "Departamento de Justicia de los Estados Unidos\nOficina Ejecutiva de Revisión de Casos de Inmigración - Corte de Inmigración\nFormulario I-862\nAVISO DE COMPARECENCIA\nEn un proceso de expulsión según la sección 240 de la Ley de Inmigración y Nacionalidad\nDemandado: SAMPLE RESPONDENT\nEl Departamento de Seguridad Nacional afirma que:\n1. Usted no es ciudadano ni nacional de los Estados Unidos.\n2. Usted entró a los Estados Unidos por un lugar desconocido en una fecha desconocida.\nSE LE ORDENA presentarse ante un juez de inmigración en 100 Sample Plaza, Suite 200, Fairfax, VA 22030 el October 7, 2026 a las 8:30 AM.\nUsted puede tener representación en este proceso, sin costo para el Gobierno, por un abogado u otra persona autorizada.\nFalta de comparecencia: Si no asiste a la audiencia en la hora y el lugar indicados, se puede dictar una orden de expulsión en su ausencia.\nDebe avisar a la Corte de Inmigración de cualquier cambio de dirección dentro de cinco días hábiles, usando el Formulario EOIR-33."
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک اطلاعیه حضور (Notice to Appear) از Executive Office for Immigration Review - Immigration Court. در این مورد کمک لازم دارم: یک اطلاعیه حضور در محکمه مهاجرت - تأیید تاریخ جلسه و پیدا کردن یک وکیل. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "اطلاعیه حضور در محکمه مهاجرت در October 7, 2026"
     summary_body: "این کاغذ یک قضیه را در محکمه مهاجرت آغاز می‌کند. آنچه دولت درباره شما می‌گوید را فهرست می‌کند و می‌گوید در October 7, 2026 ساعت 8:30 AM نزد قاضی حاضر شوید. هنوز چیزی تصمیم نشده است."
     demands:
@@ -139,6 +145,9 @@ out:
     translated_pages:
       - "وزارت عدلیه ایالات متحده\nاداره اجرایی بررسی مهاجرت - محکمه مهاجرت\nفورم I-862\nاطلاعیه حضور\nدر جریان اخراج طبق بخش 240 قانون مهاجرت و تابعیت\nخوانده: SAMPLE RESPONDENT\nوزارت امنیت داخلی ادعا می‌کند که:\n1. شما شهروند یا تبعه ایالات متحده نیستید.\n2. شما از جای نامعلوم در تاریخ نامعلوم وارد ایالات متحده شدید.\nبه شما امر می‌شود که در 100 Sample Plaza, Suite 200, Fairfax, VA 22030 در October 7, 2026 ساعت 8:30 AM نزد قاضی مهاجرت حاضر شوید.\nشما می‌توانید در این جریان، بدون هزینه برای دولت، توسط یک وکیل یا شخص مجاز دیگر نمایندگی شوید.\nعدم حضور: اگر در زمان و جای تعیین‌شده در جلسه حاضر نشوید، ممکن است در غیاب شما حکم اخراج صادر شود.\nشما باید هر تغییر آدرس را در ظرف پنج روز کاری با استفاده از فورم EOIR-33 به محکمه مهاجرت خبر دهید."
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: إشعار بالحضور (Notice to Appear) من Executive Office for Immigration Review - Immigration Court. أحتاج إلى مساعدة في: إشعار بالحضور أمام محكمة الهجرة - التأكد من موعد الجلسة وإيجاد محامٍ. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "إشعار بالحضور أمام محكمة الهجرة في October 7, 2026"
     summary_body: "هذه الورقة تبدأ قضية في محكمة الهجرة. تذكر ما تقوله الحكومة عنك وتطلب منك الحضور أمام قاضٍ في October 7, 2026 الساعة 8:30 AM. لم يُحسم شيء بعد."
     demands:

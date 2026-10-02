@@ -4,6 +4,7 @@
 // the quote text alone is shown. `accessibilityLabel` is the quote (WCAG 1.1.1).
 
 import { Image } from 'expo-image';
+// Never cache user page images to disk: expo-image defaults to cachePolicy 'disk' (privacy, D-22).
 import { useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 
@@ -77,6 +78,7 @@ export function Crop({ pageImageUri, bbox, quote, width, height }: CropProps) {
     return (
       <Image
         source={{ uri: pageImageUri }}
+        cachePolicy="memory"
         accessibilityLabel={quote}
         contentFit="contain"
         style={[styles.full, { aspectRatio: 1 / aspect, borderColor: colors.divider }]}
@@ -96,6 +98,7 @@ export function Crop({ pageImageUri, bbox, quote, width, height }: CropProps) {
         <>
           <Image
             source={{ uri: pageImageUri }}
+            cachePolicy="memory"
             contentFit="fill"
             style={{ position: 'absolute', left: g.left, top: g.top, width: g.imageWidth, height: g.imageHeight }}
           />

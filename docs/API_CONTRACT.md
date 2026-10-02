@@ -20,7 +20,7 @@ Revision 2026-09-27 (consistency pass; WP0 implements these in the models before
 |---|---|---|
 | `X-Request-Id` | any (optional) | Client-generated UUID v4; echoed. Server generates one if absent. |
 | `X-Install-Id` | any (optional) | Random UUID generated on device; HMAC-hashed server-side for rate limiting only (D-08). |
-| `X-Consent-Version` | `POST /v1/analyze`, `/v1/troubleshoot`, `/v1/chat` | The `consent_version` the user accepted (from `ServerConfig`). Missing/stale → `428 consent_required`. Exempt only when `demo_sample_id` names a known bundled fixture; an unknown id is gated like no id (`428`, or `403` on `unpaid`/`mixed`; CL-031). On `unpaid`/`mixed` a known-fixture request that still carries typed text (`/v1/chat`, or a troubleshoot `user_goal`) is gated like a real paper too. |
+| `X-Consent-Version` | `POST /v1/analyze`, `/v1/troubleshoot`, `/v1/chat` | The `consent_version` the user accepted (from `ServerConfig`). Missing/stale → `428 consent_required`. Exempt only when `demo_sample_id` names a known bundled fixture; an unknown id is gated like no id (`428`, or `403` on `unpaid`/`mixed`; CL-031). On `unpaid`/`mixed` a known-fixture request that still carries typed text (every `/v1/chat` request, or a troubleshoot with a non-blank `user_goal`) is gated like a real paper too (`ServerConfig.features.chat` is `false` there). |
 | `X-App-Token` | any (reserved) | See Authentication. |
 | `If-None-Match` | `GET /v1/language-packs/{tag}` | ETag revalidation → `304`. |
 | `Accept-Language` | any (optional) | Used only to pick `user_message` language for error copy when the client sends no `target_language`. |
@@ -50,7 +50,7 @@ Model `ErrorResponse { error: ErrorBody }`
 | `too_many_pages` | 400 | > `limits.max_pages` images, or images mixed with a PDF. |
 | `pdf_too_long` | 400 | PDF > `limits.max_pdf_pages` pages. |
 | `unauthorized` | 401 | Missing/invalid `X-App-Token` (when enforced) or `X-Admin-Token`. |
-| `unpaid_tier_real_documents_disabled` | 403 | Tier is `unpaid`/`mixed` and the request is not a demo fixture (D-01). |
+| `unpaid_tier_real_documents_disabled` | 403 | Tier is `unpaid`/`mixed` and the request is not a known demo fixture, or it is one that carries typed text (every `/v1/chat`, a non-blank troubleshoot `user_goal`; `middleware._carries_client_text`; D-01). |
 | `not_found` | 404 | Unknown resource/fixture/pack tag. |
 | `pack_version_mismatch` | 409 | Client base pack hash ≠ server base pack hash. |
 | `payload_too_large` | 413 | Body > `limits.max_request_bytes`, a page > `limits.max_page_bytes`, or PDF > `limits.max_pdf_bytes`. |
@@ -58,7 +58,7 @@ Model `ErrorResponse { error: ErrorBody }`
 | `content_blocked` | 422 | Upstream blocked the generation (`details.block_reason ∈ safety, spii, prohibited_content, recitation, blocklist, other`). Never retried on another key. |
 | `language_unresolved` | 422 | Typed language could not be resolved and no `x-` fallback was possible (empty/garbage query). |
 | `consent_required` | 428 | `X-Consent-Version` missing or older than `ServerConfig.consent_version`. |
-| `rate_limited` | 429 | Per-install/IP bucket exceeded (`key_exhausted=false`). |
+| `rate_limited` | 429 | Per-install or per-IP-class bucket exceeded (`key_exhausted=false`). `details = {window: "hour"\|"day"\|"minute", limit: int, bucket: "install"\|"ip_class"}` (D-08; `ratelimit.py`). |
 | `quota_exhausted` | 429 | All upstream slots for the tier are unavailable (`key_exhausted=true`). |
 | `internal` | 500 | Unexpected server error. |
 | `model_output_invalid` | 502 | Model output failed schema after the single-call → two-call fallback. |
@@ -256,7 +256,7 @@ Response `ServerConfig`
 | `provider` | `Provider` | |
 | `data_use_tier` | `DataUseTier` | Drives the consent badge (D-02). |
 | `models` | `ModelsInfo { fast: str, pro: str, pro_degraded_thinking: ThinkingLevel }` | Env-resolved IDs. |
-| `features` | `FeatureFlags { real_documents_allowed: bool, demo_samples: bool, dynamic_language_packs: bool, troubleshoot: bool, chat: bool, quicksheet_pdf: bool, degraded_fallback: bool, hide_parts_server_masking: bool }` | `real_documents_allowed` is `false` on `unpaid`/`mixed` unless the dev flag is set; the client disables real scans and shows the amber/red banner. |
+| `features` | `FeatureFlags { real_documents_allowed: bool, demo_samples: bool, dynamic_language_packs: bool, troubleshoot: bool, chat: bool, quicksheet_pdf: bool, degraded_fallback: bool, hide_parts_server_masking: bool }` | `real_documents_allowed` is `false` on `unpaid`/`mixed` unless the dev flag is set; the client disables real scans and shows the amber/red banner. `chat` equals `real_documents_allowed` (`settings.py`): on `unpaid`/`mixed` every chat request is gated like a real paper, samples included (D-01), so the client replaces the S9 box and S7's Ask prompts with `chat.unavailable_unpaid` and sends nothing (Phase 2C). |
 | `limits` | `Limits { max_pages: int, max_page_bytes: int, max_pdf_bytes: int, max_pdf_pages: int, max_request_bytes: int, max_upstream_inline_bytes: int, max_chat_history: int, max_question_chars: int, max_user_goal_chars: int, translate_full_max_pages: int }` | Defaults 12 / 4194304 / 12582912 / 60 / 20971520 / 18874368 / 8 / 1000 / 300 / 4. |
 | `consent_version` | `str` | e.g. `"2026-09-24"`; must be echoed in `X-Consent-Version`. |
 | `privacy_policy_url` | `str` | Public non-PDF URL. |
@@ -359,7 +359,7 @@ Request `LanguagePackRequest`
 | `pack_version` | `str` | Client's base pack hash; mismatch → `409`. |
 | `hint_tag` | `LanguageTag \| null` | Optional client guess. |
 
-Behaviour: resolve query → tag (ISO table; fast model only for unknown names; unresolvable → `x-<slug>`); serve cache if present; else generate with single-flight, QA, cache, return `LanguagePack` with `source="generated"`. Errors: `409 pack_version_mismatch`, `422 language_unresolved`, `429 quota_exhausted`, `429 rate_limited` (the route takes the per-install analyze buckets), `503 upstream_unavailable`. A `language_query` with no letter ("123", "!!!", "x-42") is `422 language_unresolved` before any model call; a typed private tag `x-foo` resolves to itself without a model call; when every chunk is invalid or blocked the route answers `503 upstream_unavailable` + `Retry-After` (never `502`) — CL-029(b)(c). Not gated by tier or consent (UI strings only, no user content). Mock provider returns a pseudo-localized pack.
+Behaviour: resolve query → tag (ISO table; fast model only for unknown names; unresolvable → `x-<slug>`); serve cache if present; else generate with single-flight, QA, cache, return `LanguagePack` with `source="generated"`. Errors: `409 pack_version_mismatch`, `422 language_unresolved`, `429 quota_exhausted`, `429 rate_limited` (the route takes the same buckets as analyze: the per-install hour/day buckets when `X-Install-Id` is sent and, always, the per-IP-class minute/day buckets — D-08), `503 upstream_unavailable`. A `language_query` with no letter ("123", "!!!", "x-42") is `422 language_unresolved` before any model call; a typed private tag `x-foo` resolves to itself without a model call; when every chunk is invalid or blocked the route answers `503 upstream_unavailable` + `Retry-After` (never `502`) — CL-029(b)(c). Not gated by tier or consent (UI strings only, no user content). Mock provider returns a pseudo-localized pack.
 
 ```json
 // POST /v1/language-packs
@@ -469,7 +469,7 @@ Response `AnalysisResult`
 | `reminder_eligible` | `bool` | `verified && date.kind=="stated" && value_iso set`. |
 | `ambiguity_note` | `str \| null` | |
 
-**`DateInfo { value_iso: str | None (YYYY-MM-DD), time_text: str | None, kind: DateKind, formula: str | None, anchor_quote: str | None, anchor_demand_id: str | None, rule_id: str | None, rule_source_url: str | None, rule_verification: RuleVerification | None, localized_line: str | None }`** — `localized_line` is the ISO date written in the target language's digits (e.g. `۲۰۲۶-۱۰-۱۴` for a Dari pack's Persian digits), `null` for `western` digits and for digit systems the server leaves as ASCII (`ethiopic`, `other`), since the line would equal `value_iso`; it carries no localized month names (code-authoritative, CL-055(e); AI_PROMPTS §11.4)
+**`DateInfo { value_iso: str | None (YYYY-MM-DD), time_text: str | None, kind: DateKind, formula: str | None, anchor_quote: str | None, anchor_demand_id: str | None, rule_id: str | None, rule_source_url: str | None, rule_verification: RuleVerification | None, localized_line: str | None }`** — `localized_line` is the ISO date written in the target language's digits (e.g. `۲۰۲۶-۱۰-۱۴` for a Dari pack's Persian digits), `null` for `western` digits and for digit systems the server leaves as ASCII (`ethiopic`, `other`), since the line would equal `value_iso`; it carries no localized month names (code-authoritative, CL-055(e); AI_PROMPTS §11.4). That rule is for `stated` dates. For an `estimated` date (Phase 2C, CL-080(d)) `localized_line` is instead the readable estimate written like the printed anchor (`deadline_rules.estimate_text`): "October 17, 2026", or "11/13/2026" when the anchor is numeric — Western digits and English month names in every language. The client leads the demand row with "About {date} (estimate)" (`demand.estimate_about`), and the quick sheet adds the line in parentheses after the printed phrase ("within 180 days (October 17, 2026)")
 
 Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real_documents_disabled`, `413 payload_too_large`, `415 unsupported_media_type`, `422 content_blocked`, `428 consent_required`, `429 rate_limited|quota_exhausted`, `502 model_output_invalid`, `503 upstream_unavailable`. An unreadable page is a `200` with `quality.readable=false`, not an error.
 
@@ -520,13 +520,13 @@ Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real
     "span_ids": ["p1b2", "p1b5"]
   },
   "demands": [
-    {"id": "d1", "kind": "deadline", "text": "تا ۱۴ اکتبر ۲۰۲۶ جواب بدهید.", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": "۲۰۲۶-۱۰-۱۴"}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null},
+    {"id": "d1", "kind": "deadline", "text": "تا October 14, 2026 جواب بدهید.", "value_verbatim": "October 14, 2026", "source_quote": "Please return the enclosed form with proof of address by October 14, 2026.", "span_ids": ["p1b5"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": {"value_iso": "2026-10-14", "time_text": null, "kind": "stated", "formula": null, "anchor_quote": null, "anchor_demand_id": null, "rule_id": null, "rule_source_url": null, "rule_verification": null, "localized_line": "۲۰۲۶-۱۰-۱۴"}, "amount": null, "documents": [], "role": "response_due", "reminder_eligible": true, "ambiguity_note": null},
     {"id": "d2", "kind": "document_requested", "text": "یک کاپی از بل برق، آب یا گاز بفرستید.", "value_verbatim": "a copy of a recent utility bill (electric, water, or gas)", "source_quote": "Acceptable proof of address includes a copy of a recent utility bill (electric, water, or gas).", "span_ids": ["p1b6"], "page": 1, "confidence": "high", "verified": true, "verification_note": "exact", "date": null, "amount": null, "documents": ["utility bill (electric, water, or gas)"], "role": "other", "reminder_eligible": false, "ambiguity_note": null}
   ],
   "unverified": [],
   "plan_steps": [
     {"id": "s1", "text": "یک بل برق، آب یا گاز به نام خود پیدا کنید.", "kind": "gather", "resource_tags": [], "span_ids": ["p1b6"], "demand_id": "d2"},
-    {"id": "s2", "text": "فورم داخل پاکت را با کاپی بل قبل از ۱۴ اکتبر پست کنید.", "kind": "mail", "resource_tags": [], "span_ids": ["p1b5"], "demand_id": "d1"},
+    {"id": "s2", "text": "فورم داخل پاکت را با کاپی بل قبل از October 14 پست کنید.", "kind": "mail", "resource_tags": [], "span_ids": ["p1b5"], "demand_id": "d1"},
     {"id": "s3", "text": "اگر سوال دارید، به دفتر مدیکید ایالت خود زنگ بزنید (ببینید: کمک در نزدیکی شما).", "kind": "call", "resource_tags": ["medicaid_renewal", "benefits_navigation"], "span_ids": [], "demand_id": null}
   ],
   "red_flags": [],
@@ -567,12 +567,12 @@ Errors: `400 invalid_request|too_many_pages|pdf_too_long`, `403 unpaid_tier_real
 
 ### 3.6 `POST /v1/troubleshoot` — tier: **pro** (`thinking_level=medium`, `MEDIA_RESOLUTION_HIGH`)
 
-Headers/gate as `/v1/analyze`. Request `TroubleshootRequest`
+Headers/gate as `/v1/analyze`, with one difference on `unpaid`/`mixed`: a known `demo_sample_id` exempts the request only while `user_goal` is null or blank — a typed goal is gated like a real paper there (428, then `403 unpaid_tier_real_documents_disabled`; D-01, `middleware._carries_client_text`). On every tier a sample troubleshoot never puts the typed goal in the prompt (`{user_goal}` is rendered empty), though the emergency lexicon still reads it. Request `TroubleshootRequest`
 
 | Field | Type | Description |
 |---|---|---|
 | `screenshot` | `PageInput` | Exactly one image (no PDF). Required even when `demo_sample_id` is set; the server then reads the fixture's screenshot from disk and ignores these bytes. |
-| `user_goal` | `str \| null` (≤ 300) | "What were you trying to do?" |
+| `user_goal` | `str \| null` (≤ 300) | "What were you trying to do?" Wrapped as untrusted data in the prompt; ignored by the prompt (not by the lexicon) when `demo_sample_id` is set. |
 | `mode` | `TroubleshootMode` (default `portal`) | `scam_check` for "Is this a scam?" |
 | `portal_hint` | `PortalHint \| null` | |
 | `target_language` | `LanguageTag` | |
@@ -603,6 +603,8 @@ Response `TroubleshootResult`
 | `warnings` | `list[WarningCode]` | |
 | `model_meta` | `ModelMeta` | |
 
+Printed forms (D-26, Phase 2C): `screen_summary`, `error_meaning`, step texts, `cautions` and model red flags pass `prose_dates.as_printed` with the screen text as the "paper" — a date the screen prints is written back in its printed spelling, and any other non-Western digit run becomes Western digits unless the screen prints that run (AI_PROMPTS §11.4).
+
 ```json
 // POST /v1/troubleshoot
 {"screenshot": {"mime_type": "image/png", "data_base64": "iVBORw0KGgoAAAANSUhEUgAA...", "masks": [], "rotation": 0}, "user_goal": "Upload my electric bill to CommonHelp", "mode": "portal", "portal_hint": "benefits_portal", "target_language": "prs", "demo_sample_id": null, "client_platform": "android"}
@@ -613,7 +615,7 @@ Response `TroubleshootResult`
   "request_id": "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
   "screen_summary": "این صفحه از شما می‌خواهد یک فایل را آپلود کنید.",
   "error_text_quoted": "File exceeds the maximum size of 5 MB",
-  "error_meaning": "متن سرخ می‌گوید فایل شما خیلی بزرگ است. حد آن ۵ مگابایت است.",
+  "error_meaning": "متن سرخ می‌گوید فایل شما خیلی بزرگ است. حد آن 5 مگابایت است.",
   "steps": [
     {"order": 1, "text": "دکمه «Back» را بزنید.", "ui_target_as_written": "Back"},
     {"order": 2, "text": "یک عکس کوچکتر انتخاب کنید یا عکس تازه با کیفیت پایین بگیرید.", "ui_target_as_written": "Choose File"},
@@ -636,17 +638,17 @@ Response `TroubleshootResult`
 
 ### 3.7 `POST /v1/chat` — tier: **fast** (`thinking_level=low`, text only; images are never re-sent)
 
-Headers/gate as `/v1/analyze`. Stateless: the client re-sends the stored analysis context and the last ≤ 8 messages.
+Headers/gate as `/v1/analyze`, except that on `unpaid`/`mixed` a known `demo_sample_id` does **not** exempt a chat request: every chat carries typed text, so it is gated like a real paper (428, then 403; D-01), and `ServerConfig.features.chat` is `false` there. Stateless: the client re-sends the stored analysis context and the last ≤ 8 messages.
 
 Request `ChatRequest`
 
 | Field | Type | Description |
 |---|---|---|
-| `analysis` | `AnalysisContext` | Subset of `AnalysisResult`: `analysis_id, category, document_type, detected_language, sender_as_written, summary (SummaryCard), demands (list[Demand]), unverified (list[Demand]), plan_steps, red_flags, glossary, original_text (list[PageText]), urgency`. Sizes are capped: `original_text` ≤ 60 000 chars (client truncates oldest pages). |
+| `analysis` | `AnalysisContext` | Subset of `AnalysisResult`: `analysis_id, category, document_type, detected_language, sender_as_written, summary (SummaryCard), demands (list[Demand]), unverified (list[Demand]), plan_steps, red_flags, glossary, original_text (list[PageText]), urgency`. Sizes are capped: `original_text` ≤ 60 000 chars (client truncates oldest pages). The contract itself sets no caps; the server first bounds what it reads (`chat_pipeline.bounded_context`: ≤ 60 pages × 400 blocks × 4 000 chars, ≤ 60 items per list) and then compacts the rendered context to ≤ 60 000 chars (AI_PROMPTS §5.4.3). With a known `demo_sample_id` this field is **ignored**: the server rebuilds the sample's context from the fixture's recorded output through the zero-key mock pipeline (never the configured model), in `target_language` (exact tag, then base tag, else `en`), cached per fixture store (`chat_pipeline.sample_context`, Phase 2C). |
 | `messages` | `list[ChatMessage { role: Literal["user","assistant"], text: str (≤ 1000) }]` (≤ 8) | Prior turns. |
 | `question` | `str` (1–1000) | |
 | `target_language` | `LanguageTag` | |
-| `demo_sample_id` | `str \| null` | |
+| `demo_sample_id` | `str \| null` | A document fixture id → server-built context (above). An unknown id or a screenshot fixture id is `400 invalid_request` (as on `/v1/analyze`). |
 
 Response `ChatAnswer`
 
@@ -662,7 +664,7 @@ Response `ChatAnswer`
 | `distress_acknowledged` | `bool` | |
 | `suggested_questions` | `list[str]` (≤ 3) | |
 | `resource_tags` | `list[ResourceTag]` | |
-| `safety` | `Safety` | Emergency lexicon also runs on the question. |
+| `safety` | `Safety` (required) | D-14 in code, before the model call (`chat_pipeline.scan_reader_words`): the lexicon reads the question and the earlier user turns against every bundled language's list (`exclude` phrases kept) and the earlier assistant turns. An ordinary question → `{emergency: false, emergency_kinds: [], credential_or_payment_request: false}`; distress words → `emergency: true` with the matched kinds and `resource_tags` led by `crisis`; the model's `crisis` tag alone → `emergency: true` with `emergency_kinds: []`. The client opens S19 **before** it shows the answer (PRODUCT_SPEC S9). |
 | `disclaimer_kind` | `DisclaimerKind` | |
 | `warnings` | `list[WarningCode]` | |
 | `model_meta` | `ModelMeta` | |
@@ -681,14 +683,14 @@ Response `ChatAnswer`
 // 200
 {
   "request_id": "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9",
-  "answer": "می‌فهمم که این نگران‌کننده است. این نامه نمی‌گوید که بیمه کسی قطع می‌شود. می‌گوید که آدرس را تا ۱۴ اکتبر ۲۰۲۶ تأیید کنید. اگر می‌خواهید بدانید بیمه پسرتان چه می‌شود، از دفتر مدیکید بپرسید.",
+  "answer": "می‌فهمم که این نگران‌کننده است. این نامه نمی‌گوید که بیمه کسی قطع می‌شود. می‌گوید که آدرس را تا October 14, 2026 تأیید کنید. اگر می‌خواهید بدانید بیمه پسرتان چه می‌شود، از دفتر مدیکید بپرسید.",
   "grounded_span_ids": ["p1b5"],
   "grounded_quotes": [{"span_id": "p1b5", "text": "Please return the enclosed form with proof of address by October 14, 2026.", "page": 1}],
   "not_in_document": true,
   "refusal_kind": "none",
   "refer_to_professional": "benefits_office",
   "distress_acknowledged": true,
-  "suggested_questions": ["اگر تا ۱۴ اکتبر نتوانم بفرستم چه می‌شود؟", "چه کاغذهایی به عنوان ثبوت آدرس قبول است؟"],
+  "suggested_questions": ["اگر تا October 14 نتوانم بفرستم چه می‌شود؟", "چه کاغذهایی به عنوان ثبوت آدرس قبول است؟"],
   "resource_tags": ["medicaid_renewal"],
   "safety": {"emergency": false, "emergency_kinds": [], "credential_or_payment_request": false},
   "disclaimer_kind": "benefits_information_only",
@@ -696,6 +698,8 @@ Response `ChatAnswer`
   "model_meta": {"provider": "gemini", "tier": "fast", "model_id": "gemini-3.5-flash-lite", "thinking_level": "low", "quality": "full", "analysis_mode": "single", "data_use_tier": "paid", "demo": false, "latency_ms": 1840}
 }
 ```
+
+Emergency fallback (D-14, Phase 2C): when the model call fails for any reason (blocked `422`, `429 quota_exhausted`, `502`/`503`/`504`) **and** the lexicon fired on the reader's words, the server answers `200` instead of the error: `answer` = the fixed pack lines `emergency.911` (+ `emergency.988` for `self_harm`, `emergency.poison` for `overdose`/`poison`, `emergency.dv` for `violence`) joined by spaces in `target_language`, `grounded_quotes: []`, `refusal_kind: none`, `distress_acknowledged: true`, `resource_tags: [crisis]`, `safety.emergency: true` (`chat_pipeline.emergency_only_answer`). An ordinary question still gets the error. Printed forms: `answer` and `suggested_questions` pass `prose_dates.as_printed` like the analysis prose (AI_PROMPTS §11.4).
 
 ### 3.8 `POST /v1/resources/match` — tier: none (deterministic matcher)
 
@@ -780,7 +784,7 @@ Response `ResourceMatchResponse`
 
 ### 3.9 `GET /v1/resources` and `GET /v1/resources/{id}` — tier: none
 
-Query: `tag: ResourceTag | None`, `state: str | None`, `language: LanguageTag | None`, `q: str | None` (name substring), `limit: int = 50`, `offset: int = 0`. Response `ResourceList { items: list[Resource], total: int, resource_db_version: str }`. `GET /v1/resources/{id}` → `Resource` or `404 not_found`.
+Query: `tag: ResourceTag | None`, `state: str | None`, `language: LanguageTag | None` (strict filter: the resource lists that language or `interpreters_200+`), `q: str | None` (case-insensitive substring of `name`, `id` or `name_note`; S11's search box sends it, PRODUCT_SPEC S11), `limit: int = 50`, `offset: int = 0`. Response `ResourceList { items: list[Resource], total: int, resource_db_version: str }`. `GET /v1/resources/{id}` → `Resource` or `404 not_found`.
 
 ```json
 // GET /v1/resources?tag=jury_summons

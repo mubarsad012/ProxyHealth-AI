@@ -12,6 +12,14 @@ Monorepo. Two apps share one API contract:
 - Type-check mobile with `cd apps/mobile && npx tsc --noEmit`; lint with `npx expo lint`; tests with `npx jest`.
 - API tests: `apps/api/.venv/bin/pytest apps/api`.
 
+## Repo commands (Makefile + scripts/, run from the repo root; `make help` lists them)
+- `make dev` — the API on :8000 (mock unless `apps/api/.env` sets keys) + Expo web on :8081 pointed at each other (CORS for localhost and 127.0.0.1); Ctrl-C stops both. `DEV_OPEN_BROWSER=0 make dev` opens no browser tab; `API_PORT=`/`WEB_PORT=` move the ports. `make api` / `make web` run one half.
+- `make smoke` — boots the mock API on its own free port (or `SMOKE_PORT=`) with a throw-away `VAR_DIR` and exercises every endpoint (`scripts/smoke.sh` → `apps/api/scripts/smoke.py`); the server is always stopped.
+- `make test` — API tests, ruff, strict mypy, `tsc`, jest and expo lint (`make test-api`, `make lint-api`, `make test-mobile` run the parts).
+- `make export-web` — static web build into `apps/mobile/dist` (always `--clear`); `make host-rules` then writes the Netlify/Cloudflare `_redirects` + `404.html` (DEPLOYMENT §2.3).
+- `make sync` / `make sync-check` — `sync_to_mobile.py` (packs, languages, fixtures, fonts, resources → `apps/mobile`); `make types` / `make types-check` — `scripts/gen-types.sh` (`--check` writes nothing; regenerating is the contract owner's job, WP0).
+- `scripts/ci.sh` (= `make ci`) — the full 15-step CI sequence, stopping at the first failure: pytest, ruff, mypy, openapi, fixtures, sync, yaml, xfail, privacy, eas-https, mobile-tsc, jest, lint, prebuild, web-export. `CI_FROM=<step> scripts/ci.sh` resumes from a step; `CI_ONLY=<step>` runs one.
+
 ## Hard rules for agents working in parallel
 1. **Never run `npm install`, `npx expo install`, or `pip install` unless you are the only agent running.** All needed packages are pre-installed; if something is truly missing, stop and report it instead of installing.
 2. Only write files your work package owns (see `docs/BUILD_PLAN.md`). Shared files (API contract models, generated TS types, design tokens, i18n base pack) belong to WP0 — read them, don't edit them.

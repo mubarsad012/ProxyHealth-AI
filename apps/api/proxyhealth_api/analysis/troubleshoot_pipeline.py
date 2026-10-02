@@ -5,8 +5,10 @@ Order: upload validation + redaction (in the thread pool) → one ``troubleshoot
 step's ``ui_target_as_written``, red-flag quotes) → contact scrubber → scam scorer (regexes over
 the screen, model hints, credential request) → emergency lexicon (``screen_text`` + ``user_goal``,
 plus the model's ``crisis`` tag) → injection detection (flag + warning; a screenshot has no block
-boxes to mask, so no re-run) → phrasing lint (steps, flags, summary, meaning, cautions) → tags
-(``scam_report`` / ``crisis`` first) → disclaimers and warnings. A sample screenshot never sends
+boxes to mask, so no re-run) → phrasing lint (steps, flags, summary, meaning, cautions) →
+printed forms (a date or number the screen shows keeps its spelling; other digits Western,
+``prose_dates.as_printed``, AI_PROMPTS §5.0 rule 7) → tags (``scam_report`` / ``crisis`` first) →
+disclaimers and warnings. A sample screenshot never sends
 the typed goal to the provider. The deadline, urgency and clerk/resource steps of AI_PROMPTS §11
 do not apply to a screen. Nothing here writes to disk or logs content (ARCHITECTURE §7).
 """
@@ -24,6 +26,7 @@ from proxyhealth_api.analysis import (
     disclaimers,
     emergency,
     injection,
+    prose_dates,
     redaction,
     scam,
     tagging,
@@ -201,11 +204,15 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
         deps, language=target, today=today, budget=RewriteBudget(), deadline_at=deadline_at
     )
 
+    # Rule 7 / D-26: a date the screen prints keeps its printed spelling; digits stay Western.
+    printed = prose_dates.printed_forms(corpus)
+
     async def clean(text: str) -> str:
-        return await phrase(
+        text = await phrase(
             scrubber.scrub(text), t=t, language=target, category=None, rewrite=rewrite,
             stats=stats,
         )  # fmt: skip
+        return prose_dates.as_printed(text, printed, target)
 
     steps: list[TroubleshootStep] = []
     for step in sorted(out.steps, key=lambda s: s.order)[:MAX_STEPS]:

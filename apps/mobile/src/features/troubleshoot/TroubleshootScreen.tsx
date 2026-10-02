@@ -5,12 +5,15 @@
 // Consent (S2, CL-070): without an accepted consent record "Pick a screenshot" and "Explain this
 // screen" open S2 instead — the user's own screenshot never leaves the phone before consent (the
 // server's 428 would come only after the bytes were uploaded). "Try a sample" stays open.
+// "Hide parts" on the preview (S5's MaskEditor; boxes sent like S5: web burns them, native sends
+// `masks[]`). "Save as proof" opens "Whose paper is this?" (default Me) and stores only the
+// pixels that were sent with the boxes burned in (`masks.ts`).
 
 import { type Href, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import type { PortalHint, TroubleshootMode } from '@/api/types';
+import type { MaskRect, PortalHint, TroubleshootMode } from '@/api/types';
 import {
   AppText,
   Banner,
@@ -25,23 +28,31 @@ import { useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { useConsentDecision } from '@/features/onboarding/consentState';
-import { bumpVault, ME_MEMBER_ID, memberName, useMembers } from '@/features/vault';
+import { ME_MEMBER_ID, memberName, SaveToVaultSheet, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
 import { usePackMeta, useT } from '@/i18n/useT';
 import { useOnline } from '@/lib/network';
 import { platformName } from '@/lib/platform';
-import { useVault } from '@/storage/StorageProvider';
 import { useSession } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
-import { canSaveEvidence, saveScamEvidence } from './evidence';
-
-import { pickScreenshot, type Screenshot, toPageInput } from './pick';
+import { buildEvidenceDocument, canSaveEvidence } from './evidence';
+import { prepareScreenshot } from './masks';
+import { pickScreenshot, type Screenshot } from './pick';
 import { buildTroubleshootRequest, MAX_GOAL_CHARS, PORTAL_HINTS, SAMPLE_SCREENSHOT_ID } from './request';
 import { CredentialGuard, type EvidenceControl, TroubleshootResultCards } from './ResultCards';
+import { ScreenshotPreview } from './ScreenshotPreview';
 import { useTroubleshoot } from './useTroubleshoot';
 
-const NO_EVIDENCE = { saved: false, busy: false, failed: false };
+interface EvidenceState {
+  saved: boolean;
+  busy: boolean;
+  failed: boolean;
+  /** Display name of the member the proof was saved for. */
+  member?: string;
+}
+
+const NO_EVIDENCE: EvidenceState = { saved: false, busy: false, failed: false };
 
 export interface TroubleshootScreenProps {
   initialMode?: TroubleshootMode;
@@ -60,8 +71,12 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   const [hint, setHint] = useState<PortalHint | null>(null);
   const [pickFailed, setPickFailed] = useState(false);
   const [emergencyClosed, setEmergencyClosed] = useState<string | null>(null);
-  const [evidence, setEvidence] = useState<{ saved: boolean; busy: boolean; failed: boolean }>(NO_EVIDENCE);
-  const vault = useVault();
+  const [evidence, setEvidence] = useState<EvidenceState>(NO_EVIDENCE);
+  const [masks, setMasks] = useState<MaskRect[]>([]);
+  // The pixels that were sent for the current result, boxes burned in (null: none may be stored).
+  const [proof, setProof] = useState<Screenshot | null>(null);
+  const [prepFailed, setPrepFailed] = useState(false);
+  const [askWhose, setAskWhose] = useState(false);
   const { members } = useMembers();
   const hideIds = useSettings((s) => s.hideIdNumbers);
   const ts = useTroubleshoot();
@@ -90,6 +105,8 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
       .then((s) => {
         if (s) {
           setShot(s);
+          setMasks([]);
+          setProof(null);
           setEvidence(NO_EVIDENCE);
           ts.reset();
         }
@@ -105,10 +122,27 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
       openConsent();
       return;
     }
-    void ts.submit(buildTroubleshootRequest({ ...common, screenshot: toPageInput(shot) }));
+    setPrepFailed(false);
+    setEvidence(NO_EVIDENCE);
+    void prepareScreenshot(shot, masks, common.platform)
+      .then((prepared) => {
+        setProof(prepared.proof);
+        return ts.submit(buildTroubleshootRequest({ ...common, screenshot: prepared.input }));
+      })
+      // The boxes could not be burned in: nothing is sent.
+      .catch(() => setPrepFailed(true));
+  };
+  const onMasks = (next: MaskRect[]) => {
+    setMasks(next);
+    // A result (and its proof copy) belongs to the boxes it was sent with.
+    setProof(null);
+    setEvidence(NO_EVIDENCE);
+    ts.reset();
   };
   const onSample = () => {
     setShot(null);
+    setMasks([]);
+    setProof(null);
     setEvidence(NO_EVIDENCE);
     void ts.runSample(
       (screenshot) => buildTroubleshootRequest({ ...common, screenshot, demoSampleId: SAMPLE_SCREENSHOT_ID }),
@@ -116,33 +150,29 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
     );
   };
 
+  // "Save as proof" → "Whose paper is this?" (default Me); the sheet writes nothing until Save.
   const onSaveEvidence = () => {
-    if (!canSaveEvidence(shot) || evidence.busy || evidence.saved) return;
-    setEvidence({ saved: false, busy: true, failed: false });
-    saveScamEvidence(vault, shot, { title: t('vault.title_scam_check') })
-      .then(() => {
-        bumpVault();
-        setEvidence({ saved: true, busy: false, failed: false });
-      })
-      .catch(() => setEvidence({ saved: false, busy: false, failed: true }));
+    if (!canSaveEvidence(proof) || evidence.busy || evidence.saved) return;
+    setAskWhose(true);
   };
   // Scam mode, a real picked screenshot, a real (non-demo) result: offer "Save as proof". Not while
-  // `settings.hide_ids` is on: the proof is the unmasked image, and saves with that setting keep no
-  // page images (vault/documents.ts `buildStoredDocument`).
+  // `settings.hide_ids` is on: the proof is the screenshot image, and saves with that setting keep
+  // no page images (vault/documents.ts `buildStoredDocument`). Not when the boxes could not be
+  // burned into stored pixels (native with "Hide parts" boxes, `masks.ts`).
   const evidenceControl: EvidenceControl | null =
     mode === 'scam_check' &&
     !hideIds &&
-    canSaveEvidence(shot) &&
+    canSaveEvidence(proof) &&
     ts.result &&
     !ts.offlineSample &&
     !ts.result.model_meta?.demo
       ? {
           ...evidence,
           onSave: onSaveEvidence,
-          // saveScamEvidence stores the proof for "Me" (evidence.ts default).
-          member: memberName(members.find((m) => m.id === ME_MEMBER_ID) ?? null, t),
+          member: evidence.member ?? memberName(members.find((m) => m.id === ME_MEMBER_ID) ?? null, t),
         }
       : null;
+  const proofShot = canSaveEvidence(proof) ? proof : null;
 
   const loading = ts.status === 'loading';
   const title = mode === 'scam_check' ? t('troubleshoot.mode_scam') : t('home.tile_troubleshoot');
@@ -187,14 +217,7 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
           </Pressable>
         ) : null}
         {pickFailed ? <AppText role="alert">{t('state.unreadable_screenshot')}</AppText> : null}
-        {shot ? (
-          <Image
-            source={{ uri: shot.uri }}
-            accessibilityIgnoresInvertColors
-            style={[styles.preview, { borderColor: colors.border, aspectRatio: shot.width && shot.height ? shot.width / shot.height : 0.6 }]}
-            resizeMode="contain"
-          />
-        ) : null}
+        {shot ? <ScreenshotPreview shot={shot} masks={masks} onChangeMasks={onMasks} disabled={loading} /> : null}
         <View style={styles.field}>
           <AppText weight="bold" nativeID="ts-goal-label">
             {t('troubleshoot.goal_label')}
@@ -250,6 +273,11 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
         {loading ? (
           <ProgressSteps steps={[t('troubleshoot.step_read'), t('troubleshoot.step_explain')]} active={ts.step} />
         ) : null}
+        {prepFailed ? (
+          <AppText role="alert" color="danger" testID="troubleshoot-prep-failed">
+            {t('err.internal')}
+          </AppText>
+        ) : null}
         {ts.status === 'error' && ts.error ? (
           <ErrorState error={ts.error} onRetry={shot ? onSubmit : undefined} onTrySample={onSample} />
         ) : null}
@@ -260,6 +288,16 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
           </View>
         ) : null}
       </View>
+      {askWhose && proofShot ? (
+        <SaveToVaultSheet
+          buildDocument={(memberId, now) => buildEvidenceDocument(proofShot, { title: t('vault.title_scam_check'), now, memberId })}
+          onSaved={(_id, savedFor) => {
+            setAskWhose(false);
+            setEvidence({ saved: true, busy: false, failed: false, member: savedFor });
+          }}
+          onCancel={() => setAskWhose(false)}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -276,12 +314,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     padding: space.md,
-  },
-  preview: {
-    width: '60%',
-    maxWidth: 280,
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderRadius: radius.sm,
   },
 });

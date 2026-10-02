@@ -140,7 +140,7 @@ describe('ResourceList', () => {
     expect(onAlt).toHaveBeenCalled();
     expect(queryByText('Broken Listing')).toBeNull();
     expect(getByText('Nothing verified near you yet. These national services can help.')).toBeTruthy();
-    expect(getByText('Always available')).toBeTruthy();
+    expect(getByText('Help anywhere in the US')).toBeTruthy();
     expect(getAllByText(/^Verified on /).length).toBeGreaterThanOrEqual(2);
   });
 });
@@ -172,7 +172,7 @@ describe('HelpForDocument', () => {
         <HelpForDocument analysis={medicaid} />
       </AppProviders>,
     );
-    await waitFor(() => expect(first.getByText('Always available')).toBeTruthy());
+    await waitFor(() => expect(first.getByText('Help anywhere in the US')).toBeTruthy());
     expect(lastMatchForDocument(medicaid.analysis_id)).not.toBeNull();
     await first.unmount();
     const second = await render(
@@ -180,7 +180,7 @@ describe('HelpForDocument', () => {
         <HelpForDocument analysis={medicaid} />
       </AppProviders>,
     );
-    expect(second.getByText('Always available')).toBeTruthy();
+    expect(second.getByText('Help anywhere in the US')).toBeTruthy();
     expect(matchResources).toHaveBeenCalledTimes(1);
   });
 
@@ -190,7 +190,7 @@ describe('HelpForDocument', () => {
         <HelpForDocument analysis={medicaid} />
       </AppProviders>,
     );
-    expect(await findByText('Always available', {}, { timeout: 4000 })).toBeTruthy();
+    expect(await findByText('Help anywhere in the US', {}, { timeout: 4000 })).toBeTruthy();
     expect(await findByText('Tell me your state to find help near you.')).toBeTruthy();
   });
 });

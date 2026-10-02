@@ -3,7 +3,10 @@
 // `createClient` runs against a mocked `fetch` that answers like `AI_PROVIDER=mock`):
 //   sample → S6 Reading (three steps, ≥ 1.5 s) → `POST /v1/analyze` → S7 route → result cards;
 //   web scan with hidden parts → the body on the wire has `masks_applied_client_side: true` and
-//   empty `masks`; native keeps `masks[]`; a 428 shows S2 inline and retries once after consent;
+//   empty `masks`; native keeps `masks[]`; before consent the app's real client guard
+//   (`refuseUnconsentedUploads: true`, as `api/config.ts` builds it) sends NOTHING — S2 shows inline
+//   and the one retry after consent is the first analyze call on the wire; a server 428 (a client
+//   without the guard) is handled the same way;
 //   an unreachable server on a real scan shows the network error with its next steps, and "Save to
 //   read later" saves the pages to My papers as "Not read yet" (no in-memory queue).
 
@@ -107,8 +110,9 @@ function mockResult(req: AnalyzeRequest): AnalysisResult {
   return { ...base, analysis_id: req.analysis_id ?? base.analysis_id };
 }
 
-/** A fetch that answers like the mock API; `script` can override responses per call. */
-function mockApi(script: ((call: Call, n: number) => Response | Promise<Response> | null) | null = null) {
+/** A fetch that answers like the mock API; `script` can override responses per call.
+ *  `guard` builds the client like the app does (`refuseUnconsentedUploads: true`). */
+function mockApi(script: ((call: Call, n: number) => Response | Promise<Response> | null) | null = null, guard = false) {
   const calls: Call[] = [];
   const fetchMock = jest.fn(async (url: string, init: RequestInit) => {
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as AnalyzeRequest) : null;
@@ -126,6 +130,7 @@ function mockApi(script: ((call: Call, n: number) => Response | Promise<Response
     getInstallId: async () => 'install-wp5',
     getLanguageTag: () => useI18n.getState().tag,
     fetch: fetchMock as unknown as typeof fetch,
+    refuseUnconsentedUploads: guard,
   });
   setClient(client);
   const analyzeCalls = () => calls.filter((c) => c.url.endsWith('/v1/analyze'));
@@ -253,7 +258,25 @@ describe('the analyze body on the wire (real client, mocked fetch)', () => {
 });
 
 describe('S6 error rows', () => {
-  it('428: shows S2 inline, then retries the same request once after consent', async () => {
+  it('no consent yet: the real client guard sends nothing, S2 shows inline, one analyze after consent', async () => {
+    const { client, analyzeCalls } = mockApi(null, true);
+    useSession.getState().setPages([webPage({ masks: [] })]);
+    const screen = await renderReading(client);
+    await waitFor(() => expect(screen.getByTestId('consent-screen')).toBeTruthy(), { timeout: 5000 });
+    // Refused on the device: the page never left the phone before S2.
+    expect(analyzeCalls()).toHaveLength(0);
+    await waitFor(() => expect(screen.getByTestId('tier-badge-demo')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('consent-continue'));
+    });
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith(expect.stringMatching(/^\/result\//)), { timeout: 5000 });
+    const calls = analyzeCalls();
+    expect(calls).toHaveLength(1);
+    expect(new Headers(calls[0].init.headers).get('X-Consent-Version')).toBe(CONSENT);
+    expect(calls[0].body?.pages).toHaveLength(1);
+  }, 15_000);
+
+  it('server 428 (a client without the guard): shows S2 inline, then retries the same request once after consent', async () => {
     // Like the real server: `/v1/analyze` without `X-Consent-Version` → 428.
     const { client, analyzeCalls } = mockApi((call) =>
       call.url.endsWith('/v1/analyze') && new Headers(call.init.headers).get('X-Consent-Version') === null

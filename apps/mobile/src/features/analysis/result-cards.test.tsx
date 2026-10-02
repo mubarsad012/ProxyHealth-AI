@@ -207,3 +207,31 @@ describe('ResultView at font scale 2 (200 %)', () => {
     }
   });
 });
+
+describe('Get help preview', () => {
+  it('"Verified on {date}" keeps the date LTR-isolated in an RTL pack', async () => {
+    const pack = bundledPackFor('prs');
+    if (!pack) return;
+    useI18n.getState().setPack(pack);
+    const a = asResult(medicaidPrs);
+    const r = a.resource_preview[0];
+    expect(r).toBeTruthy();
+    const { getByTestId } = await renderResult(a);
+    const line = getByTestId(`help-verified-${r.resource.id}`);
+    const flat = (n: unknown): string =>
+      typeof n === 'string' ? n : Array.isArray(n) ? n.map(flat).join('') : n && typeof n === 'object' ? flat((n as { children?: unknown }).children) : '';
+    expect(flat(line)).toContain(`${LRI}${r.resource.verified_on}${PDI}`);
+  });
+});
+
+describe('Ask about this paper on the unpaid / mixed tier (features.chat=false)', () => {
+  it('disables Ask, hides the prompt chips and explains in one plain line', async () => {
+    const a = asResult(medicaidEn);
+    const onAsk = jest.fn();
+    const off = await render(<ResultView analysis={a} pages={[]} handlers={{ onAsk }} chatUnavailable />);
+    expect(off.getByTestId('ask-unavailable')).toHaveTextContent(t('chat.unavailable_unpaid'));
+    expect(off.queryByTestId('ask-prompt-0')).toBeNull();
+    const on = await render(<ResultView analysis={a} pages={[]} handlers={{ onAsk }} />);
+    expect(on.queryByTestId('ask-unavailable')).toBeNull();
+  });
+});

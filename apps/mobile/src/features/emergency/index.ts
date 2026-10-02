@@ -8,12 +8,15 @@ import type { Safety } from '@/api/types';
 import { t } from '@/i18n/store';
 
 export {
+  actionNumber,
+  digitGroupedForSpeech,
   EMERGENCY_ROWS,
   EmergencyCard,
   type EmergencyCardProps,
   emergencyKindWords,
   isDesktopWeb,
   openHref,
+  spokenNumber,
 } from './EmergencyCard';
 
 export interface EmergencyTriggerState {

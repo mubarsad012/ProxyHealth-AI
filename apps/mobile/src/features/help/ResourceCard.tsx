@@ -4,8 +4,11 @@
 // languages, eligibility, warnings, "Verified on" (+ link-health / stale lines), the checklist,
 // and counts-only feedback. Phones, URLs, hours and the "Verified on" date are LTR-isolated: after
 // a Dari or Arabic word a bare "1-800-323-8603" or "2026-09-27" would show its groups reversed
-// (UAX #9: digits after Arabic letters become Arabic numbers). The Call button reads the S11 line
-// "Call {organization}, {digits grouped}" as its hint (`callLabel`).
+// (UAX #9: digits after Arabic letters become Arabic numbers). The Call button's S11 screen-reader
+// line "Call {organization}, {digits grouped}" (`callLabel`) rides as its accessibilityHint: BigButton
+// (design/components, WP4) has no accessibilityLabel override yet, so its label is the visible
+// "Call 1-800-…" text (CL-076 — when the prop lands, pass `callLabel` as the label and drop the hint).
+// Chip / warning React keys are text + index (the same text may come twice).
 
 import { Linking, StyleSheet, View } from 'react-native';
 
@@ -108,8 +111,8 @@ export function ResourceCard({
       ) : null}
       <ChipRow>
         <Chip text={t(COST_KEYS[resource.cost] ?? 'resource.unknown_cost')} tone={resource.cost === 'free' ? 'success' : 'neutral'} />
-        {whyChips.map((w) => (
-          <Chip key={w} text={w} icon="check" />
+        {whyChips.map((w, i) => (
+          <Chip key={`${w}-${i}`} text={w} icon="check" />
         ))}
       </ChipRow>
       {noteKey ? (
@@ -147,8 +150,8 @@ export function ResourceCard({
       {resource.hours ? <Bidi variant="caption">{resource.hours}</Bidi> : null}
       {langs ? <AppText variant="caption">{langs}</AppText> : null}
       {eligibility ? <AppText variant="caption" lang={eligibility.english ? 'en' : undefined}>{eligibility.text}</AppText> : null}
-      {(resource.warnings ?? []).map((w) => (
-        <AppText key={w} variant="caption" color="warning">
+      {(resource.warnings ?? []).map((w, i) => (
+        <AppText key={`${w}-${i}`} variant="caption" color="warning">
           {t(w)}
         </AppText>
       ))}

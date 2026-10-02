@@ -10,7 +10,10 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
 4. only past dates (≤ 60 days) → ``date_passed`` headline, ``critical`` on immigration/court
    papers, else ``high`` for response/payment/appointment/hearing and ``medium`` for expiry/move,
    plus an ``expired_date`` red flag;
-5. only ``estimated`` dates → the same thresholds capped at ``medium``;
+5. only ``estimated`` dates → the same thresholds capped at ``medium``; the headline's ``{date}``
+   and ``date_iso`` are both the ISO day (``date == date_iso`` marks the estimate: the client
+   writes it out in the reader's language, as on the demand row, whose readable server line is
+   ``DateInfo.localized_line`` — ``deadline_rules.estimate_text``);
 6. floors: ``nta``, ``hearing_notice``, ``eviction_summons``, ``uscis_noid``, ``utility_shutoff``,
    ``pay_or_quit`` never below ``high``;
 7. no verified date drives it but ``unverified[]`` holds a dated demand (a quote that did not
@@ -320,6 +323,8 @@ def compute_urgency(
             }
             cand = _pick(estimated, levels)
             iso = cand.when.isoformat()
+            # ``date == date_iso`` (both ISO) is the client's signal that the banner date is an
+            # estimate it writes out in the reader's language (features/analysis/estimatedDate.ts).
             result = _urgency(
                 levels[id(cand)], KEY_MEDIUM_ESTIMATED, cand=cand,
                 params={"date": iso, "date_iso": iso}, verify=verify,

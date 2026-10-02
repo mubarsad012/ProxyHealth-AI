@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { AnalysisResult } from '@/api/types';
 import SourceRoute from '@/app/result/[id]/source';
 import { EmergencyCard } from '@/features/emergency';
-import { fallbackNotice } from '@/features/speech';
+import { FALLBACK_ENGLISH_KEY, fallbackNotice } from '@/features/speech';
 import { LANGUAGES } from '@/i18n/languages';
 import { bundledPackFor, EN_PACK, t, useI18n } from '@/i18n/store';
 import { resetVoicesForTests } from '@/lib/tts';
@@ -17,6 +17,7 @@ import { StorageProvider } from '@/storage/StorageProvider';
 import { useSession } from '@/store/session';
 
 import inovaEn from '../../../assets/fixtures/inova_final_notice.result.en.json';
+import { pageImageFor } from './pageImages';
 import { loadStoredPages } from './storedPages';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -79,13 +80,19 @@ afterEach(() => {
 });
 
 describe('kept page images of a saved paper', () => {
-  it('loads stored page files in page order and stops at the first gap', async () => {
+  it('loads stored page files at their page number; a gap stays a quote-only placeholder (CL-077)', async () => {
     const vault = fakeVault(null, [page(2), page(1), page(4)], { 'p1.jpg': 'file:///v/p1.jpg', 'p2.jpg': 'file:///v/p2.jpg', 'p4.jpg': 'file:///v/p4.jpg' });
     const pages = await loadStoredPages(vault, 'doc-1');
-    expect(pages.map((p) => p.uri)).toEqual(['file:///v/p1.jpg', 'file:///v/p2.jpg']);
+    expect(pages.map((p) => p.uri)).toEqual(['file:///v/p1.jpg', 'file:///v/p2.jpg', '', 'file:///v/p4.jpg']);
     expect(pages[0]).toMatchObject({ id: 'doc-1-p1', mimeType: 'image/jpeg', rotation: 0, masks: [] });
+    // Page 1 was masked and not kept: page 2 keeps its own image, page 1 is quote-only.
     const missing = fakeVault(null, [page(1), page(2)], { 'p1.jpg': null, 'p2.jpg': 'file:///v/p2.jpg' });
-    expect(await loadStoredPages(missing, 'doc-1')).toEqual([]);
+    const slots = await loadStoredPages(missing, 'doc-1');
+    expect(slots.map((p) => p.uri)).toEqual(['', 'file:///v/p2.jpg']);
+    const a = analysis();
+    delete (a as { page_thumbnails?: unknown }).page_thumbnails;
+    expect(pageImageFor(a, slots, 1)).toBeNull();
+    expect(pageImageFor(a, slots, 2)?.uri).toBe('file:///v/p2.jpg');
   });
 
   it('S8 shows the kept page image for a vault paper (no "not kept" line)', async () => {
@@ -148,7 +155,10 @@ describe('honest TTS line outside S7', () => {
     const speaker = within(getByTestId(`source-block-${firstBlock.id}`)).getAllByLabelText(t('btn.read_aloud'))[0];
     await fireEvent.press(speaker);
     const notice = await findByTestId('tts-fallback-notice');
-    expect(notice).toHaveTextContent(t('tts.fallback_offer', { language: LANGUAGES.es.name_native, fallback: 'English' }));
+    // The fallback IS English, so the line offers English once ("… Hear it in English?"), never
+    // "Hear it in English or English?" (`tts.fallback_offer_english`, keys-2c-mobilescan.json).
+    expect(notice).toHaveTextContent(t(FALLBACK_ENGLISH_KEY, { language: LANGUAGES.es.name_native }));
+    expect(notice).not.toHaveTextContent(t('tts.fallback_offer', { language: LANGUAGES.es.name_native, fallback: 'English' }));
   });
 
   it('S19 opened from Home in Dari shows the Farsi-voice line up front', async () => {

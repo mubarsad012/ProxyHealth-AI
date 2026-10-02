@@ -173,7 +173,18 @@ def test_estimated_dates_are_capped_at_medium() -> None:
     out = run(DT.insurance_denial, CAT.medical, dated(3, "response_due", kind=DateKind.estimated))
     assert out.urgency.level is UrgencyLevel.medium
     assert out.urgency.headline_key == "urgency.medium.estimated"
-    assert out.urgency.headline_params["date"] == (TODAY + timedelta(days=3)).isoformat()
+    # ``date == date_iso`` (ISO) marks the estimate; the client writes it out in the reader's
+    # language (features/analysis/estimatedDate.ts ``localizeUrgencyDate``).
+    iso = (TODAY + timedelta(days=3)).isoformat()
+    assert out.urgency.headline_params == {"date": iso, "date_iso": iso}
+
+
+def test_estimated_headline_keeps_iso_even_with_a_readable_estimate_line() -> None:
+    d = dated(20, "response_due", kind=DateKind.estimated)
+    assert d.date is not None
+    d = d.model_copy(update={"date": d.date.model_copy(update={"localized_line": "10/14/2026"})})
+    out = run(DT.insurance_denial, CAT.medical, d)
+    assert out.urgency.headline_params == {"date": "2026-10-14", "date_iso": "2026-10-14"}
 
 
 @pytest.mark.parametrize("doc", sorted(u.FLOORS))

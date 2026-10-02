@@ -105,17 +105,27 @@ function dedupeResources(resources: Resource[]): Resource[] {
   return out.slice(0, MAX_RESOURCES);
 }
 
-function dateLines(analysis: AnalysisResult, t: TranslateFn): string[] {
+/**
+ * One line per verified dated demand. The label is the date exactly as PRINTED (`value_verbatim`);
+ * the server's `localized_line` (e.g. Persian digits) is only ever ADDED after it in parentheses,
+ * never substituted for it (D-26) — the clerk and the user must see the same date the paper shows.
+ * A demand with no printed value gets no date label (a localized line alone is never a label).
+ */
+export function dateLines(analysis: AnalysisResult, t: TranslateFn): string[] {
   const out: string[] = [];
   for (const d of analysis.demands ?? []) {
     if (!d.verified) continue;
     const dated = d.date !== null || d.kind === 'deadline' || d.kind === 'relative_deadline' || d.kind === 'appointment';
     if (!dated) continue;
-    let label = d.date?.localized_line || d.value_verbatim || '';
-    if (!label) continue;
+    const printed = (d.value_verbatim ?? '').trim();
+    if (!printed) continue;
+    let label = printed;
     if (d.date?.kind === 'estimated') label = `${t('demand.estimate_prefix')} ${label}`;
-    if (d.date?.time_text) label = `${label} ${d.date.time_text}`;
-    out.push(d.text.includes(label) ? d.text : `${label} — ${d.text}`);
+    const time = d.date?.time_text?.trim();
+    if (time && !printed.includes(time)) label = `${label} ${time}`;
+    const localized = (d.date?.localized_line ?? '').trim();
+    const extra = localized && localized !== printed && !d.text.includes(localized) ? ` (${localized})` : '';
+    out.push(d.text.includes(label) ? `${d.text}${extra}` : `${label}${extra} — ${d.text}`);
   }
   return out;
 }

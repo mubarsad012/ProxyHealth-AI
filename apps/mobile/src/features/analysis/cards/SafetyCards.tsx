@@ -24,6 +24,11 @@ export function sortRedFlags(flags: readonly RedFlag[]): RedFlag[] {
   return flags.slice().sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
+/** True when the flag is shown as fixed copy (UI pack language), false for model text. */
+export function redFlagIsFixedCopy(f: RedFlag): boolean {
+  return f.kind === 'injection_suspected' || Boolean(f.fixed_copy_key && keyExists(f.fixed_copy_key));
+}
+
 /** Fixed copy for a flag when it has one (never model text for fixed notices). */
 export function redFlagText(f: RedFlag, t: TFunction): string {
   if (f.kind === 'injection_suspected') return t('warning.injection_masked');

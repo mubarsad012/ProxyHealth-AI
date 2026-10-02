@@ -3,9 +3,9 @@
   "category": "other",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "Hello. I speak English. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
+    "english": "Hello. I speak English. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you.",
     "need_line_source": "template",
-    "translated": "Hello. I speak English. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+    "translated": "Hello. I speak English. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [],

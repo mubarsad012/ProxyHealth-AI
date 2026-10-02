@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "task": "clerk_translate",
+  "language_tag": "prs",
+  "english": "Hello. I speak Dari. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you.",
+  "translated": "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک اطلاعیه حضور (Notice to Appear) از Executive Office for Immigration Review - Immigration Court. در این مورد کمک لازم دارم: یک اطلاعیه حضور در محکمه مهاجرت - تأیید تاریخ جلسه و پیدا کردن یک وکیل. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
+}

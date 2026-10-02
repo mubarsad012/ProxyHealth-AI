@@ -14,7 +14,7 @@
   "translated_pages": [
     {
       "page": 1,
-      "text": "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: 29 de septiembre de 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
+      "text": "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: September 29, 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
     }
   ],
   "summary_title": "Carta que pide tarjetas de regalo y dice ser de inmigración",
@@ -126,7 +126,7 @@
     }
   ],
   "questions_to_ask": [],
-  "clerk_need_en": "understanding a paper I received",
+  "clerk_need_en": "reading a paper I got",
   "emergency_terms_found": [],
   "is_likely_scam": true,
   "scam_signals": [

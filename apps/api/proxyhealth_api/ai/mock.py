@@ -9,9 +9,14 @@ output (``legibility=poor``, ``readable_reason="mock_no_match"``). A matched fix
 ``out.<target_language>.json`` when recorded, otherwise its English output with a visible ``⟦tag⟧``
 marker on every user-facing string. ``troubleshoot`` does the same against screenshot fixtures.
 ``chat`` answers from the request's ``AnalysisContext`` only (``demo/chat_mock.py``). Language
-packs are pseudo-localised; small tasks return fixed, validator-clean shapes.
+packs are pseudo-localised. ``clerk_translate`` serves the recorded translation of exactly that
+English card (``data/fixtures/<id>/clerk.<lang>.json``, AI_PROMPTS §5.5.4) — so a sample read in
+a recorded language shows a real "What this card says" — and the ``⟦tag⟧`` pseudo text only when
+no recording of that card in that language exists. Small tasks return fixed, validator-clean
+shapes.
 
-Nothing is logged or stored: the page bytes are hashed in memory and dropped (ARCHITECTURE §7).
+Nothing is logged or stored: the page bytes are hashed in memory and dropped (ARCHITECTURE §7);
+a page that must be hashed (no ``demo_sample_id``) is handled off the event loop.
 Mock is never a silent fallback for a real request — it is only built when ``AI_PROVIDER=mock``.
 """
 
@@ -66,6 +71,8 @@ MOCK_MODEL_ID = "mock"
 # BUILD_PLAN §5.8: base language subtags written right-to-left.
 RTL_BASES = frozenset({"ar", "prs", "ps", "fa", "ur", "he", "rhg", "ug", "sd", "ckb"})
 _CALL1_FIELDS = frozenset({"legibility", "readable_reason", "blocks"})
+# Reading tasks that may dHash the first page against the fixtures (no demo_sample_id).
+_HASHING_TASKS = frozenset({Task.analyze_single, Task.explain, Task.transcribe, Task.troubleshoot})
 _DOC_TYPE_RE = re.compile(r"\b(" + "|".join(sorted(DocumentType, key=len, reverse=True)) + r")\b")
 
 
@@ -132,8 +139,9 @@ def resolve_language(query: str) -> LanguageResolveOut:
     )  # fmt: skip
 
 
-def pseudo_pack(
-    tag: str, strings: Mapping[str, str], hints: Mapping[str, str]
+def _pack(
+    tag: str, values: Mapping[str, str], hints: Mapping[str, str], *, confidence: Confidence,
+    note: str,
 ) -> LanguagePackModelOut:
     row = language_table().get(tag) or {}
     return LanguagePackModelOut(
@@ -143,11 +151,28 @@ def pseudo_pack(
         direction=direction_for(tag),
         script=row.get("script"),
         digit_system=_digit_system(tag),
-        strings=[KeyValue(key=k, value=marker(tag) + v) for k, v in strings.items()],
+        strings=[KeyValue(key=k, value=v) for k, v in values.items()],
         fallback_keys=[],
-        confidence=Confidence.low,
-        notes_for_reviewer="Mock pseudo-localization; not a translation.",
+        confidence=confidence,
+        notes_for_reviewer=note,
     )
+
+
+def pseudo_pack(
+    tag: str, strings: Mapping[str, str], hints: Mapping[str, str]
+) -> LanguagePackModelOut:
+    """``"⟦<tag>⟧ " + english`` per key (BUILD_PLAN §5.8): visibly not a translation."""
+    values = {k: marker(tag) + v for k, v in strings.items()}
+    return _pack(tag, values, hints, confidence=Confidence.low,
+                 note="Mock pseudo-localization; not a translation.")  # fmt: skip
+
+
+def recorded_pack(
+    tag: str, key: str, translated: str, hints: Mapping[str, str]
+) -> LanguagePackModelOut:
+    """A recorded sample translation (``clerk.<tag>.json``) served as the one-line answer."""
+    return _pack(tag, {key: translated}, hints, confidence=Confidence.high,
+                 note="Mock: recorded sample clerk-card translation.")  # fmt: skip
 
 
 class MockProvider:
@@ -233,6 +258,22 @@ class MockProvider:
         question = hints.get("question") or (texts[-1] if texts else "")
         return chat_answer(ctx, question, hints.get("target_language") or "en")
 
+    def clerk_translate(
+        self, parts: Sequence[Part], hints: Mapping[str, str]
+    ) -> LanguagePackModelOut:
+        """One key: the recorded translation of exactly this English card in this language
+        (any document fixture's ``clerk.<tag>.json``), else ``"⟦<tag>⟧ " + english``."""
+        tag = hints.get("language_tag") or "x-unknown"
+        strings = _strings_to_translate(parts, hints)
+        if not strings:
+            english = hints.get("english") or (_texts(parts) or [""])[-1]
+            strings = {hints.get("key") or "clerk_message": english}
+        key, english = next(iter(strings.items()))
+        recorded = self.fixtures.clerk_translation(tag, english)
+        if recorded is not None:
+            return recorded_pack(tag, key, recorded, hints)
+        return pseudo_pack(tag, {key: english}, hints)
+
     @staticmethod
     def rewrite(parts: Sequence[Part], hints: Mapping[str, str]) -> RewriteOut:
         text_parts = _texts(parts)
@@ -261,13 +302,7 @@ class MockProvider:
                 tag = hints.get("language_tag") or "x-unknown"
                 return pseudo_pack(tag, _strings_to_translate(parts, hints), hints)
             case Task.clerk_translate:
-                tag = hints.get("language_tag") or "x-unknown"
-                strings = _strings_to_translate(parts, hints)
-                if not strings:
-                    english = hints.get("english") or (_texts(parts) or [""])[-1]
-                    strings = {hints.get("key") or "clerk_message": english}
-                first = next(iter(strings.items()))
-                return pseudo_pack(tag, dict([first]), hints)
+                return self.clerk_translate(parts, hints)
             case Task.resolve_language:
                 query = hints.get("language_query") or (_texts(parts) or [""])[-1]
                 return resolve_language(query)
@@ -294,7 +329,12 @@ class MockProvider:
         lo, hi = self.settings.mock_latency_min_ms, self.settings.mock_latency_max_ms
         if hi > 0:
             await asyncio.sleep(random.uniform(min(lo, hi), hi) / 1000)  # noqa: S311
-        parsed = self.build(task, parts, hints or {})
+        hints = dict(hints or {})
+        if task in _HASHING_TASKS and not hints.get("demo_sample_id") and _first_media(parts):
+            # The dHash decode + resize of an uploaded page is CPU work: keep it off the loop.
+            parsed = await asyncio.to_thread(self.build, task, parts, hints)
+        else:
+            parsed = self.build(task, parts, hints)
         return StructuredResult(
             parsed=parsed,
             raw_text=parsed.model_dump_json(),
@@ -306,4 +346,12 @@ class MockProvider:
         )
 
 
-__all__ = ["MOCK_MODEL_ID", "RTL_BASES", "MockProvider", "direction_for", "resolve_language"]
+__all__ = [
+    "MOCK_MODEL_ID",
+    "RTL_BASES",
+    "MockProvider",
+    "direction_for",
+    "pseudo_pack",
+    "recorded_pack",
+    "resolve_language",
+]

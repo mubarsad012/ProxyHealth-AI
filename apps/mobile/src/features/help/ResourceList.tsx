@@ -1,5 +1,5 @@
 // Match results grouped "Near you" / "Anywhere in the U.S." (by `serves.scope`), then
-// "Always available" (`national_fallbacks`), then `notes_keys` info lines and the fixed
+// "Help anywhere in the US" (`national_fallbacks`), then `notes_keys` info lines and the fixed
 // general-information disclaimer (PRODUCT_SPEC S11). Broken links are never shown.
 
 import { StyleSheet, View } from 'react-native';

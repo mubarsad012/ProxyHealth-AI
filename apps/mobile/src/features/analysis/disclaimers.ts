@@ -69,7 +69,9 @@ export function resultBanners(a: AnalysisResult, ui: BannerInputs): BannerSpec[]
   if (has('document_language_differs')) {
     out.push({
       key: 'banner.doc_language_differs',
-      vars: { doc_language: languageName(a.detected_language), ui_language: languageName(ui.uiTag) },
+      // "I explained it in {ui_language}": the language the result is written in, which the S5
+      // output-language chip may have set apart from the UI language.
+      vars: { doc_language: languageName(a.detected_language), ui_language: languageName(a.target_language || ui.uiTag) },
       tone: 'info',
     });
   }

@@ -8,7 +8,7 @@ import { resolveVoice, type ResolvedVoice } from '@/lib/tts';
 
 import { fallbackNotice } from './fallback';
 
-export { fallbackNotice, hasEnglishVoice, languageEntryFor, languageName } from './fallback';
+export { FALLBACK_ENGLISH_KEY, fallbackNotice, hasEnglishVoice, languageEntryFor, languageName } from './fallback';
 export { SpeakRow, type SpeakRowProps } from './SpeakRow';
 export { useSequentialSpeech, type SequentialSpeech } from './sequential';
 
@@ -29,21 +29,25 @@ export function useTtsFallbackNotice(lang?: string): { notice: string | null; on
 /**
  * The honest line for a screen whose speakers read in `lang` (S7 cards, "Read all aloud"): the
  * voice is resolved once up front, so the user learns before tapping that e.g. Dari will be read
- * with a Farsi voice. Null while resolving and when the pack's own voice exists.
+ * with a Farsi voice. Null while resolving and when the pack's own voice exists. `null` resolves
+ * nothing (a screen's optional second reading language, e.g. the UI pack when it differs from
+ * the paper's output language).
  */
-export function useVoiceNotice(lang: string): string | null {
+export function useVoiceNotice(lang: string | null): string | null {
   const t = useT();
-  const [resolved, setResolved] = useState<ResolvedVoice | null>(null);
+  // Keyed by language, so a voice resolved for an earlier language is never reported for this one.
+  const [resolved, setResolved] = useState<{ lang: string; voice: ResolvedVoice } | null>(null);
   useEffect(() => {
+    if (!lang) return undefined;
     let cancelled = false;
     void resolveVoice(lang)
       .then((v) => {
-        if (!cancelled) setResolved(v);
+        if (!cancelled) setResolved({ lang, voice: v });
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [lang]);
-  return fallbackNotice(resolved, lang, t);
+  return lang && resolved?.lang === lang ? fallbackNotice(resolved.voice, lang, t) : null;
 }

@@ -5,7 +5,7 @@
     "appended_line_keys": [],
     "english": "Hello. I speak Spanish. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a jury summons from Circuit Court of Sample County, Virginia. I need help with: a jury summons - answering the form before its due date. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: una citación para jurado de Circuit Court of Sample County, Virginia. Necesito ayuda con: una citación para jurado - contestar el formulario antes de su fecha límite. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -35,7 +35,7 @@
       "span_ids": [
         "p1b6"
       ],
-      "text": "Conteste el cuestionario y envíelo antes del 23 de octubre de 2026.",
+      "text": "Conteste el cuestionario y envíelo antes del October 23, 2026.",
       "value_verbatim": "October 23, 2026",
       "verification_note": "exact",
       "verified": true
@@ -66,7 +66,7 @@
       "span_ids": [
         "p1b7"
       ],
-      "text": "La citación da como fecha para presentarse el 16 de noviembre de 2026 a las 8:00 AM.",
+      "text": "La citación da como fecha para presentarse el November 16, 2026 a las 8:00 AM.",
       "value_verbatim": "November 16, 2026",
       "verification_note": "exact",
       "verified": true
@@ -294,7 +294,7 @@
         "p1b6",
         "p1b9"
       ],
-      "text": "Conteste cada pregunta del cuestionario y envíelo por correo antes del 23 de octubre de 2026."
+      "text": "Conteste cada pregunta del cuestionario y envíelo por correo antes del October 23, 2026."
     },
     {
       "demand_id": "d3",
@@ -426,7 +426,7 @@
   "sender_as_written": "Circuit Court of Sample County, Virginia",
   "sender_kind": "court",
   "summary": {
-    "body": "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del 23 de octubre de 2026 y presentarse el 16 de noviembre de 2026 a las 8:00 AM.",
+    "body": "Esta es una citación para servir como jurado de la Corte de Circuito del Condado de Sample. Le pide contestar un formulario antes del October 23, 2026 y presentarse el November 16, 2026 a las 8:00 AM.",
     "body_en": "This is a jury summons from the Circuit Court of Sample County. It asks you to answer a form by October 23, 2026 and to report on November 16, 2026 at 8:00 AM.",
     "span_ids": [
       "p1b1",
@@ -439,7 +439,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: 25 de septiembre de 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del 23 de octubre de 2026.\nFecha para presentarse: 16 de noviembre de 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
+      "text": "Corte de Circuito del Condado de Sample, Virginia\nOficina del Administrador del Jurado\nFecha: September 25, 2026\nCITACIÓN PARA SERVICIO DE JURADO\nPor la presente se le cita para presentarse al servicio de jurado.\nComplete el Cuestionario de Calificación del Jurado y devuélvalo antes del October 23, 2026.\nFecha para presentarse: November 16, 2026 a las 8:00 AM, Sala de Reunión del Jurado, Palacio de Justicia del Condado de Sample.\nPregunta 4. ¿Es usted ciudadano de los Estados Unidos? [ ] Sí [ ] No\nConteste cada pregunta con la verdad. Si no devuelve el cuestionario, puede recibir una multa.\nPara pedir otra fecha o una excusa, llame a la Oficina del Jurado al (703) 555-0181."
     }
   ],
   "translation_confidence": "medium",

@@ -1,34 +1,22 @@
 // Kept page images of a saved paper (PRODUCT_SPEC S7 "Data": page images come from session.pages,
 // vault files via `vault.pages.uri`, or `page_thumbnails`). Stored pages are numbered from the
-// session index (`page: i + 1`, WP6 `buildStoredDocument`) and `pageImageFor` indexes by position,
-// so only the run of pages 1..n without a gap is returned: a later page after a missing file falls
-// back to quote-only rather than showing the wrong page.
+// session index (`page: i + 1`, WP6 `buildStoredDocument`), and a page whose "Hide parts" boxes
+// were not burned into its pixels is not stored, so a saved paper can have a gap (page 1 masked,
+// pages 2-3 kept). `pageImageFor` indexes by position, so every stored page sits at index
+// `page - 1` and a gap holds an empty-`uri` placeholder (`features/vault/pages.ts`
+// `loadStoredPageSlots`, `isPageGap`): the later pages keep their images and the gap is quote-only
+// (CL-077).
 
 import { useEffect, useState } from 'react';
 
-import { useVaultVersion } from '@/features/vault';
-import type { StoredPage, Vault } from '@/storage/index';
+import { loadStoredPageSlots, useVaultVersion } from '@/features/vault';
+import type { Vault } from '@/storage/index';
 import { useVault } from '@/storage/StorageProvider';
 import type { CapturedPage } from '@/store/session';
 
-/** Stored page files as capture pages, in page order, stopping at the first gap. */
-export async function loadStoredPages(vault: Vault, documentId: string): Promise<CapturedPage[]> {
-  const stored: StoredPage[] = [...(await vault.pages.list(documentId))].sort((a, b) => a.page - b.page);
-  const out: CapturedPage[] = [];
-  for (const p of stored) {
-    if (p.page !== out.length + 1) break;
-    const uri = await vault.pages.uri(p);
-    if (!uri) break;
-    out.push({
-      id: `${documentId}-p${p.page}`,
-      uri,
-      mimeType: 'image/jpeg',
-      rotation: 0,
-      masks: [],
-      source: 'library',
-    });
-  }
-  return out;
+/** Stored page files as capture pages at index `page - 1`; a gap is an empty-`uri` placeholder. */
+export function loadStoredPages(vault: Vault, documentId: string): Promise<CapturedPage[]> {
+  return loadStoredPageSlots(vault, documentId);
 }
 
 const NONE: CapturedPage[] = [];

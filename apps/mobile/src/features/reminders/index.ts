@@ -9,10 +9,24 @@ export {
   rescheduleLostReminders,
   remindersApi,
   remindersDeps,
+  retimeRemindersForZone,
+  syncRemindersAtStart,
   useReminders,
+  zoneStore,
   type RemindersApi,
   type ScheduleOutcome,
 } from './useReminders';
+export { startReminderSync } from './useReminderTapRouting';
+export {
+  deviceZone,
+  retimedFireAt,
+  retimeForZoneChange,
+  slotOfFireTime,
+  zoneChanged,
+  ZONE_KEY,
+  type ZoneStamp,
+  type ZoneStore,
+} from './timezone';
 export {
   computeFireTimes,
   daysUntil,
@@ -39,4 +53,4 @@ export {
   type OwnDateInput,
   type RemindersDeps,
 } from './service';
-export { icsEvents, rescheduleMissing, setReminderEnabled } from './manage';
+export { icsEvents, moveReminder, rescheduleMissing, setReminderEnabled } from './manage';

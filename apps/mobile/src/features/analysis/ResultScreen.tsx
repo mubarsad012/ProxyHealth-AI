@@ -1,12 +1,14 @@
 // S7 — Result screen (route `/result/[id]`). The analysis comes from `session.currentAnalysis`
 // first, then the vault (`useDocument`, WP6 seam); an unknown id shows the S18 copy. Sticky action
-// bar: Save (WP6 `SaveToVaultSheet`), Show the clerk, Quick sheet, Read all aloud / Stop.
+// bar: Save (WP6 `SaveToVaultSheet`, preselecting the member chosen on S5), Show the clerk, Quick
+// sheet, Read all aloud / Stop. "Ask about this paper" explains itself when the server has chat
+// off (`features.chat=false`, unpaid / mixed tier).
 
 import { type Href, router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 
-import { useApi } from '@/api/config';
+import { useApi, useServerConfig } from '@/api/config';
 import type { AnalysisResult, Demand, ResourceTag } from '@/api/types';
 import { BigButton } from '@/design/components/BigButton';
 import { openExternal } from '@/design/components/ExternalLink';
@@ -14,10 +16,12 @@ import { Screen } from '@/design/components/Screen';
 import { EmptyState } from '@/design/components/States';
 import { AppText } from '@/design/components/Text';
 import { space } from '@/design/tokens';
+import { chatAvailable } from '@/features/chat/useChat';
 import { emergencyTrigger } from '@/features/emergency';
 import { sendFeedbackOnce } from '@/features/feedback';
 import { useReminders } from '@/features/reminders';
 import { useVoiceNotice } from '@/features/speech';
+import { memberChoiceFor } from '@/features/scan/choices';
 import { useSequentialSpeech } from '@/features/speech/sequential';
 import { memberName, SaveToVaultSheet, useDocument, useMembers } from '@/features/vault';
 import { useDirection } from '@/i18n/direction';
@@ -28,7 +32,7 @@ import { useSettings } from '@/store/settings';
 
 import type { ResultViewHandlers } from './ResultView';
 import { ResultView } from './ResultView';
-import { hearItItems } from './hearItMode';
+import { hearItItems, paperSpeechLang } from './hearItMode';
 import { sampleIdForAnalysis } from './sampleOrigin';
 import { useStoredPages } from './storedPages';
 import { withLiveUrgency } from './urgencyCopy';
@@ -112,10 +116,18 @@ export function ResultScreen({ id }: { id: string }) {
   const { analysis, pages, loading, documentId } = useAnalysisFor(id);
   const { online } = useOnline();
   const client = useApi();
+  const { config } = useServerConfig();
   const reminders = useReminders();
   const speech = useSequentialSpeech();
   const hearIt = useSettings((s) => s.hearItMode);
-  const voiceNotice = useVoiceNotice(meta.tag);
+  // Honest TTS lines (D-26) for both reading languages: the model's text is read in the S5
+  // output language (`target_language`), headings and fixed copy in the UI pack.
+  const paperLang = analysis ? paperSpeechLang(analysis, meta.tag) : meta.tag;
+  const paperVoiceNotice = useVoiceNotice(paperLang);
+  const uiVoiceNotice = useVoiceNotice(paperLang === meta.tag ? null : meta.tag);
+  const voiceNotices = [paperVoiceNotice, uiVoiceNotice].filter(
+    (n, i, all): n is string => Boolean(n) && all.indexOf(n) === i,
+  );
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(documentId);
   const [notice, setNotice] = useState<string | null>(null);
@@ -185,11 +197,11 @@ export function ResultScreen({ id }: { id: string }) {
 
   const footer = (
     <View style={styles.footer}>
-      {voiceNotice ? (
-        <AppText variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
-          {voiceNotice}
+      {voiceNotices.map((n) => (
+        <AppText key={n} variant="caption" color="textMuted" role="status" testID="tts-fallback-notice">
+          {n}
         </AppText>
-      ) : null}
+      ))}
       <View style={[styles.bar, { flexDirection: dir.row }]}>
         <View style={styles.cell}>
           <BigButton
@@ -227,11 +239,12 @@ export function ResultScreen({ id }: { id: string }) {
           {notice}
         </AppText>
       ) : null}
-      <ResultView analysis={a} pages={pages} handlers={handlers} offline={!online} />
+      <ResultView analysis={a} pages={pages} handlers={handlers} offline={!online} chatUnavailable={!chatAvailable(config)} />
       {saving ? (
         <SaveToVaultSheet
           analysis={a}
           pages={pages}
+          initialMemberId={memberChoiceFor(a.analysis_id)}
           onSaved={(docId) => {
             setSaving(false);
             setSavedId(docId);

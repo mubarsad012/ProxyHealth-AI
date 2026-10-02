@@ -1213,22 +1213,30 @@ async def finish_analysis(
     # paper, or today (``prose_dates``); others are replaced or their sentence dropped.
     allowed = prose_dates.allowed_dates(demands, paper.full_text, today=today, language=detected)
     date_stats = prose_dates.ProseDateStats()
+    # D-26 / rule 7: a printed date keeps its printed spelling and digits stay Western in prose
+    # ("۱۴ اکتبر ۲۰۲۶" for the printed "October 14, 2026" is put back as printed).
+    printed = prose_dates.printed_forms(paper.full_text, detected, demands)
+
+    def as_printed(text: str, language: str = target) -> str:
+        return prose_dates.as_printed(text, printed, language)
 
     async def clean(text: str) -> str:
         text = await phrase(scrubber.scrub(text), t=t, language=target, category=category,
                             rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
-        return prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
+        return as_printed(
+            prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
+        )
 
     async def clean_demand(d: Demand) -> Demand:
         text = await phrase(scrubber.scrub(d.text), t=t, language=target, category=category,
                             rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
         d = d.model_copy(update={"text": text})
         return d.model_copy(update={
-            "text": prose_dates.check_demand_text(
+            "text": as_printed(prose_dates.check_demand_text(
                 d, allowed, t=t, language=target, stats=date_stats
-            ),
+            )),
             # D-10: every model-authored field shown to the reader passes the contact filter.
-            "documents": [x for x in scrubber.scrub_all(d.documents) if x.strip()],
+            "documents": [as_printed(x) for x in scrubber.scrub_all(d.documents) if x.strip()],
             "ambiguity_note": await clean(d.ambiguity_note) if d.ambiguity_note else None,
         })  # fmt: skip
 
@@ -1237,7 +1245,9 @@ async def finish_analysis(
                            document_type=document_type)  # fmt: skip
     summary = SummaryCard(
         title=await clean(out.summary_title), body=await clean(out.summary_body),
-        body_en=prose_dates.check_text(body_en, allowed, t=en, language="en", stats=date_stats),
+        body_en=as_printed(
+            prose_dates.check_text(body_en, allowed, t=en, language="en", stats=date_stats), "en"
+        ),
         span_ids=summary_ids,
     )  # fmt: skip
     final_demands = [await clean_demand(d) for d in demands]
@@ -1271,7 +1281,9 @@ async def finish_analysis(
     if sender and scrubber.scrub(sender) != sender:
         sender = None
     translated = [
-        p.model_copy(update={"text": scrubber.scrub_kinds(p.text, contacts_filter.CONTACT_KINDS)})
+        p.model_copy(update={
+            "text": as_printed(scrubber.scrub_kinds(p.text, contacts_filter.CONTACT_KINDS))
+        })
         for p in out.translated_pages
     ]  # fmt: skip
 

@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "task": "clerk_translate",
+  "language_tag": "prs",
+  "english": "Hello. I speak Dari. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you.",
+  "translated": "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک نامه Medicaid از Virginia Department of Medical Assistance Services. در این مورد کمک لازم دارم: یک نامه Medicaid که از من می‌خواهد آدرس خود را تا October 14, 2026 تأیید کنم. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
+}

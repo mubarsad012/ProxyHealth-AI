@@ -254,9 +254,11 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
   }, [paneHeight]);
 
   // Honest TTS line (D-26) per speaker language: the paper's own words are read in
-  // `detected_language`, translations in the UI pack. Shown above the panes, so it stays visible.
+  // `detected_language`, translations in the language they are written in — the S5 output
+  // language (`target_language`), which can differ from the UI pack. Shown above the panes.
+  const translationLang = a.target_language || meta.tag;
   const originalVoice = useTtsFallbackNotice(a.detected_language);
-  const translationVoice = useTtsFallbackNotice(meta.tag);
+  const translationVoice = useTtsFallbackNotice(translationLang);
   const voiceNotices = [originalVoice.notice, translationVoice.notice].filter(
     (n, i, all): n is string => Boolean(n) && all.indexOf(n) === i,
   );
@@ -280,7 +282,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
         <View
           onLayout={(e: LayoutChangeEvent) => setBox(e.nativeEvent.layout.width)}
           style={[styles.pageImage, { height: box ? box * aspect : 320, borderColor: colors.divider }]}>
-          <Image source={{ uri: image.uri }} contentFit="fill" style={StyleSheet.absoluteFill} accessibilityLabel={a.summary.title} />
+          <Image source={{ uri: image.uri }} cachePolicy="memory" contentFit="fill" style={StyleSheet.absoluteFill} accessibilityLabel={a.summary.title} />
           {model.blocks.map((r) =>
             r.block.bbox && box ? (
               <Pressable
@@ -322,7 +324,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
             <View style={styles.flex}>
               <AppText lang={a.target_language}>{model.pageTranslation}</AppText>
             </View>
-            <SpeakButton text={model.pageTranslation} lang={meta.tag} onResolved={translationVoice.onResolved} />
+            <SpeakButton text={model.pageTranslation} lang={translationLang} onResolved={translationVoice.onResolved} />
           </View>
         </View>
       ) : null}
@@ -356,7 +358,7 @@ export function SourceScreen({ analysis: a, pages, block, page, imagesKept = tru
                   {r.translation ?? t('source.not_translated')}
                 </AppText>
               </View>
-              {r.translation ? <SpeakButton text={r.translation} lang={meta.tag} onResolved={translationVoice.onResolved} /> : null}
+              {r.translation ? <SpeakButton text={r.translation} lang={translationLang} onResolved={translationVoice.onResolved} /> : null}
             </View>
           ) : null}
           <View style={[styles.badges, { flexDirection: dir.row }]}>

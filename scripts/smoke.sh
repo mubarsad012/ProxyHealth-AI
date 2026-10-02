@@ -50,7 +50,7 @@ echo "[smoke] starting the mock API on http://127.0.0.1:$PORT (VAR_DIR=$WORK/var
     VAR_DIR="$WORK/var" INSTALL_HASH_SECRET=smoke LOG_LEVEL=warning \
     MOCK_LATENCY_MIN_MS=0 MOCK_LATENCY_MAX_MS=20 \
     RATE_LIMIT_ANALYZE_PER_HOUR=100000 RATE_LIMIT_ANALYZE_PER_DAY=1000000 \
-    RATE_LIMIT_IP_PER_MINUTE=100000 \
+    RATE_LIMIT_IP_PER_MINUTE=100000 RATE_LIMIT_IP_PER_DAY=1000000 \
     .venv/bin/uvicorn proxyhealth_api.main:app --host 127.0.0.1 --port "$PORT" --no-access-log
 ) >"$LOG" 2>&1 &
 SERVER_PID=$!

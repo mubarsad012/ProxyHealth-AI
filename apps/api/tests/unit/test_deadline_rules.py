@@ -491,3 +491,51 @@ def test_employment_rules_never_estimate_a_debt_collectors_window(
     )  # fmt: skip
     d2 = dr.apply_deadline_rules(v.verified, v.sources, emp, t)[1]
     assert d2.date is not None and d2.date.rule_id == "osha_retaliation_30d"
+
+
+# --- Phase 2C: an estimate carries a readable line for "About {date} (estimate)" ---------------
+
+
+def test_estimated_date_carries_a_readable_line_in_every_language(
+    rules: list[DeadlineRule],
+) -> None:
+    """The estimate is printed nowhere: ``localized_line`` holds it written like the printed
+    anchor (Western digits, English month), also for Persian-digit packs (D-26, rule 7)."""
+    t = _denial_paper()
+    v = _denial_demands(t)
+    for digits in (DigitSystem.western, DigitSystem.persian, DigitSystem.eastern_arabic):
+        ctx = dr.DeadlineContext(
+            document_type=DocumentType.insurance_denial, rules=rules, today=TODAY, t=en_t(),
+            digit_system=digits,
+        )  # fmt: skip
+        notice, appeal, _ = dr.apply_deadline_rules(v.verified, v.sources, ctx, t)
+        assert appeal.date is not None and appeal.date.kind is DateKind.estimated
+        assert appeal.date.localized_line == "February 28, 2027", digits
+        # A stated date keeps its digit-localized line (or none for Western digits).
+        assert notice.date is not None
+        expected = None if digits is DigitSystem.western else dr.localize_digits(
+            "2026-09-01", digits
+        )
+        assert notice.date.localized_line == expected
+
+
+@pytest.mark.parametrize(
+    ("anchor", "anchor_iso", "expected"),
+    [
+        ("October 14, 2026", "2026-10-14", "November 13, 2026"),
+        ("Oct. 14, 2026", "2026-10-14", "November 13, 2026"),
+        ("14 October 2026", "2026-10-14", "13 November 2026"),
+        ("14 de octubre de 2026", "2026-10-14", "13 November 2026"),
+        ("10/14/2026", "2026-10-14", "11/13/2026"),
+        ("14/10/2026", "2026-10-14", "13/11/2026"),
+        ("3/4/26", "2026-03-04", "11/13/26"),
+        ("05-06-2026", "2026-05-06", "11-13-2026"),
+        ("۱۰/۱۴/۲۰۲۶", "2026-10-14", "11/13/2026"),
+        ("2026-10-14", "2026-10-14", "November 13, 2026"),
+        (None, None, "November 13, 2026"),
+    ],
+)
+def test_estimate_text_follows_the_printed_anchor(
+    anchor: str | None, anchor_iso: str | None, expected: str
+) -> None:
+    assert dr.estimate_text(date(2026, 11, 13), anchor, anchor_iso) == expected

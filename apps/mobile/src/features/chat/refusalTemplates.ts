@@ -34,3 +34,7 @@ export function starterQuestions(a: AnalysisResult, t: TFunction, max = 5): stri
   }
   return out.slice(0, max);
 }
+
+/** "Questions are off in this test build …" (keys-2c-mobilescan.json): `/v1/config`
+ *  `features.chat=false` on the unpaid / mixed tier (D-01). Shown on S9 and next to S7's Ask. */
+export const CHAT_UNAVAILABLE_KEY = 'chat.unavailable_unpaid';

@@ -5,7 +5,7 @@
     "appended_line_keys": [],
     "english": "Hello. I speak Arabic. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦ar⟧ Hello. I speak Arabic. I am here about: a notice from my landlord from Oak Hollow Property Management LLC. I need help with: a notice from my landlord about rent - what it says and the date on it. Please speak slowly or write it down. Thank you."
+    "translated": "مرحباً. أتحدث العربية. أنا هنا بخصوص: إشعار من المالك، من Oak Hollow Property Management LLC. أحتاج إلى مساعدة في: إشعار من المالك عن الإيجار - ماذا يقول والتاريخ المذكور فيه. من فضلك تكلّم ببطء أو اكتبه. شكراً."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -530,7 +530,7 @@
         },
         {
           "key": "bring_proof_rent_utilities",
-          "text_en": "Your rent and utility bills"
+          "text_en": "Your rent, power, gas and water bills"
         },
         {
           "key": "bring_notice",

@@ -14,11 +14,11 @@
   "translated_pages": [
     {
       "page": 1,
-      "text": "Servicio de Ciudadanía e Inmigración de los Estados Unidos\nDepartamento de Seguridad Nacional\nI-797E, Aviso de Acción\nFecha del aviso: 18 de julio de 2026\nNúmero de recibo: IOE0987654321\nSOLICITUD DE EVIDENCIA\nNecesitamos más evidencia antes de tomar una decisión sobre su Formulario I-485.\nDebe presentar la evidencia solicitada dentro de 87 días. Su respuesta debe recibirse a más tardar el 13 de octubre de 2026.\nPresente la siguiente evidencia:\n1. Una copia de su acta de nacimiento con una traducción certificada al inglés.\n2. Dos fotos tamaño pasaporte tomadas en los últimos 30 días.\n3. Una copia de su declaración federal de impuestos más reciente.\nColoque este aviso encima de su respuesta.\nEnvíe toda la evidencia junta en un solo paquete.\nSi no responde antes de la fecha indicada, podemos considerar su caso abandonado."
+      "text": "Servicio de Ciudadanía e Inmigración de los Estados Unidos\nDepartamento de Seguridad Nacional\nI-797E, Aviso de Acción\nFecha del aviso: July 18, 2026\nNúmero de recibo: IOE0987654321\nSOLICITUD DE EVIDENCIA\nNecesitamos más evidencia antes de tomar una decisión sobre su Formulario I-485.\nDebe presentar la evidencia solicitada dentro de 87 días. Su respuesta debe recibirse a más tardar el October 13, 2026.\nPresente la siguiente evidencia:\n1. Una copia de su acta de nacimiento con una traducción certificada al inglés.\n2. Dos fotos tamaño pasaporte tomadas en los últimos 30 días.\n3. Una copia de su declaración federal de impuestos más reciente.\nColoque este aviso encima de su respuesta.\nEnvíe toda la evidencia junta en un solo paquete.\nSi no responde antes de la fecha indicada, podemos considerar su caso abandonado."
     }
   ],
   "summary_title": "USCIS pide más papeles para su Formulario I-485",
-  "summary_body": "Esta es una Solicitud de Evidencia de USCIS. Necesitan más papeles antes de decidir sobre su Formulario I-485. Su caso no está negado. Deben recibir su respuesta antes del 13 de octubre de 2026.",
+  "summary_body": "Esta es una Solicitud de Evidencia de USCIS. Necesitan más papeles antes de decidir sobre su Formulario I-485. Su caso no está negado. Deben recibir su respuesta antes del October 13, 2026.",
   "summary_body_en": "This is a Request for Evidence from USCIS. They need more papers before they decide on your Form I-485. Your case is not denied. They must receive your answer by October 13, 2026.",
   "summary_span_ids": [
     "p1b6",
@@ -29,7 +29,7 @@
     {
       "id": "d1",
       "kind": "deadline",
-      "text": "USCIS debe recibir su respuesta antes del 13 de octubre de 2026.",
+      "text": "USCIS debe recibir su respuesta antes del October 13, 2026.",
       "value_verbatim": "October 13, 2026",
       "source_quote": "Your response must be received by October 13, 2026.",
       "span_ids": [
@@ -123,7 +123,7 @@
     },
     {
       "id": "s3",
-      "text": "Envíe todo en un solo paquete, con este aviso encima, para que llegue antes del 13 de octubre de 2026.",
+      "text": "Envíe todo en un solo paquete, con este aviso encima, para que llegue antes del October 13, 2026.",
       "kind": "mail",
       "resource_tags": [],
       "span_ids": [
@@ -164,7 +164,7 @@
   "red_flags": [],
   "questions_to_ask": [
     "¿Qué puedo enviar si no tengo mi acta de nacimiento?",
-    "¿Mi respuesta debe llegar antes del 13 de octubre o enviarse antes de esa fecha?",
+    "¿Mi respuesta debe llegar antes del October 13 o enviarse antes de esa fecha?",
     "¿Puedo enviar los papeles en más de un paquete?"
   ],
   "clerk_need_en": "a USCIS request for evidence and what I must send before the date on it",

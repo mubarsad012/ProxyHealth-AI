@@ -13,14 +13,25 @@ transcript, or today. Anything else is an invented or shifted date:
 * in other prose the sentence carrying it is dropped; a text of one sentence keeps the sentence
   with the date replaced by ``SEE_PAPER_KEY``.
 
-Each replaced or dropped span counts as a checked and rejected fact in ``verification``. Pure
-functions; nothing logged.
+Each replaced or dropped span counts as a checked and rejected fact in ``verification``.
+
+**Printed forms (D-26; AI_PROMPTS §5.0 rule 7).** A date the paper prints must also *look* as
+printed: a model that writes the printed "October 14, 2026" as "۱۴ اکتبر ۲۰۲۶" (Persian digits and
+a translated month) or "14 أكتوبر 2026" names the right day, but the reader can no longer match it
+against the paper or show it to a clerk. ``as_printed`` puts the paper's own spelling back: a date
+mention that is not printed as written, carries non-Western digits or a month name in a language
+the paper does not print (English month names are never treated as translations), and means a
+date the paper prints, is replaced by that printed spelling; every other run of non-Western digits
+(amounts, times, form and case numbers) becomes Western digits unless the paper itself prints
+that run. The localized line the app *adds* (``DateInfo.localized_line``) is code output and is
+never touched. Pure functions; nothing logged.
 """
 
 from __future__ import annotations
 
+import re
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -42,6 +53,8 @@ class DateMention:
     end: int
     dates: frozenset[date] = frozenset()
     month_days: frozenset[tuple[int, int]] = frozenset()
+    month_token: str | None = None
+    """The month word as matched (NFKC, case-folded), for named-month mentions only."""
 
 
 def _folded(text: str) -> tuple[str, list[int]]:
@@ -68,24 +81,26 @@ def find_mentions(text: str, language: str | None = None) -> list[DateMention]:
     if not text:
         return []
     s, index = _folded(text)
-    raw: list[tuple[int, int, frozenset[date], frozenset[tuple[int, int]]]] = []
+    raw: list[tuple[int, int, frozenset[date], frozenset[tuple[int, int]], str | None]] = []
 
     def add(
         m_start: int,
         m_end: int,
         dates: Iterable[date | None],
         md: Iterable[tuple[int, int]] = (),
+        token: str | None = None,
     ) -> None:
         ds = frozenset(d for d in dates if d is not None)
         mds = frozenset(md)
         if ds or mds:
-            raw.append((m_start, m_end, ds, mds))
+            raw.append((m_start, m_end, ds, mds, token))
 
     for pattern in (dr._P_DMY_NAME, dr._P_MDY_NAME):
         for m in pattern.finditer(s):
             month = dr._month_of(m.group("mon"), language)
             if month is not None:
-                add(m.start(), m.end(), [_valid(dr._year(m.group("y")), month, int(m.group("d")))])
+                day = _valid(dr._year(m.group("y")), month, int(m.group("d")))
+                add(m.start(), m.end(), [day], token=m.group("mon").rstrip("."))
     for pattern in (dr._P_ISO, dr._P_CJK, dr._P_VI):
         for m in pattern.finditer(s):
             y, mo, d = int(m.group("y")), int(m.group("m")), int(m.group("d"))
@@ -101,15 +116,15 @@ def find_mentions(text: str, language: str | None = None) -> list[DateMention]:
         month = dr._month_of(token, language)
         digits = [int(x) for x in _digit_runs(m.group(0))]
         if month is not None and digits and 1 <= digits[0] <= 31:
-            add(m.start(), m.end(), [], [(month, digits[0])])
+            add(m.start(), m.end(), [], [(month, digits[0])], token=token.rstrip("."))
     raw.sort(key=lambda r: (r[0], -(r[1] - r[0])))
     out: list[DateMention] = []
     last_end = -1
-    for start, end, ds, mds in raw:
+    for start, end, ds, mds, token in raw:
         if start < last_end:
             continue
         last_end = end
-        out.append(DateMention(index[start], index[end - 1] + 1, ds, mds))
+        out.append(DateMention(index[start], index[end - 1] + 1, ds, mds, token))
     return out
 
 
@@ -241,13 +256,139 @@ def check_demand_text(
     return _replace_spans(text, bad, t(SEE_PAPER_KEY))
 
 
+# ----------------------------------------------------------------------------- printed forms
+
+# A run of non-ASCII decimal digits, with the Arabic decimal/thousands separators (and the ASCII
+# ones) allowed between its digits: "۱٬۲۴۰٫۰۰", "١٤", "۸:۳۰" is two runs around the colon.
+_NATIVE_RUN_RE = re.compile(r"(?:(?![0-9])\d)+(?:[٫٬.,](?:(?![0-9])\d)+)*")
+_SEPARATORS = str.maketrans({"٫": ".", "٬": ","})
+# What may follow a year-less mention whose printed spelling carries the year: ", ۲۰۲۶".
+_TRAILING_YEAR_RE = re.compile(r"\s*[,،]?\s*(\d{4})(?!\d)")
+
+
+def _nfkc_fold(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
+def western_digits(text: str, keep: frozenset[str] = frozenset()) -> str:
+    """``text`` with every run of non-Western decimal digits written in Western digits (Arabic
+    ``٫``/``٬`` separators inside a run become ``.``/``,``), except runs in ``keep`` (runs the
+    paper itself prints in its own digits)."""
+    if not text or text.isascii():
+        return text
+
+    def west(m: re.Match[str]) -> str:
+        run = m.group(0)
+        return run if run in keep else ascii_digits(run).translate(_SEPARATORS)
+
+    return _NATIVE_RUN_RE.sub(west, text)
+
+
+def _month_languages(token: str | None) -> frozenset[str]:
+    if not token:
+        return frozenset()
+    return frozenset(dr._TOKEN_MONTHS.get(token, {}))
+
+
+@dataclass(frozen=True)
+class PrintedForms:
+    """How one paper prints its dates and digits: the spellings model prose must keep."""
+
+    by_date: Mapping[date, str]
+    by_month_day: Mapping[tuple[int, int], str]
+    month_languages: frozenset[str]
+    native_runs: frozenset[str]
+    folded_text: str
+
+    def is_printed(self, surface: str) -> bool:
+        return bool(surface.strip()) and _nfkc_fold(surface) in self.folded_text
+
+    def spelling_for(self, mention: DateMention) -> str | None:
+        """The paper's spelling of the date ``mention`` names, when exactly one exists."""
+        if mention.dates:
+            found = {self.by_date[d] for d in mention.dates if d in self.by_date}
+        else:
+            found = {self.by_month_day[md] for md in mention.month_days if md in self.by_month_day}
+        return found.pop() if len(found) == 1 else None
+
+    def needs_printed_form(self, surface: str, mention: DateMention) -> bool:
+        """Non-Western digits, or a month word in a language the paper does not print (English
+        month names count as printed: rule 7 keeps dates "in Latin letters")."""
+        if any(ch.isdecimal() and not ch.isascii() for ch in surface):
+            return True
+        langs = _month_languages(mention.month_token)
+        return bool(langs) and "en" not in langs and not langs & self.month_languages
+
+
+def printed_forms(
+    transcript_text: str, language: str | None = None, demands: Iterable[Demand] = ()
+) -> PrintedForms:
+    """The printed spellings of ``transcript_text``: per date (and month/day) its first printed
+    spelling — a verified demand's ``value_verbatim`` wins when it is itself one printed date —
+    the languages of the month words the paper prints and its own non-Western digit runs."""
+    by_date: dict[date, str] = {}
+    by_md: dict[tuple[int, int], str] = {}
+    full_md: set[tuple[int, int]] = set()
+    langs: set[str] = set()
+    for d in demands:
+        value = (d.value_verbatim or "").strip()
+        mentions = find_mentions(value, language) if d.verified and value else []
+        if len(mentions) == 1 and mentions[0].start == 0 and mentions[0].end == len(value):
+            for day in mentions[0].dates:
+                by_date.setdefault(day, value)
+    for m in find_mentions(transcript_text, language):
+        surface = transcript_text[m.start : m.end]
+        langs |= _month_languages(m.month_token)
+        for day in m.dates:
+            by_date.setdefault(day, surface)
+            key = (day.month, day.day)
+            if key not in full_md:  # a spelling with the year beats a year-less one
+                full_md.add(key)
+                by_md[key] = by_date[day]
+        for key in m.month_days:
+            by_md.setdefault(key, surface)
+    return PrintedForms(
+        by_date=by_date, by_month_day=by_md, month_languages=frozenset(langs),
+        native_runs=frozenset(_NATIVE_RUN_RE.findall(transcript_text)),
+        folded_text=_nfkc_fold(transcript_text),
+    )  # fmt: skip
+
+
+def as_printed(text: str, forms: PrintedForms, language: str | None = None) -> str:
+    """``text`` with the paper's own spelling of every date it prints and Western digits (module
+    docstring, "Printed forms"). A year-less mention replaced by a spelling that carries the
+    year also absorbs a following ", <that year>". Dates the paper does not print (today, an
+    estimate) keep their words; only their digits become Western."""
+    if not text or not text.strip():
+        return text
+    out = text
+    for m in sorted(find_mentions(text, language), key=lambda x: x.start, reverse=True):
+        surface = text[m.start : m.end]
+        if forms.is_printed(surface) or not forms.needs_printed_form(surface, m):
+            continue
+        spelling = forms.spelling_for(m)
+        if spelling is None:
+            continue
+        end = m.end
+        if not m.dates:
+            tail = _TRAILING_YEAR_RE.match(ascii_digits(text[end:]))
+            if tail and tail.group(1) in ascii_digits(spelling):
+                end += tail.end()
+        out = out[: m.start] + spelling + out[end:]
+    return western_digits(out, forms.native_runs)
+
+
 __all__ = [
     "SEE_PAPER_KEY",
     "AllowedDates",
     "DateMention",
+    "PrintedForms",
     "ProseDateStats",
     "allowed_dates",
+    "as_printed",
     "check_demand_text",
     "check_text",
     "find_mentions",
+    "printed_forms",
+    "western_digits",
 ]

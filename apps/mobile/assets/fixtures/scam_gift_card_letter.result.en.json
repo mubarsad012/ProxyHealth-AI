@@ -3,9 +3,9 @@
   "category": "immigration",
   "clerk_message": {
     "appended_line_keys": [],
-    "english": "Hello. I speak English. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you.",
+    "english": "Hello. I speak English. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "Hello. I speak English. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+    "translated": "Hello. I speak English. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [

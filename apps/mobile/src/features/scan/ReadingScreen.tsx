@@ -112,7 +112,7 @@ export function ReadingScreen() {
             {t('state.unreadable')}
           </AppText>
           {first && first.mimeType !== 'application/pdf' ? (
-            <Image source={{ uri: first.uri }} contentFit="contain" style={styles.page} accessibilityLabel={t('state.unreadable')} />
+            <Image source={{ uri: first.uri }} cachePolicy="memory" contentFit="contain" style={styles.page} accessibilityLabel={t('state.unreadable')} />
           ) : null}
           <BigButton label={t('btn.retake')} icon="camera" variant="primary" size={72} onPress={backToReview} />
         </View>

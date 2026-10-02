@@ -396,7 +396,7 @@
         },
         {
           "key": "bring_proof_rent_utilities",
-          "text_en": "Your rent and utility bills"
+          "text_en": "Your rent, power, gas and water bills"
         }
       ],
       "eligibility_note_key": null,
@@ -479,7 +479,7 @@
         },
         {
           "key": "bring_proof_rent_utilities",
-          "text_en": "Your rent and utility bills"
+          "text_en": "Your rent, power, gas and water bills"
         }
       ],
       "eligibility_note_key": null,
@@ -584,7 +584,7 @@
         },
         {
           "key": "bring_proof_rent_utilities",
-          "text_en": "Your rent and utility bills"
+          "text_en": "Your rent, power, gas and water bills"
         }
       ],
       "eligibility_note_key": null,

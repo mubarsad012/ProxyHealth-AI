@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { ResourceMatch } from '@/api/types';
 import { Bidi } from '@/design/components/Bidi';
 import { Card } from '@/design/components/Card';
+import { Interpolated } from '@/design/components/Interpolated';
 import { AppText } from '@/design/components/Text';
 import { useTheme } from '@/design/theme';
 import { size, space } from '@/design/tokens';
@@ -43,9 +44,15 @@ export function HelpPreview({ analysis, onSeeAll, onSetRegion }: HelpPreviewProp
               {m.resource.name}
             </Bidi>
             {why ? <AppText>{why}</AppText> : null}
-            <AppText variant="caption" color="textMuted">
-              {t('resource.verified_on', { date: m.resource.verified_on })}
-            </AppText>
+            {/* `{date}` LTR-isolated (§5.5), so an RTL pack keeps "2026-09-24" in order. */}
+            <Interpolated
+              template={t('resource.verified_on')}
+              vars={{ date: m.resource.verified_on }}
+              ltrKeys={['date']}
+              variant="caption"
+              color="textMuted"
+              testID={`help-verified-${m.resource.id}`}
+            />
           </View>
         );
       })}

@@ -5,7 +5,10 @@
 // A-numbers / receipt numbers in the stored copy. A page with "Hide parts" boxes keeps its image
 // only on web, where `preparePages` burned the boxes into the display page (D-19; native sends
 // `masks[]` and keeps the original photo in the session, so that page is saved without an image).
-// Works for "Save to read later" too (analysis null + an explicit `documentId`).
+// Three uses, one sheet (the member choice defaults to "Me"):
+//   • a result (`analysis`);
+//   • "Save to read later" (`readLaterId`, no `analysis` — the row is stored with `analysis: null`);
+//   • a caller-built copy (`buildDocument`, e.g. S16 "Save as proof"), built for the chosen member.
 
 import { useState } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native';
@@ -15,6 +18,7 @@ import { BigButton } from '@/design/components/BigButton';
 import { AppText } from '@/design/components/Text';
 import { useDirection } from '@/i18n/direction';
 import { useT } from '@/i18n/useT';
+import type { StoredDocument, StoredPageInput } from '@/storage/index';
 import { useVault } from '@/storage/StorageProvider';
 import type { CapturedPage } from '@/store/session';
 import { useSettings } from '@/store/settings';
@@ -28,20 +32,48 @@ import { Sheet } from './Sheet';
 import { bumpVault } from './store';
 
 export interface SaveToVaultSheetProps {
-  analysis: AnalysisResult;
-  pages: CapturedPage[];
-  onSaved(documentId: string): void;
+  /** The result being saved. Omitted (or null) for "Save to read later" and `buildDocument` saves. */
+  analysis?: AnalysisResult | null;
+  /** Session pages (page images follow Settings → "Keep page images"). */
+  pages?: CapturedPage[];
+  /** `savedFor` is the chosen member's display name (for "Saved for {member}"). */
+  onSaved(documentId: string, savedFor: string): void;
   onCancel(): void;
   /** "Save to read later": no analysis yet; the caller supplies the id. */
   readLaterId?: string;
   /** Preselected member (e.g. chosen on S5). */
   initialMemberId?: string | null;
+  /** Caller-built stored copy for the chosen member (S16 "Save as proof"). */
+  buildDocument?(memberId: string, now: Date): { doc: StoredDocument; pages: StoredPageInput[] };
+}
+
+/** What the sheet will write for `memberId`, or null when it has nothing to save. */
+export function documentToSave(
+  props: Pick<SaveToVaultSheetProps, 'analysis' | 'pages' | 'readLaterId' | 'buildDocument'>,
+  opts: { memberId: string; keepPages: boolean; hideIds: boolean; now: Date; t: (key: string, vars?: Record<string, string | number>) => string; web: boolean },
+): { doc: StoredDocument; pages: StoredPageInput[] } | null {
+  if (props.buildDocument) return props.buildDocument(opts.memberId, opts.now);
+  const analysis = props.readLaterId ? null : (props.analysis ?? null);
+  if (!analysis && !props.readLaterId) return null;
+  return buildStoredDocument({
+    analysis,
+    pages: props.pages ?? [],
+    memberId: opts.memberId,
+    keepPages: opts.keepPages,
+    hideIds: opts.hideIds,
+    now: opts.now,
+    t: opts.t,
+    documentId: props.readLaterId,
+    // Web result pages come from `preparePages` (boxes burned on a canvas); "read later" pages
+    // and every native page still hold the original pixels.
+    masksBurnedIn: opts.web && !props.readLaterId,
+  });
 }
 
 const PENDING_ID = '__pending_new_member__';
 
 export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
-  const { analysis, pages, onSaved, onCancel, readLaterId, initialMemberId } = props;
+  const { analysis, onSaved, onCancel, readLaterId, initialMemberId, buildDocument } = props;
   const t = useT();
   const dir = useDirection();
   const vault = useVault();
@@ -53,9 +85,10 @@ export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
   const [pending, setPending] = useState<{ name: string; color: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const canSave = Boolean(buildDocument || readLaterId || analysis);
 
   const save = async () => {
-    if (busy) return;
+    if (busy || !canSave) return;
     setBusy(true);
     setFailed(false);
     try {
@@ -66,27 +99,16 @@ export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
         memberId = created.id;
         savedFor = created.name;
       }
-      const { doc, pages: pageInputs } = buildStoredDocument({
-        analysis: readLaterId ? null : analysis,
-        pages,
-        memberId,
-        keepPages,
-        hideIds,
-        now: new Date(),
-        t,
-        documentId: readLaterId,
-        // Web result pages come from `preparePages` (boxes burned on a canvas); "read later" pages
-        // and every native page still hold the original pixels.
-        masksBurnedIn: Platform.OS === 'web' && !readLaterId,
-      });
-      await vault.documents.save(doc, pageInputs);
+      const built = documentToSave(props, { memberId, keepPages, hideIds, now: new Date(), t, web: Platform.OS === 'web' });
+      if (!built) throw new Error('nothing to save');
+      await vault.documents.save(built.doc, built.pages);
       bumpVault();
       try {
         AccessibilityInfo.announceForAccessibility(savedAnnouncement(t, savedFor));
       } catch {
         // best-effort announcement
       }
-      onSaved(doc.id);
+      onSaved(built.doc.id, savedFor);
     } catch {
       setFailed(true);
     } finally {
@@ -130,7 +152,7 @@ export function SaveToVaultSheet(props: SaveToVaultSheetProps) {
               icon="check"
               variant="primary"
               size={72}
-              disabled={busy}
+              disabled={busy || !canSave}
               onPress={() => void save()}
             />
             <BigButton label={t('btn.cancel')} variant="secondary" size={56} disabled={busy} onPress={onCancel} />

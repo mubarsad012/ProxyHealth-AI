@@ -7,21 +7,24 @@
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, StyleSheet } from 'react-native';
 
 import type { ApiClient } from '@/api/client';
-import type { AnalysisResult, ChatAnswer, ChatMessage, ChatRequest, PageText } from '@/api/types';
+import { ApiError } from '@/api/errors';
+import type { AnalysisResult, ChatAnswer, ChatMessage, ChatRequest, PageText, ServerConfig } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
+import { textSizeFactor } from '@/design/theme';
 import { bundledPackFor, EN_PACK, t, translate, useI18n } from '@/i18n/store';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
 import medicaidEn from '../../../assets/fixtures/medicaid_address_confirmation.result.en.json';
 import { forgetSampleOrigins, rememberSampleOrigin } from '@/features/analysis/sampleOrigin';
 
 import { answerAnnouncement, assistantLines, ChatScreen, turnListLiveProps } from './ChatScreen';
 import { buildChatRequest, compactOriginalText, historyForRequest } from './context';
-import { referShowsHelp, starterQuestions } from './refusalTemplates';
-import { useChatHistory } from './useChat';
+import { CHAT_UNAVAILABLE_KEY, referShowsHelp, starterQuestions } from './refusalTemplates';
+import { chatAvailable, useChatHistory } from './useChat';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -277,5 +280,76 @@ describe('chat answers are announced (S9 "new bubbles announced", COMPLIANCE §1
   it('the announcement is the answer line without bidi controls, or the fixed template', () => {
     expect(answerAnnouncement(answer({ answer: '\u2066October 14\u2069 is the date.' }), t)).toBe('October 14 is the date.');
     expect(answerAnnouncement(answer({ answer: '', not_in_document: true }), t)).toBe(t('chat.not_in_document'));
+  });
+});
+
+describe('S19 first (D-14) and chat off on the unpaid tier (D-01)', () => {
+  function offConfig(chat: boolean) {
+    return { features: { chat, real_documents_allowed: chat }, limits: {} } as unknown as ServerConfig;
+  }
+
+  beforeEach(() => {
+    useSession.getState().setServerConfig(null);
+    useSettings.setState({ textSize: 'normal' });
+  });
+
+  it('an emergency answer opens S19 before the answer joins the chat, and is not read out over it', async () => {
+    const spy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    let turnsWhenOpened = -1;
+    (router.push as jest.Mock).mockImplementation(() => {
+      turnsWhenOpened = useChatHistory.getState().byAnalysis[analysis.analysis_id]?.length ?? 0;
+    });
+    const { client } = chatClient(() =>
+      answer({ safety: { emergency: true, emergency_kinds: [], credential_or_payment_request: false } }),
+    );
+    const screen = await renderChat(client, 'I have chest pain, what does this paper say?');
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/emergency'));
+    expect(turnsWhenOpened).toBe(1); // only the question: the card came first
+    await waitFor(() => expect(screen.getByText('The paper asks you to send proof of address.')).toBeTruthy());
+    expect(spy).toHaveBeenCalledWith(t('a11y.emergency_shown'));
+    expect(spy).not.toHaveBeenCalledWith('The paper asks you to send proof of address.');
+    spy.mockRestore();
+    (router.push as jest.Mock).mockReset();
+  });
+
+  it('features.chat=false: a plain line instead of the box; nothing is sent', async () => {
+    useSession.getState().setServerConfig(offConfig(false));
+    const { client, log } = chatClient(() => answer());
+    const screen = await renderChat(client, 'What does this paper ask for?');
+    expect(screen.getByTestId('chat-unavailable')).toHaveTextContent(t(CHAT_UNAVAILABLE_KEY));
+    expect(screen.queryByTestId('chat-input')).toBeNull();
+    expect(screen.queryByLabelText(starterQuestions(analysis, t)[0])).toBeNull();
+    await act(async () => undefined);
+    expect(log).toHaveLength(0);
+    expect(chatAvailable(offConfig(false))).toBe(false);
+    expect(chatAvailable(offConfig(true))).toBe(true);
+    expect(chatAvailable(null)).toBe(true); // unknown config: keep the box, the request reports
+  });
+
+  it('a 403 unpaid answer turns the box into the same plain line (never a raw failure)', async () => {
+    const client = new Proxy({} as ApiClient, {
+      get: (_t, prop) => {
+        if (prop === 'chat') {
+          return async () => {
+            throw new ApiError({ code: 'unpaid_tier_real_documents_disabled', status: 403, userMessageKey: 'err.unpaid_tier' });
+          };
+        }
+        return () => Promise.reject(new Error('not used'));
+      },
+    });
+    const screen = await renderChat(client, 'What does this paper ask for?');
+    await waitFor(() => expect(screen.getByTestId('chat-unavailable')).toBeTruthy());
+    expect(screen.queryByTestId('chat-input')).toBeNull();
+  });
+
+  it('answers in the language the result was written in; the field follows the text size', async () => {
+    const es = { ...analysis, target_language: 'es' };
+    useSettings.setState({ textSize: 'xl' });
+    const { client, log } = chatClient(() => answer());
+    const screen = await renderChat(client, '¿Qué pide este papel?', es);
+    await waitFor(() => expect(log).toHaveLength(1));
+    expect(log[0].target_language).toBe('es');
+    const style = StyleSheet.flatten(screen.getByTestId('chat-input').props.style);
+    expect(style.fontSize).toBe(Math.round(18 * textSizeFactor.xl));
   });
 });

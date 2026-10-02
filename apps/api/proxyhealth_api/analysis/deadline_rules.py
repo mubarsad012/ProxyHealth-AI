@@ -15,7 +15,14 @@ The model never computes a date: it records ``date_text`` as printed, or ``relat
 * ``unresolved`` — anything else; the client shows "Ask the sender which date this means."
 
 A printed date on the same demand always wins. Eviction papers never receive an estimate.
-Pure functions with an injected ``today``; nothing logged.
+
+``DateInfo.localized_line`` is the line the app *adds* under a date (D-26, never a substitute
+for the printed value): for a ``stated`` date the ISO day in the pack's own digits (Persian,
+Eastern Arabic …; ``None`` for Western-digit packs); for an ``estimated`` date — which is printed
+nowhere — the estimate written the way the paper prints its anchor date, in Western digits and
+English month names ("November 13, 2026", or "11/13/2026" when the anchor is printed
+"10/14/2026"), for every language, so the client can show "About {date} (estimate)" on the demand
+row (``estimate_text``). Pure functions with an injected ``today``; nothing logged.
 """
 
 from __future__ import annotations
@@ -549,6 +556,48 @@ def _localized(value: date | None, digit_system: DigitSystem) -> str | None:
     return line if line != value.isoformat() else None
 
 
+EN_MONTHS = (
+    "January", "February", "March", "April", "May", "June", "July", "August", "September",
+    "October", "November", "December",
+)  # fmt: skip
+_P_NUMERIC_LIKE = re.compile(r"(?<!\d)(\d{1,2})([/.-])(\d{1,2})\2(\d{4}|\d{2})(?!\d)")
+
+
+def estimate_text(
+    value: date, anchor_text: str | None = None, anchor_iso: str | None = None
+) -> str:
+    """``value`` written like the printed anchor date: the anchor's numeric order, separator,
+    zero padding and year width when it is printed in numbers ("10/14/2026" → "11/13/2026",
+    "14.10.26" → "13.11.26"); "13 November 2026" when it prints the day before a month name;
+    otherwise "November 13, 2026". Western digits and English month names only (rule 7: dates
+    stay in Latin letters and Western digits in every language)."""
+    like = _fold(ascii_digits(anchor_text or ""))
+    month_name = EN_MONTHS[value.month - 1]
+    if _P_DMY_NAME.search(like):
+        return f"{value.day} {month_name} {value.year}"
+    numeric = None if _P_MDY_NAME.search(like) else _P_NUMERIC_LIKE.search(like)
+    if numeric is None:
+        return f"{month_name} {value.day}, {value.year}"
+    a, sep, b, y = numeric.groups()
+    anchor = _iso_or_none(anchor_iso)
+    day_first = anchor is not None and anchor.day != anchor.month and (
+        (int(a), int(b)) == (anchor.day, anchor.month)
+    )
+    first, second = (value.day, value.month) if day_first else (value.month, value.day)
+    pad = a.startswith("0") or b.startswith("0") or (len(a) == 2 and len(b) == 2)
+    year = f"{value.year % 100:02d}" if len(y) == 2 else str(value.year)
+    if pad:
+        return f"{first:02d}{sep}{second:02d}{sep}{year}"
+    return f"{first}{sep}{second}{sep}{year}"
+
+
+def _iso_or_none(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
 def _printed_date_text(demand: Demand, source: DemandOut | None) -> str | None:
     """``date_text`` when its digits sit in the verified quote, else the verified value."""
     if source is not None and source.date_text:
@@ -679,7 +728,9 @@ def resolve_relative(
         value_iso=value.isoformat(), time_text=time_text, kind=DateKind.estimated,
         formula=rule_formula(rule, anchor.value_verbatim), anchor_quote=anchor.source_quote,
         anchor_demand_id=anchor.id, rule_id=rule.id, rule_source_url=rule.source_url,
-        rule_verification=rule.verification, localized_line=_localized(value, ctx.digit_system),
+        rule_verification=rule.verification,
+        # Printed nowhere: the readable estimate for "About {date} (estimate)" (module docstring).
+        localized_line=estimate_text(value, anchor.value_verbatim, anchor.date.value_iso),
     )  # fmt: skip
     return demand.model_copy(update={"date": info, "reminder_eligible": False})
 
@@ -740,6 +791,7 @@ __all__ = [
     "AMBIGUOUS_DATE_KEY",
     "DATED_KINDS",
     "DEFAULT_TIME_ZONE",
+    "EN_MONTHS",
     "MONTH_LANGUAGES",
     "NEVER_ESTIMATE_TYPES",
     "NO_DEFAULT_ORDER_TYPES",
@@ -752,6 +804,7 @@ __all__ = [
     "compile_rule_pattern",
     "compute_estimate",
     "context_for",
+    "estimate_text",
     "federal_holidays",
     "find_rule",
     "is_business_day",

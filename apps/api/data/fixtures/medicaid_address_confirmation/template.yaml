@@ -77,14 +77,17 @@ out:
     geo_state: VA
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una carta de Medicaid de Virginia Department of Medical Assistance Services. Necesito ayuda con: una carta de Medicaid que me pide confirmar mi dirección antes del October 14, 2026. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "Medicaid le pide confirmar su dirección"
-    summary_body: "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del 14 de octubre de 2026. Si no lo hace, puede perder los papeles de su renovación."
+    summary_body: "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del October 14, 2026. Si no lo hace, puede perder los papeles de su renovación."
     demands:
-      d1: {text: "Confirme o actualice su dirección antes del 14 de octubre de 2026."}
+      d1: {text: "Confirme o actualice su dirección antes del October 14, 2026."}
       d2: {text: "Confirme su dirección por internet, por teléfono o enviando el formulario adjunto por correo."}
     plan_steps:
       s1: {text: "Revise la dirección impresa en la carta. Si es correcta, confírmela."}
-      s2: {text: "Entre por internet, llame o envíe el formulario adjunto antes del 14 de octubre de 2026."}
+      s2: {text: "Entre por internet, llame o envíe el formulario adjunto antes del October 14, 2026."}
       s3: {text: "Si necesita ayuda, pregunte en una oficina de beneficios. Puede pedir un intérprete gratis."}
     glossary:
       "Medicaid": "Cobertura de salud gratis o de bajo costo que da el estado."
@@ -92,11 +95,14 @@ out:
       "FAMIS": "El programa de cobertura de salud de Virginia para niños."
     questions_to_ask:
       - "¿La dirección que tienen de mí es correcta?"
-      - "¿Qué pasa si mi formulario llega después del 14 de octubre?"
+      - "¿Qué pasa si mi formulario llega después del October 14?"
       - "¿Puedo confirmar mi dirección por teléfono?"
     translated_pages:
-      - "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: 10 de septiembre de 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del 14 de octubre de 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
+      - "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: September 10, 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del October 14, 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک نامه Medicaid از Virginia Department of Medical Assistance Services. در این مورد کمک لازم دارم: یک نامه Medicaid که از من می‌خواهد آدرس خود را تا October 14, 2026 تأیید کنم. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "مدیکید از شما می‌خواهد آدرس خود را تأیید کنید"
     summary_body: "این نامه از مدیکید ویرجینیا است. از شما می‌خواهد آدرس پستی خود را تا October 14, 2026 تأیید کنید. اگر این کار را نکنید، ممکن است کاغذهای تجدید خود را از دست بدهید."
     demands:
@@ -117,6 +123,9 @@ out:
     translated_pages:
       - "ریاست خدمات کمک‌های طبی ویرجینیا\nCover Virginia - مدیکید و FAMIS\nتاریخ: September 10, 2026\nنمبر دوسیه: ******1234\nمهم: لطفاً آدرس خود را تأیید کنید\nما به آدرس پستی درست شما نیاز داریم تا نامه‌های مربوط به پوشش مدیکید شما را از دست ندهید.\nلطفاً آدرس خود را تا October 14, 2026 تأیید یا نو کنید.\nمی‌توانید آدرس خود را آنلاین، از طریق تلفون با نمبر روی کارت مدیکید خود، یا با پست کردن فورم ضمیمه تأیید کنید.\nاگر از شما خبری نشود، ممکن است نتوانیم بسته تجدید شما را بفرستیم.\nاین نامه پوشش امروز شما را تغییر نمی‌دهد.\nضمیمه: فورم تأیید آدرس"
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: رسالة Medicaid من Virginia Department of Medical Assistance Services. أحتاج إلى مساعدة في: رسالة Medicaid تطلب مني تأكيد عنواني قبل October 14, 2026. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "ميديكيد يطلب منك تأكيد عنوانك"
     summary_body: "هذه الرسالة من ميديكيد فرجينيا. تطلب منك تأكيد عنوانك البريدي قبل October 14, 2026. إذا لم تفعل، قد تفوتك أوراق التجديد."
     demands:

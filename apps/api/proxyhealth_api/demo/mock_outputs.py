@@ -39,7 +39,7 @@ from proxyhealth_api.settings import DATA_DIR
 
 EN_PACK_PATH = DATA_DIR / "langpacks" / "en.json"
 NO_MATCH_REASON = "mock_no_match"
-GENERIC_CLERK_NEED = "understanding a paper I received"
+GENERIC_CLERK_NEED = "reading a paper I got"
 
 # DOCUMENT_TAXONOMY §2 "Primary resource_tags" (conditional extras left to the matcher).
 DOCUMENT_TYPE_TAGS: dict[DocumentType, list[str]] = {

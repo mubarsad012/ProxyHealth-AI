@@ -1,15 +1,17 @@
 """``FixtureStore`` (BUILD_PLAN §4.1; ARCHITECTURE §2 ``demo/``; D-29).
 
 Loads ``data/fixtures/<id>/manifest.yaml`` for every sample paper at boot. Everything else — page
-PNGs, ``transcript.txt``, ``out.<lang>.json`` — is read from disk on first use and cached in
-memory. Fixture files are committed, synthetic and watermarked SAMPLE; nothing user-supplied is
-ever read or written here (ARCHITECTURE §7).
+PNGs, ``transcript.txt``, ``out.<lang>.json``, ``clerk.<lang>.json`` — is read from disk on first
+use and cached in memory. Fixture files are committed, synthetic and watermarked SAMPLE; nothing
+user-supplied is ever read or written here (ARCHITECTURE §7).
 
 ``out(lang)`` returns the recorded model output with the ``_meta`` object removed (AI_PROMPTS
 §10.2); ``match_dhash`` compares an uploaded page against the precomputed page hashes of every
 fixture (or of one ``kind`` when given) and returns the nearest one within ``max_hamming``
 (ties → manifest order), so a photographed printed SAMPLE sheet resolves to its fixture in
-zero-key mode.
+zero-key mode. ``clerk_translation(lang, english)`` returns the recorded ``clerk_translate`` answer
+(``clerk.<lang>.json``, AI_PROMPTS §5.5.4) whose English card is exactly ``english``, so the mock
+shows a recorded sample's card in its recorded language instead of the ``⟦tag⟧`` pseudo text.
 """
 
 from __future__ import annotations
@@ -38,6 +40,19 @@ class FixtureError(Exception):
     """A fixture folder is malformed (bad manifest, unreadable output). Boot fails loudly."""
 
 
+@dataclass(frozen=True)
+class ClerkCard:
+    """A recorded ``clerk_translate`` answer: the English clerk card and its translation."""
+
+    english: str
+    translated: str
+
+
+def squash(text: str) -> str:
+    """Whitespace-normalised text (the clerk-card match key)."""
+    return " ".join(text.split())
+
+
 @dataclass
 class Fixture:
     """One sample paper or screenshot on disk."""
@@ -52,6 +67,7 @@ class Fixture:
     _pngs: dict[int, bytes] = field(default_factory=dict, repr=False)
     _outs: dict[str, FixtureOut | None] = field(default_factory=dict, repr=False)
     _metas: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    _clerk: dict[str, ClerkCard | None] = field(default_factory=dict, repr=False)
     _transcript: str | None = field(default=None, repr=False)
 
     @property
@@ -127,6 +143,31 @@ class Fixture:
         out = self.out(lang)
         return out if isinstance(out, TroubleshootModelOut) else None
 
+    def clerk_card(self, lang: str) -> ClerkCard | None:
+        """The recorded clerk-card translation for exactly ``lang`` (``None`` when not recorded).
+
+        Like ``out``, only the manifest's recorded languages are ever read or cached.
+        """
+        if self.kind != "document" or lang not in self.manifest.available_target_languages:
+            return None
+        if lang not in self._clerk:
+            path = self.dir / f"clerk.{lang}.json"
+            card: ClerkCard | None = None
+            if path.is_file():
+                try:
+                    raw = json.loads(path.read_text("utf-8"))
+                except ValueError as exc:
+                    raise FixtureError(f"{path}: not valid JSON ({exc})") from exc
+                english = raw.get("english") if isinstance(raw, dict) else None
+                translated = raw.get("translated") if isinstance(raw, dict) else None
+                if not (isinstance(english, str) and english.strip()) or not (
+                    isinstance(translated, str) and translated.strip()
+                ):
+                    raise FixtureError(f"{path}: needs non-empty 'english' and 'translated'")
+                card = ClerkCard(english=english.strip(), translated=translated.strip())
+            self._clerk[lang] = card
+        return self._clerk[lang]
+
     def meta(self, lang: str) -> dict[str, Any]:
         """The ``_meta`` object of ``out.<lang>.json`` (empty when absent)."""
         self.out(lang)
@@ -198,6 +239,18 @@ class FixtureStore:
     def default(self) -> Fixture | None:
         return self._by_id.get(DEFAULT_FIXTURE_ID) or next(iter(self._by_id.values()), None)
 
+    def clerk_translation(self, lang: str, english: str) -> str | None:
+        """The recorded translation of exactly this English clerk card in ``lang`` (whitespace
+        aside), from any document fixture that recorded ``lang``; ``None`` when there is none."""
+        wanted = squash(english)
+        if not wanted:
+            return None
+        for fixture in self._by_id.values():
+            card = fixture.clerk_card(lang)
+            if card is not None and squash(card.english) == wanted:
+                return card.translated
+        return None
+
     def match_dhash(
         self, png_or_jpeg: bytes, max_hamming: int, *, kind: FixtureKind | None = None
     ) -> Fixture | None:
@@ -223,9 +276,11 @@ class FixtureStore:
 
 __all__ = [
     "DEFAULT_FIXTURE_ID",
+    "ClerkCard",
     "Fixture",
     "FixtureError",
     "FixtureKind",
     "FixtureOut",
     "FixtureStore",
+    "squash",
 ]

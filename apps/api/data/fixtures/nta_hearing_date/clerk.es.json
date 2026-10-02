@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "task": "clerk_translate",
+  "language_tag": "es",
+  "english": "Hello. I speak Spanish. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you.",
+  "translated": "Hola. Hablo español. Vengo por: un Aviso de Comparecencia (Notice to Appear) de Executive Office for Immigration Review - Immigration Court. Necesito ayuda con: un Aviso de Comparecencia ante la corte de inmigración - confirmar la fecha de la audiencia y encontrar un abogado. Por favor, hable despacio o escríbalo. Gracias."
+}

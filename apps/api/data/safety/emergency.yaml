@@ -11,6 +11,9 @@
 #   prefix    — the term must start a word but may continue (inflecting non-Latin scripts)
 #   substring — anywhere (scripts written without spaces between words: zh-Hans, zh-Hant, my,
 #               and Korean, whose particles attach to the word)
+# `proclitics` (optional, per language): one-letter prefixes written attached to the next word
+# (Arabic و ف ب ل ك); up to two of them may stand before a term's first word, so "ولا أستطيع
+# التنفس" ("and I cannot breathe") and "بألم في صدري" match their terms.
 # `exclude` phrases (resource names printed on ordinary papers, e.g. "Poison Control", and label
 # boilerplate such as "If swallowed") are removed from *printed* text (transcripts, screen_text)
 # before matching so a medicine label's help line is not an emergency. They are never removed
@@ -19,7 +22,7 @@
 # Every list is a machine-assisted draft: `reviewed_by: null` until a native speaker signs off
 # (launch gate, DECISIONS Q6). A language without a list falls back to en + es and adds
 # warnings: [emergency_lexicon_unavailable].
-version: "2026-09-30"
+version: "2026-10-01"
 kinds: [chest_pain, breathing, overdose, poison, self_harm, stroke, bleeding, allergic, violence]
 fallback_languages: [en, es]
 languages:
@@ -117,17 +120,18 @@ languages:
     reviewed_by: null
     reviewed_on: null
     match: prefix
+    proclitics: ["و", "ف", "ب", "ل", "ك"]
     exclude: ["مركز السموم", "مركز مكافحة السموم"]
     terms:
-      chest_pain: ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر", "نوبة قلبية", "أزمة قلبية", "ألم شديد في الصدر", "صدري يؤلمني", "يؤلمني صدري", "صدري يوجعني"]
-      breathing: ["لا أستطيع التنفس", "لا يستطيع التنفس", "صعوبة في التنفس", "ضيق التنفس", "ضيق في التنفس", "اختناق", "أتنفس", "لا يتنفس", "لا تتنفس", "ما يتنفس"]
+      chest_pain: ["ألم في الصدر", "ألم بالصدر", "ضيق في الصدر", "نوبة قلبية", "أزمة قلبية", "ألم شديد في الصدر", "صدري يؤلمني", "يؤلمني صدري", "صدري يوجعني", "ألم في صدري", "وجع في صدري", "وجع في الصدر", "ألم صدري", "صدري يوجع"]
+      breathing: ["لا أستطيع التنفس", "لا يستطيع التنفس", "صعوبة في التنفس", "ضيق التنفس", "ضيق في التنفس", "اختناق", "أتنفس", "لا يتنفس", "لا تتنفس", "ما يتنفس", "أستطيع التنفس", "يستطيع التنفس", "تستطيع التنفس", "أقدر أتنفس"]
       overdose: ["جرعة زائدة", "جرعة مفرطة", "تناول الكثير من الحبوب", "حبوب كثيرة", "كل الحبوب", "كل حبوبي", "الكثير من الحبوب", "علبة حبوب", "بلعت حبوب", "بلع حبوب"]
       poison: ["تسمم", "مسموم", "مادة سامة", "شرب مبيض", "شرب الكلور", "شرب كلور", "شرب سم", "بلع سم", "شرب الكلوركس"]
       self_harm: ["انتحار", "الانتحار", "أريد أن أموت", "أقتل نفسي", "إيذاء النفس", "أؤذي نفسي", "انتحر", "أنتحر", "سأنتحر", "سانتحر", "ينتحر", "تنتحر", "سينتحر", "سأقتل نفسي", "أنهي حياتي", "لا أريد أن أعيش", "لا أريد العيش", "أتمنى الموت", "بدي موت"]
       stroke: ["سكتة دماغية", "جلطة دماغية", "تدلي الوجه", "صعوبة في الكلام", "تنميل في جانب واحد"]
       bleeding: ["نزيف حاد", "نزيف شديد", "نزيف لا يتوقف", "ينزف بشدة"]
       allergic: ["حساسية شديدة", "صدمة تأقية", "تورم الحلق", "تورم اللسان"]
-      violence: ["عنف أسري", "عنف منزلي", "يضربني", "هددني بالقتل", "اغتصاب", "اعتداء جنسي", "اتجار بالبشر"]
+      violence: ["عنف أسري", "عنف منزلي", "يضربني", "يضربونني", "ضربني", "هددني بالقتل", "سيقتلني", "اغتصاب", "اعتداء جنسي", "اتجار بالبشر"]
   ht:
     reviewed_by: null
     reviewed_on: null
@@ -232,7 +236,7 @@ languages:
       stroke: ["سکته مغزی", "سکته", "کجی روی", "گپ زده نمی‌تواند"]
       bleeding: ["خونریزی شدید", "خون زیاد", "خونریزی بند نمی‌شود"]
       allergic: ["حساسیت شدید", "آلرژی شدید", "پندیدن گلو", "ورم زبان"]
-      violence: ["خشونت خانگی", "مرا لت می‌کند", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان"]
+      violence: ["خشونت خانگی", "مرا لت می‌کند", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان", "لت و کوب", "لت‌وکوب", "مرا لت", "مره لت", "لتم می‌کند", "مرا کتک", "کتکم می‌زند"]
   ps:
     reviewed_by: null
     reviewed_on: null
@@ -262,7 +266,7 @@ languages:
       stroke: ["سکته مغزی", "افتادگی صورت", "اختلال در گفتار", "بی‌حسی یک طرف"]
       bleeding: ["خونریزی شدید", "خونریزی بند نمی‌آید", "خون زیادی"]
       allergic: ["واکنش آلرژیک شدید", "شوک آنافیلاکسی", "تورم گلو", "تورم زبان"]
-      violence: ["خشونت خانگی", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان"]
+      violence: ["خشونت خانگی", "مرا می‌زند", "تهدید به قتل", "تجاوز جنسی", "قاچاق انسان", "مرا کتک", "کتکم می‌زند", "کتک می‌زند"]
   ur:
     reviewed_by: null
     reviewed_on: null

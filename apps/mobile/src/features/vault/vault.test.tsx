@@ -10,7 +10,7 @@ import { AppProviders } from '@/design/components/Providers';
 import { VaultAndDataSettings } from '@/features/settings/VaultAndDataSettings';
 import type { Member, StoredDocument, StoredPageInput, Vault } from '@/storage/index';
 
-import { SaveToVaultSheet } from './SaveToVaultSheet';
+import { documentToSave, SaveToVaultSheet } from './SaveToVaultSheet';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -90,7 +90,7 @@ describe('SaveToVaultSheet (opt-in save)', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0].doc.id).toBe('an_test');
     expect(saved[0].doc.memberId).toBe('me');
-    expect(onSaved).toHaveBeenCalledWith('an_test');
+    expect(onSaved).toHaveBeenCalledWith('an_test', 'Me');
   });
 
   it('creates a new person only when the paper is saved', async () => {
@@ -117,6 +117,43 @@ describe('SaveToVaultSheet (opt-in save)', () => {
     expect(vault.members.add).toHaveBeenCalledTimes(1);
     expect(saved[0].doc.memberId).toBe('m1');
     expect(onCancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('SaveToVaultSheet without an analysis (Phase 2C)', () => {
+  const jpegPage = {
+    id: 'p1',
+    uri: 'file:///p1.jpg',
+    base64: '/9j/PAGE',
+    mimeType: 'image/jpeg' as const,
+    rotation: 0 as const,
+    masks: [],
+    source: 'library' as const,
+  };
+
+  it('"Save to read later" needs no analysis prop and stores analysis: null', async () => {
+    const { vault, saved } = fakeVault();
+    const { getByTestId, getByText } = await render(
+      <AppProviders client={offlineClient()} vault={vault} staticMetrics>
+        <SaveToVaultSheet readLaterId="doc_later" pages={[jpegPage]} onSaved={jest.fn()} onCancel={jest.fn()} />
+      </AppProviders>,
+    );
+    expect(getByText('Whose paper is this? (you can choose later)')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByTestId('save-to-vault-confirm'));
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0].doc).toMatchObject({ id: 'doc_later', memberId: 'me', analysis: null });
+  });
+
+  it('with nothing to save the sheet writes nothing', () => {
+    const opts = { memberId: 'me', keepPages: true, hideIds: false, now: new Date('2026-10-01T12:00:00Z'), t: (k: string) => k, web: false };
+    expect(documentToSave({}, opts)).toBeNull();
+    expect(documentToSave({ readLaterId: 'x', pages: [] }, opts)?.doc.analysis).toBeNull();
+    const built = { doc: { id: 'custom' } as StoredDocument, pages: [] };
+    const buildDocument = jest.fn(() => built);
+    expect(documentToSave({ buildDocument }, opts)).toBe(built);
+    expect(buildDocument).toHaveBeenCalledWith('me', opts.now);
   });
 });
 

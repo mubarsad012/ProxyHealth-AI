@@ -7,7 +7,7 @@
     ],
     "english": "Hello. I speak Spanish. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: una factura médica de Inova Health System. Necesito ayuda con: una factura del hospital - el monto, de qué es y ayuda para pagarla. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -60,7 +60,7 @@
       "span_ids": [
         "p1b9"
       ],
-      "text": "La factura pide el pago antes del 28 de octubre de 2026.",
+      "text": "La factura pide el pago antes del October 28, 2026.",
       "value_verbatim": "October 28, 2026",
       "verification_note": "exact",
       "verified": true
@@ -382,7 +382,7 @@
         "p1b12",
         "p1b9"
       ],
-      "text": "Llame al número de la factura con sus preguntas antes del 28 de octubre de 2026."
+      "text": "Llame al número de la factura con sus preguntas antes del October 28, 2026."
     },
     {
       "demand_id": null,
@@ -710,7 +710,7 @@
   "sender_as_written": "Inova Health System",
   "sender_kind": "hospital_or_clinic",
   "summary": {
-    "body": "Esta es una factura de Inova Health System por una visita de emergencia el 2 de julio de 2026. Dice que el monto a pagar es $1,240.00 antes del 28 de octubre de 2026. También dice que hay ayuda financiera.",
+    "body": "Esta es una factura de Inova Health System por una visita de emergencia el July 2, 2026. Dice que el monto a pagar es $1,240.00 antes del October 28, 2026. También dice que hay ayuda financiera.",
     "body_en": "This is a bill from Inova Health System for an emergency visit on July 2, 2026. It says the amount due is $1,240.00 by October 28, 2026. It also says financial assistance is available.",
     "span_ids": [
       "p1b1",
@@ -724,7 +724,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "Inova Health System\nServicios Financieros para Pacientes - Fairfax, VA\nFecha del estado de cuenta: 20 de septiembre de 2026\nNúmero de cuenta: ******5678\nAVISO FINAL\nPaciente: SAMPLE PATIENT\nFecha del servicio: 2 de julio de 2026 - Visita al departamento de emergencias\nMonto a pagar: $1,240.00\nPague antes del 28 de octubre de 2026.\nEste es su aviso final. Pague el monto para evitar que su cuenta se envíe a una agencia de cobranza.\nHay ayuda financiera disponible. Pregúntenos por nuestra política de ayuda financiera antes de pagar.\n¿Preguntas sobre esta factura? Llame a Cuentas de Pacientes al (703) 555-0142.\nATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.\nAviso: Si habla árabe, tiene servicios gratuitos de ayuda con el idioma."
+      "text": "Inova Health System\nServicios Financieros para Pacientes - Fairfax, VA\nFecha del estado de cuenta: September 20, 2026\nNúmero de cuenta: ******5678\nAVISO FINAL\nPaciente: SAMPLE PATIENT\nFecha del servicio: July 2, 2026 - Visita al departamento de emergencias\nMonto a pagar: $1,240.00\nPague antes del October 28, 2026.\nEste es su aviso final. Pague el monto para evitar que su cuenta se envíe a una agencia de cobranza.\nHay ayuda financiera disponible. Pregúntenos por nuestra política de ayuda financiera antes de pagar.\n¿Preguntas sobre esta factura? Llame a Cuentas de Pacientes al (703) 555-0142.\nATENCIÓN: Si habla español, tiene a su disposición servicios gratuitos de asistencia lingüística.\nAviso: Si habla árabe, tiene servicios gratuitos de ayuda con el idioma."
     }
   ],
   "translation_confidence": "medium",

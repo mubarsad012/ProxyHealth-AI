@@ -9,6 +9,7 @@ import { useApi } from '@/api/config';
 import type { ApiError } from '@/api/errors';
 import { toApiError } from '@/api/errors';
 import type { AnalysisResult } from '@/api/types';
+import { rememberMemberFor, useScanChoices } from '@/features/scan/choices';
 import { t, useI18n } from '@/i18n/store';
 import { newId } from '@/lib/ids';
 import { platformName } from '@/lib/platform';
@@ -38,13 +39,15 @@ export const MIN_ON_SCREEN_MS = 1_500;
 
 const initial: AnalyzeState = { status: 'idle', step: 0, tipKey: null, error: null, result: null, offlineSample: false };
 
-/** The request context from settings + session + the active pack. */
+/** The request context from settings + session + the active pack + the S5 choices (output
+ *  language, document hint; a sample paper sends no hint — the fixture knows its type). */
 export function currentRequestContext(analysisId: string = newId()): RequestContext {
   const settings = useSettings.getState();
   const session = useSession.getState();
   const pack = useI18n.getState().pack;
+  const choices = useScanChoices.getState();
   return {
-    targetLanguage: pack.tag,
+    targetLanguage: choices.outputLanguage ?? pack.tag,
     uiDirection: pack.direction,
     platform: platformName(),
     analysisId,
@@ -53,6 +56,7 @@ export function currentRequestContext(analysisId: string = newId()): RequestCont
     zip3: settings.region.zip3,
     hideIdNumbers: settings.hideIdNumbers,
     preferences: settings.preferences,
+    documentHint: session.demoSampleId ? null : choices.documentHint,
   };
 }
 
@@ -112,6 +116,7 @@ export function useAnalyze(): AnalyzeState & { start(): void; cancel(): void; re
         }
         if (out.displayPages.length) useSession.getState().setPages(out.displayPages);
         if (ctx.demoSampleId) rememberSampleOrigin(out.result.analysis_id, ctx.demoSampleId);
+        else rememberMemberFor(out.result.analysis_id, useScanChoices.getState().memberId);
         useSession.getState().setCurrentAnalysis(out.result);
         try {
           AccessibilityInfo.announceForAccessibility(t('a11y.reading_finished', { n: datesFound(out.result) }));

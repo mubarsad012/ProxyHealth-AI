@@ -10,7 +10,7 @@ troubleshoot); everything else becomes the target-language marker
 ``warning.contacts_stripped_inline`` ("[contact removed — see Get help nearby]"). Capitalised
 organisation names ending in an institution word (``… Center``, ``… Legal Aid``, ``… Project``,
 ``… Inc``) that are neither on the paper nor in ``ResourceRepo.names()`` become
-``warning.org_removed_inline`` ("an organization (see Get help nearby)"); so do head-first names
+``warning.org_removed_inline`` ("a group or office (see Get help nearby)"); so do head-first names
 ("Centro Legal de …", "Clínica …", "Servicios Legales …") and Arabic-script help-organisation
 names ("انجمن کمک حقوقی …") unless every specific word of them is printed on the paper.
 Emergency numbers in model text are stripped like any other number — the fixed emergency card
@@ -191,6 +191,10 @@ _ORG_SUFFIX_KEYS = frozenset(s.casefold() for s in _ORG_SUFFIXES)
 # one word ("us" is a generic word) instead of the two tokens "u" and "s".
 _INITIALISM_RE = re.compile(r"(?<![\w.])(?:[A-Za-z]\.){2,}")
 _AND_SPLIT_RE = re.compile(r"\s+(?:and|&)\s+", re.IGNORECASE)
+# Spanish prose runs a translated phrase into a printed English name with "de": "Solicitud de
+# Evidencia de USCIS de U.S. Citizenship and Immigration Services". The name is then the part
+# after a "de"/"del" whose head holds no institution word of its own.
+_ES_SPLIT_RE = re.compile(r"\s+(?:de|del)(?:\s+(?:la|las|los|el))?\s+")
 _PAREN_RE = re.compile(r"\(([^()]*)\)")
 _FORMERLY_RE = re.compile(r"^\s*formerly\s+", re.IGNORECASE)
 # A replacement right at the start of a sentence gets a capital letter ("An organization …").
@@ -495,6 +499,12 @@ class AllowList:
             if left.strip() and right.strip() and self._allows_one_org(left):
                 if self.allows_org(right):
                     return True
+        for m in _ES_SPLIT_RE.finditer(name):
+            head, tail = name[: m.start()], name[m.end() :]
+            if not tail.strip() or any(w.strip(".,;:") in _ORG_SUFFIXES for w in head.split()):
+                continue
+            if self._allows_one_org(tail):
+                return True
         return False
 
     def _allows_one_org(self, name: str) -> bool:

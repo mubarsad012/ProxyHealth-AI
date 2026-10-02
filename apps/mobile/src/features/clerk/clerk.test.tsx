@@ -9,13 +9,14 @@ import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AnalysisResult } from '@/api/types';
-import { ThemeProvider } from '@/design/theme';
+import { textSizeFactor, ThemeProvider } from '@/design/theme';
 import { palette } from '@/design/tokens';
 import { EMERGENCY_ROWS, EmergencyCard, emergencyTrigger } from '@/features/emergency';
 import { bundledPackFor, EN_PACK, t, useI18n } from '@/i18n/store';
 import { useSession } from '@/store/session';
+import { useSettings } from '@/store/settings';
 
-import { ClerkScreen, splitGreeting } from './ClerkScreen';
+import { ClerkScreen, clerkFontSize, splitGreeting } from './ClerkScreen';
 import { clerkCardFromAnalysis, genericClerkCard } from './clerkModel';
 import { LongPressExit } from './LongPressExit';
 
@@ -46,6 +47,7 @@ function flatStyle(style: unknown): Record<string, unknown> {
 
 afterEach(() => {
   mockScheme = 'light';
+  useSettings.setState({ textSize: 'normal' });
   useI18n.getState().setPack(EN_PACK);
   useSession.getState().reset();
 });
@@ -91,6 +93,25 @@ describe('<ClerkScreen>', () => {
     expect(body.color).toBe(palette.highContrast.text);
     expect(flatStyle(getByTestId('clerk-screen').props.style).backgroundColor).toBe(palette.highContrast.background);
     expect(getByText(t('clerk.brightness_tip'))).toBeTruthy();
+  });
+
+  it('follows the in-app text size: card text and the own-words field grow, never below 24 / 32 pt', async () => {
+    expect(clerkFontSize(true, 1)).toBe(32);
+    expect(clerkFontSize(false, 1)).toBe(24);
+    expect(clerkFontSize(false, 0.8)).toBe(24);
+    useSettings.setState({ textSize: 'xl' });
+    const { getByText, getByLabelText } = await render(
+      <ThemeProvider>
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <ClerkScreen analysis={null} />
+        </SafeAreaProvider>
+      </ThemeProvider>,
+    );
+    const greeting = flatStyle(getByText('Hello. I speak English.').props.style);
+    expect(greeting.fontSize).toBe(Math.round(32 * textSizeFactor.xl));
+    const field = flatStyle(getByLabelText(t('clerk.own_words')).props.style);
+    expect(field.fontSize).toBe(Math.round(18 * textSizeFactor.xl));
+    expect(field.color).toBe(palette.highContrast.text);
   });
 
   it('keeps "What this card says" black on white in the dark colour scheme', async () => {

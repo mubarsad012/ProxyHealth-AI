@@ -16,7 +16,7 @@ function isToday(r: Reminder, doc: StoredDocument | null, now: Date): boolean {
   return iso !== null && iso.slice(0, 10) === toIsoDay(now);
 }
 
-async function docFor(deps: RemindersDeps, cache: Map<string, StoredDocument | null>, id: string) {
+export async function docFor(deps: RemindersDeps, cache: Map<string, StoredDocument | null>, id: string) {
   if (!id) return null;
   if (!cache.has(id)) cache.set(id, await deps.getDocument(id).catch(() => null));
   return cache.get(id) ?? null;
@@ -44,6 +44,35 @@ async function rearm(deps: RemindersDeps, r: Reminder, doc: StoredDocument | nul
   });
   const { id: _old, ...rest } = r;
   await deps.reminders.add({ ...rest, notificationId, enabled: true });
+  await deps.reminders.remove(r.id);
+}
+
+/**
+ * Move one reminder to a new fire time (time-zone change, `timezone.ts`): cancel its notification,
+ * schedule the new time when it is enabled, in the future and allowed, then swap the row (add the
+ * new one first, like `rearm`). The enabled flag and every other field are kept.
+ */
+export async function moveReminder(
+  deps: RemindersDeps,
+  r: Reminder,
+  doc: StoredDocument | null,
+  fireAt: Date,
+  granted: boolean,
+): Promise<void> {
+  if (r.notificationId) await deps.notifications.cancel(r.notificationId);
+  const now = deps.now();
+  let notificationId: string | null = null;
+  if (granted && r.enabled && fireAt.getTime() > now.getTime()) {
+    const text = textFor(deps, r, doc, now);
+    notificationId = await deps.notifications.schedule({
+      fireAt,
+      title: text.title,
+      body: text.body,
+      url: reminderUrl(r.documentId),
+    });
+  }
+  const { id: _old, ...rest } = r;
+  await deps.reminders.add({ ...rest, fireAt: fireAt.toISOString(), notificationId });
   await deps.reminders.remove(r.id);
 }
 

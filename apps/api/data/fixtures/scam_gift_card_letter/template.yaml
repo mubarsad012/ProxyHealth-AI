@@ -69,7 +69,7 @@ out:
         source_quote: "Do not tell anyone about this letter."
         span_ids: ["@secret"]
     questions_to_ask: []
-    clerk_need_en: "understanding a paper I received"
+    clerk_need_en: "reading a paper I got"
     is_likely_scam: true
     scam_signals: [gift_card, deportation_threat, non_gov_domain, urgency_pressure]
     resource_tags: [scam_report, immigration_legal_help]
@@ -77,6 +77,13 @@ out:
     form_numbers: []
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una carta de U.S. Immigration Services Department. Necesito ayuda con: entender un papel que recibí. Por favor, hable despacio o escríbalo. Gracias."
+      # Also recorded: the same card once clerk_need_en reads like the planned clerk.generic_need
+      # rewrite "reading a paper I got" (keys-devops-docs crossscope; Phase 2C COPY, CL-076).
+      - english: "Hello. I speak Spanish. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una carta de U.S. Immigration Services Department. Necesito ayuda con: leer un papel que recibí. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "Carta que pide tarjetas de regalo y dice ser de inmigración"
     summary_body: "Esta carta dice que es del \"U.S. Immigration Services Department\". Pide $950 en tarjetas de regalo de Google Play y amenaza con deportación. No pude relacionarla con un tipo conocido de papel."
     demands:
@@ -94,8 +101,15 @@ out:
       - "La carta le dice que lo guarde en secreto y que pague rápido."
     questions_to_ask: []
     translated_pages:
-      - "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: 29 de septiembre de 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
+      - "U.S. Immigration Services Department\nOficina de Tarifas y Multas de Inmigración\nFecha: September 29, 2026\nÚLTIMA ADVERTENCIA - TARIFA DE INMIGRACIÓN VENCIDA\nEstimado solicitante:\nNuestros registros muestran que usted debe una tarifa de trámite de inmigración de $950.\nDebe pagar hoy con tarjetas de regalo de Google Play o será deportado a menos que recibamos el pago en 48 horas.\nLlame al oficial Daniel Sample al (202) 555-0147 y lea los números de las tarjetas por teléfono.\nPortal de pagos de USCIS: www.uscis-fee-payment.example.com\nNo le cuente a nadie sobre esta carta. Mantenga este asunto en secreto."
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک نامه از U.S. Immigration Services Department. در این مورد کمک لازم دارم: فهمیدن کاغذی که به دستم رسیده. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
+      # Also recorded: the same card once clerk_need_en reads like the planned clerk.generic_need
+      # rewrite "reading a paper I got" (keys-devops-docs crossscope; Phase 2C COPY, CL-076).
+      - english: "Hello. I speak Dari. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک نامه از U.S. Immigration Services Department. در این مورد کمک لازم دارم: خواندن کاغذی که به دستم رسیده. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "نامه‌ای که کارت تحفه می‌خواهد و می‌گوید از اداره مهاجرت است"
     summary_body: "این نامه می‌گوید از \"U.S. Immigration Services Department\" است. $950 به شکل کارت تحفه Google Play می‌خواهد و به اخراج تهدید می‌کند. نتوانستم آن را با یک نوع شناخته‌شده کاغذ مطابقت دهم."
     demands:
@@ -115,6 +129,13 @@ out:
     translated_pages:
       - "U.S. Immigration Services Department\nدفتر فیس‌ها و جریمه‌های مهاجرت\nتاریخ: September 29, 2026\nهشدار نهایی - فیس مهاجرت پرداخت‌نشده\nمتقاضی گرامی،\nسوابق ما نشان می‌دهد که شما یک فیس پرداخت‌نشده رسیدگی مهاجرت به مبلغ $950 بدهکار هستید.\nشما باید امروز با کارت‌های تحفه Google Play پرداخت کنید، ورنه اگر پرداخت در ظرف 48 ساعت نرسد اخراج می‌شوید.\nبه افسر Daniel Sample به نمبر (202) 555-0147 زنگ بزنید و نمبرهای کارت تحفه را تلفونی بخوانید.\nپورتال پرداخت USCIS: www.uscis-fee-payment.example.com\nدرباره این نامه به هیچ کس نگویید. این موضوع را مخفی نگه دارید."
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a letter from U.S. Immigration Services Department. I need help with: understanding a paper I received. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: رسالة من U.S. Immigration Services Department. أحتاج إلى مساعدة في: فهم ورقة وصلتني. من فضلك تكلّم ببطء أو اكتبه. شكراً."
+      # Also recorded: the same card once clerk_need_en reads like the planned clerk.generic_need
+      # rewrite "reading a paper I got" (keys-devops-docs crossscope; Phase 2C COPY, CL-076).
+      - english: "Hello. I speak Arabic. I am here about: a letter from U.S. Immigration Services Department. I need help with: reading a paper I got. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: رسالة من U.S. Immigration Services Department. أحتاج إلى مساعدة في: قراءة ورقة وصلتني. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "رسالة تطلب بطاقات هدايا وتقول إنها من دائرة الهجرة"
     summary_body: "تقول هذه الرسالة إنها من \"U.S. Immigration Services Department\". تطلب $950 ببطاقات هدايا Google Play وتهدد بالترحيل. لم أستطع مطابقتها مع نوع معروف من الأوراق."
     demands:

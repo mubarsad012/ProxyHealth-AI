@@ -13,6 +13,13 @@ this script generates, byte-deterministically:
 * ``out.<lang>.json`` — the hand-authored ``AnalysisModelOut`` (``TroubleshootModelOut`` for the
   screenshot) per recorded language, assembled from ``template.out.base`` plus per-language
   overrides, with ``blocks`` (ids + bboxes) taken from the rendered layout and a ``_meta`` object.
+* ``clerk.<lang>.json`` — for a readable document in a recorded non-English language, the
+  hand-recorded ``clerk_translate`` answer: the English clerk card the pipeline builds
+  (``analysis/clerk.py``) and its translation from ``out.<lang>.clerk_cards`` (the mock serves it
+  as ``clerk_message.translated``; a missing or stale translation fails the build).
+
+Every output language keeps printed dates and times exactly as printed (AI_PROMPTS §5.0 rule 7,
+PRODUCT_SPEC §7.1 "Numbers", D-26): ``October 7, 2026`` in Spanish, Arabic and Dari prose alike.
 
 Block ids are ``p<page>b<n>`` in reading order (AI_PROMPTS §4.1). Template lines may carry a
 ``ref`` name; any ``"@name"`` string in a span-id field of the output resolves to that block id.
@@ -49,7 +56,8 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from proxyhealth_api.ai import prompt_loader  # noqa: E402
-from proxyhealth_api.contracts.enums import ResourceTag  # noqa: E402
+from proxyhealth_api.analysis import clerk  # noqa: E402
+from proxyhealth_api.contracts.enums import DocumentType, ResourceTag  # noqa: E402
 from proxyhealth_api.contracts.model_out import (  # noqa: E402
     AnalysisModelOut,
     TroubleshootModelOut,
@@ -644,36 +652,129 @@ def _unprinted_digits(text: str, transcript: str) -> str | None:
 
 
 @functools.cache
-def _scripts() -> dict[str, str]:
-    """ISO 15924 script per language tag from ``data/languages.yaml``."""
+def _language_rows() -> dict[str, dict[str, Any]]:
+    """``data/languages.yaml`` rows (script, ``name_en``, …) per language tag."""
     with (DATA / "languages.yaml").open(encoding="utf-8") as fh:
         table: dict[str, dict[str, Any]] = yaml.safe_load(fh)
-    return {tag: str(row.get("script") or "") for tag, row in table.items()}
+    return {str(tag): dict(row) for tag, row in table.items()}
+
+
+def _printed_values(demands: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """``(key, value)`` for every printed ``date_text`` / ``time_text`` of the English demands."""
+    found: list[tuple[str, str]] = []
+    for d in demands:
+        for key in _VERBATIM_DATE_KEYS:
+            value = d.get(key)
+            if value and (key, value) not in found:
+                found.append((key, str(value)))
+    return found
+
+
+def _repeats_printed(
+    where: str, label: str, english: str, translated: str, printed: list[tuple[str, str]]
+) -> list[str]:
+    return [
+        f"{where} {label}: text does not repeat the printed {key} {value!r} verbatim"
+        for key, value in printed
+        if _contains(english, value) and not _contains(translated, value)
+    ]
 
 
 def check_printed_dates(
     fid: str, lang: str, out: dict[str, Any], base: dict[str, Any] | None
 ) -> list[str]:
-    """Rule 7 "in Latin letters … even in a right-to-left language": in a language written in
-    another script, a demand sentence repeats its printed ``date_text`` / ``time_text`` verbatim
-    wherever the English sentence repeats it (``October 7, 2026``, never ``٧ أكتوبر ٢٠٢٦``)."""
-    if base is None or lang == "en" or _scripts().get(lang, "Latn") == "Latn":
+    """Rule 7 "exactly as printed, in Latin letters and Western digits" in EVERY output language
+    (Spanish too, not only a right-to-left one; PRODUCT_SPEC §7.1 "Numbers", D-26): wherever the
+    English sentence repeats a printed ``date_text`` / ``time_text``, the translated sentence
+    repeats it verbatim (``October 7, 2026``, never ``7 de octubre de 2026`` or ``٧ أكتوبر ٢٠٢٦``).
+    Checked over the summary, demands, plan steps, questions and translated pages."""
+    if base is None or lang == "en":
         return []
+    where = f"{fid}/out.{lang}.json"
+    printed = _printed_values(base["demands"])
+    pairs: list[tuple[str, str, str]] = [
+        ("summary_title", base["summary_title"], out["summary_title"]),
+        ("summary_body", base["summary_body"], out["summary_body"]),
+    ]
+    en_demands = {d["id"]: d["text"] for d in base["demands"]}
+    pairs += [(f"demand {d['id']}", en_demands.get(d["id"], ""), d["text"]) for d in out["demands"]]
+    en_steps = {s["id"]: s["text"] for s in base["plan_steps"]}
+    pairs += [(f"step {s['id']}", en_steps.get(s["id"], ""), s["text"]) for s in out["plan_steps"]]
+    en_questions, questions = base["questions_to_ask"], out["questions_to_ask"]
+    if len(en_questions) == len(questions):
+        asked = zip(en_questions, questions, strict=True)
+        pairs += [(f"question {i + 1}", q_en, q) for i, (q_en, q) in enumerate(asked)]
+    en_pages = {p["page"]: p["text"] for p in base["translated_pages"]}
+    pairs += [
+        (f"translated page {p['page']}", en_pages.get(p["page"], ""), p["text"])
+        for p in out["translated_pages"]
+    ]
     errors: list[str] = []
-    base_text = {d["id"]: d["text"] for d in base["demands"]}
-    for d in out["demands"]:
-        for key in _VERBATIM_DATE_KEYS:
-            value = d.get(key)
-            if (
-                value
-                and _contains(base_text.get(d["id"], ""), value)
-                and not _contains(d["text"], value)
-            ):
-                errors.append(
-                    f"{fid}/out.{lang}.json demand {d['id']}: text does not repeat the printed "
-                    f"{key} {value!r} verbatim"
-                )
+    for label, english, translated in pairs:
+        errors += _repeats_printed(where, label, english, translated, printed)
     return errors
+
+
+# --------------------------------------------------------------------------- clerk card recordings
+
+
+def clerk_card_english(tpl: dict[str, Any], lang: str) -> tuple[str, str]:
+    """(English clerk card, need-line source) exactly as ``analysis/clerk.build_clerk_message``
+    composes it for this fixture read in ``lang`` (D-18): the fixed template around the paper's
+    sender and the AI need line ``clerk_need_en``."""
+    base = tpl["out"]["base"]
+    need, source = clerk.choose_need_line(base.get("clerk_need_en"), "")
+    name = str((_language_rows().get(lang) or {}).get("name_en") or lang)
+    sender = clerk.checked_sender(base.get("sender_as_written"), None)
+    document = clerk.document_phrase(DocumentType(tpl["document_type"]), sender)
+    return clerk.TEMPLATE.format(language=name, document=document, need=need), source
+
+
+def clerk_out(
+    tpl: dict[str, Any], lang: str, transcript: str, meta: dict[str, Any]
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """``clerk.<lang>.json``: the recorded ``clerk_translate`` answer for a readable document in a
+    recorded non-English language (AI_PROMPTS §5.5.4). ``out.<lang>.clerk_cards`` in the template
+    lists ``{english, translated}`` pairs; the entry whose ``english`` is the card the pipeline
+    builds today is written. A missing or stale entry is an error, so the zero-key demo never
+    falls back to the ``⟦tag⟧`` pseudo card for a recorded language and never shows a
+    translation of a different English card."""
+    fid = str(tpl["id"])
+    base = tpl["out"]["base"]
+    if lang == "en" or tpl.get("kind", "document") != "document" or not base.get("blocks", True):
+        return None, []
+    where = f"{fid}/clerk.{lang}.json"
+    english, source = clerk_card_english(tpl, lang)
+    if source != "ai":
+        return None, [
+            f"{where}: clerk_need_en fails the D-18 checks (contact filter, phrasing lint, 200 "
+            "characters); the pipeline would print the fixed need line instead"
+        ]
+    cards = (tpl["out"].get(lang) or {}).get("clerk_cards") or []
+    wanted = " ".join(english.split())
+    found = [c for c in cards if " ".join(str(c.get("english") or "").split()) == wanted]
+    if not found:
+        return None, [
+            f"{where}: no out.{lang}.clerk_cards entry translates the current English card "
+            f"{english!r}; add its translation (built from sender_as_written and clerk_need_en)"
+        ]
+    translated = str(found[0].get("translated") or "").strip()
+    errors: list[str] = []
+    if not translated or "⟦" in translated or " ".join(translated.split()) == wanted:
+        errors.append(f"{where}: the translated card is empty, English or pseudo text")
+    hit = _prose_contacts(translated, transcript)
+    if hit:
+        errors.append(f"{where}: contact {hit!r} in the translated card is not printed")
+    localized = _unprinted_digits(translated, transcript)
+    if localized:
+        errors.append(f"{where}: localized digits {localized!r}; keep Western digits")
+    printed = _printed_values(base.get("demands") or [])
+    errors += _repeats_printed(where, "translated card", english, translated, printed)
+    body = {
+        "_meta": meta, "task": "clerk_translate", "language_tag": lang, "english": english,
+        "translated": translated,
+    }  # fmt: skip
+    return body, errors
 
 
 def check_analysis(
@@ -870,6 +971,10 @@ def build_fixture(tpl_dir: Path) -> Built:
         if lang == "en":
             en_body = body
         files[f"out.{lang}.json"] = _json_bytes({"_meta": meta, **body})
+        card, card_errors = clerk_out(tpl, lang, transcript, meta)
+        errors += card_errors
+        if card is not None:
+            files[f"clerk.{lang}.json"] = _json_bytes(card)
     if errors:
         raise TemplateError("\n".join(errors))
     page_hashes = [dhash(r.png) for r in rendered]

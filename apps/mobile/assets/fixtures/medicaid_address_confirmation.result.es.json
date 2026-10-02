@@ -7,7 +7,7 @@
     ],
     "english": "Hello. I speak Spanish. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a Medicaid letter from Virginia Department of Medical Assistance Services. I need help with: a Medicaid letter asking me to confirm my address by October 14, 2026. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: una carta de Medicaid de Virginia Department of Medical Assistance Services. Necesito ayuda con: una carta de Medicaid que me pide confirmar mi dirección antes del October 14, 2026. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -37,7 +37,7 @@
       "span_ids": [
         "p1b7"
       ],
-      "text": "Confirme o actualice su dirección antes del 14 de octubre de 2026.",
+      "text": "Confirme o actualice su dirección antes del October 14, 2026.",
       "value_verbatim": "October 14, 2026",
       "verification_note": "exact",
       "verified": true
@@ -293,7 +293,7 @@
         "p1b8",
         "p1b7"
       ],
-      "text": "Entre por internet, llame o envíe el formulario adjunto antes del 14 de octubre de 2026."
+      "text": "Entre por internet, llame o envíe el formulario adjunto antes del October 14, 2026."
     },
     {
       "demand_id": null,
@@ -317,7 +317,7 @@
   },
   "questions_to_ask": [
     "¿La dirección que tienen de mí es correcta?",
-    "¿Qué pasa si mi formulario llega después del 14 de octubre?",
+    "¿Qué pasa si mi formulario llega después del October 14?",
     "¿Puedo confirmar mi dirección por teléfono?"
   ],
   "red_flags": [],
@@ -572,7 +572,7 @@
   "sender_as_written": "Virginia Department of Medical Assistance Services",
   "sender_kind": "state_agency",
   "summary": {
-    "body": "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del 14 de octubre de 2026. Si no lo hace, puede perder los papeles de su renovación.",
+    "body": "Esta carta es de Medicaid de Virginia. Le pide confirmar su dirección postal antes del October 14, 2026. Si no lo hace, puede perder los papeles de su renovación.",
     "body_en": "This letter is from Virginia Medicaid. It asks you to confirm your mailing address by October 14, 2026. If you do not, you may miss your renewal papers.",
     "span_ids": [
       "p1b1",
@@ -585,7 +585,7 @@
   "translated_text": [
     {
       "page": 1,
-      "text": "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: 10 de septiembre de 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del 14 de octubre de 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
+      "text": "Departamento de Servicios de Asistencia Médica de Virginia\nCover Virginia - Medicaid y FAMIS\nFecha: September 10, 2026\nNúmero de caso: ******1234\nIMPORTANTE: Por favor confirme su dirección\nNecesitamos su dirección postal correcta para que no pierda cartas sobre su cobertura de Medicaid.\nPor favor confirme o actualice su dirección antes del October 14, 2026.\nPuede confirmar su dirección por internet, por teléfono usando el número de su tarjeta de Medicaid, o enviando por correo el formulario adjunto.\nSi no recibimos su respuesta, quizás no podamos enviarle su paquete de renovación.\nEsta carta no cambia su cobertura hoy.\nAdjunto: Formulario de confirmación de dirección"
     }
   ],
   "translation_confidence": "medium",

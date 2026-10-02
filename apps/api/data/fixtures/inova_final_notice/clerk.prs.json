@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "prompts_version": "2026-09-27.1",
+    "recorded_by": "hand",
+    "recorded_on": "2026-09-27",
+    "model_id": "hand"
+  },
+  "task": "clerk_translate",
+  "language_tag": "prs",
+  "english": "Hello. I speak Dari. I am here about: a medical bill from Inova Health System. I need help with: a hospital bill - the amount, what it is for, and help paying it. Please speak slowly or write it down. Thank you.",
+  "translated": "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک بل صحی از Inova Health System. در این مورد کمک لازم دارم: یک بل شفاخانه - مبلغ آن، اینکه برای چیست، و کمک برای پرداخت آن. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
+}

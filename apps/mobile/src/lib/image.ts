@@ -3,8 +3,16 @@
 // types): `ImageManipulator.manipulate(uri).rotate(deg).resize({width|height}).renderAsync()` →
 // `ImageRef.saveAsync({ compress, format: SaveFormat.JPEG, base64: true })`. Web: the picked
 // `File` / blob: / data: URL is drawn on a `<canvas>` and re-encoded with `toDataURL('image/jpeg')`.
-// Re-encoding drops EXIF on both paths. Nothing here writes to disk or sends anything anywhere.
+// Re-encoding drops EXIF on both paths. Nothing here sends anything anywhere.
+// Temp files (native): expo-camera, expo-image-picker, expo-document-picker and
+// expo-image-manipulator `saveAsync` write full-size files under `Paths.cache/<Module>/`.
+// `deleteCaptureTemp` removes one such file as soon as its compressed base64 exists (the manipulator
+// output right after it is read here; the camera / picker original in `features/scan/compress.ts`),
+// so "Your paper was not saved anywhere" is true right away; `storage/cache.native.ts` still sweeps
+// the folders at every cold start. Only files inside those cache folders are ever deleted — never a
+// vault page (`Paths.document/vault/`), a photo-library asset or anything else.
 
+import { File as FsFile, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Platform } from 'react-native';
 
@@ -70,6 +78,58 @@ export function normaliseMask(m: MaskRect): MaskRect | null {
   const y1 = c(Math.max(m.y0, m.y1));
   if (x1 - x0 < 0.005 || y1 - y0 < 0.005) return null;
   return { x0, y0, x1, y1 };
+}
+
+// --- native capture temp files -------------------------------------------------------------------
+
+/** `Paths.cache` sub-folders the capture modules write into (SDK 57 native sources; the same list
+ *  as `storage/cache.native.ts` minus expo-print's `Print`, which is not a capture). */
+export const CAPTURE_TEMP_DIRS: readonly string[] = ['Camera', 'ImageManipulator', 'ImagePicker', 'DocumentPicker'];
+
+function filePath(uri: string): string {
+  let path = uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
+  try {
+    path = decodeURI(path);
+  } catch {
+    // keep the raw path
+  }
+  return path.replace(/\/+/g, '/');
+}
+
+/** True when `uri` is a file directly owned by a capture module under `cacheUri` (pure). */
+export function isCaptureTempUri(uri: string | null | undefined, cacheUri: string | null | undefined): boolean {
+  if (!uri || !cacheUri || !uri.startsWith('file:')) return false;
+  const path = filePath(uri);
+  if (path.split('/').includes('..')) return false;
+  const base = filePath(cacheUri).replace(/\/?$/, '/');
+  return CAPTURE_TEMP_DIRS.some((dir) => path.startsWith(`${base}${dir}/`) && path.length > base.length + dir.length + 1);
+}
+
+function cacheDirUri(): string | null {
+  if (Platform.OS === 'web') return null;
+  try {
+    return Paths.cache.uri;
+  } catch {
+    return null;
+  }
+}
+
+/** Native: is this page source a capture temp file (deleted once compressed)? Web: never. */
+export function isCaptureTemp(uri: string | null | undefined): boolean {
+  return Platform.OS !== 'web' && isCaptureTempUri(uri, cacheDirUri());
+}
+
+/** Native only: delete one capture temp file; true when a file was removed. Never throws. */
+export function deleteCaptureTemp(uri: string | null | undefined): boolean {
+  if (!uri || !isCaptureTemp(uri)) return false;
+  try {
+    const file = new FsFile(uri);
+    if (!file.exists) return false;
+    file.delete();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // --- web (canvas) ------------------------------------------------------------------------------
@@ -145,6 +205,8 @@ async function toJpegNative(input: ImageInput, opts: ToJpegOptions): Promise<Jpe
     ref = await ctx.renderAsync();
   }
   const out = await ref.saveAsync({ compress: opts.quality, format: SaveFormat.JPEG, base64: true });
+  // The manipulator also wrote this JPEG to <cache>/ImageManipulator; the base64 is all we keep.
+  deleteCaptureTemp(out.uri);
   const base64 = out.base64 ?? '';
   if (!base64) throw new Error('encode_failed');
   return { base64, width: out.width, height: out.height, byteLength: base64ByteLength(base64) };

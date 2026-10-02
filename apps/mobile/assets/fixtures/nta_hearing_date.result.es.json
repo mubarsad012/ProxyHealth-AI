@@ -5,7 +5,7 @@
     "appended_line_keys": [],
     "english": "Hello. I speak Spanish. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you.",
     "need_line_source": "ai",
-    "translated": "⟦es⟧ Hello. I speak Spanish. I am here about: a Notice to Appear from Executive Office for Immigration Review - Immigration Court. I need help with: a Notice to Appear in immigration court - confirming the hearing date and finding a lawyer. Please speak slowly or write it down. Thank you."
+    "translated": "Hola. Hablo español. Vengo por: un Aviso de Comparecencia (Notice to Appear) de Executive Office for Immigration Review - Immigration Court. Necesito ayuda con: un Aviso de Comparecencia ante la corte de inmigración - confirmar la fecha de la audiencia y encontrar un abogado. Por favor, hable despacio o escríbalo. Gracias."
   },
   "created_at": "2026-10-02T14:00:00Z",
   "demands": [
@@ -35,7 +35,7 @@
       "span_ids": [
         "p1b10"
       ],
-      "text": "Vaya a la corte de inmigración el 7 de octubre de 2026 a las 8:30 AM.",
+      "text": "Vaya a la corte de inmigración el October 7, 2026 a las 8:30 AM.",
       "value_verbatim": "October 7, 2026",
       "verification_note": "exact",
       "verified": true
@@ -374,7 +374,7 @@
     "reason": null
   },
   "questions_to_ask": [
-    "¿Mi audiencia sigue siendo el 7 de octubre de 2026 a las 8:30 AM?",
+    "¿Mi audiencia sigue siendo el October 7, 2026 a las 8:30 AM?",
     "¿Dónde encuentro ayuda legal gratis antes de la audiencia?",
     "¿Cómo envío el Formulario EOIR-33 si me mudo?"
   ],
@@ -624,20 +624,20 @@
   "sender_as_written": "Executive Office for Immigration Review - Immigration Court",
   "sender_kind": "court",
   "summary": {
-    "body": "Este papel inicia un caso en la corte de inmigración. Dice lo que el gobierno afirma sobre usted y le ordena presentarse ante un juez el 7 de octubre de 2026 a las 8:30 AM. Todavía no hay nada decidido.",
+    "body": "Este papel inicia un caso en la corte de inmigración. Dice lo que el gobierno afirma sobre usted y le ordena presentarse ante un juez el October 7, 2026 a las 8:30 AM. Todavía no hay nada decidido.",
     "body_en": "This paper starts a case in immigration court. It lists what the government says about you and tells you to appear before a judge on October 7, 2026 at 8:30 AM. Nothing is decided yet.",
     "span_ids": [
       "p1b4",
       "p1b7",
       "p1b10"
     ],
-    "title": "Aviso de Comparecencia ante la corte de inmigración el 7 de octubre de 2026"
+    "title": "Aviso de Comparecencia ante la corte de inmigración el October 7, 2026"
   },
   "target_language": "es",
   "translated_text": [
     {
       "page": 1,
-      "text": "Departamento de Justicia de los Estados Unidos\nOficina Ejecutiva de Revisión de Casos de Inmigración - Corte de Inmigración\nFormulario I-862\nAVISO DE COMPARECENCIA\nEn un proceso de expulsión según la sección 240 de la Ley de Inmigración y Nacionalidad\nDemandado: SAMPLE RESPONDENT\nEl Departamento de Seguridad Nacional afirma que:\n1. Usted no es ciudadano ni nacional de los Estados Unidos.\n2. Usted entró a los Estados Unidos por un lugar desconocido en una fecha desconocida.\nSE LE ORDENA presentarse ante un juez de inmigración en 100 Sample Plaza, Suite 200, Fairfax, VA 22030 el 7 de octubre de 2026 a las 8:30 AM.\nUsted puede tener representación en este proceso, sin costo para el Gobierno, por un abogado u otra persona autorizada.\nFalta de comparecencia: Si no asiste a la audiencia en la hora y el lugar indicados, se puede dictar una orden de expulsión en su ausencia.\nDebe avisar a la Corte de Inmigración de cualquier cambio de dirección dentro de cinco días hábiles, usando el Formulario EOIR-33."
+      "text": "Departamento de Justicia de los Estados Unidos\nOficina Ejecutiva de Revisión de Casos de Inmigración - Corte de Inmigración\nFormulario I-862\nAVISO DE COMPARECENCIA\nEn un proceso de expulsión según la sección 240 de la Ley de Inmigración y Nacionalidad\nDemandado: SAMPLE RESPONDENT\nEl Departamento de Seguridad Nacional afirma que:\n1. Usted no es ciudadano ni nacional de los Estados Unidos.\n2. Usted entró a los Estados Unidos por un lugar desconocido en una fecha desconocida.\nSE LE ORDENA presentarse ante un juez de inmigración en 100 Sample Plaza, Suite 200, Fairfax, VA 22030 el October 7, 2026 a las 8:30 AM.\nUsted puede tener representación en este proceso, sin costo para el Gobierno, por un abogado u otra persona autorizada.\nFalta de comparecencia: Si no asiste a la audiencia en la hora y el lugar indicados, se puede dictar una orden de expulsión en su ausencia.\nDebe avisar a la Corte de Inmigración de cualquier cambio de dirección dentro de cinco días hábiles, usando el Formulario EOIR-33."
     }
   ],
   "translation_confidence": "medium",

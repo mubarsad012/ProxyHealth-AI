@@ -1,5 +1,6 @@
 // S11 Action Hub for one paper (rendered by WP5's `app/result/[id]/help.tsx`). Emergency card
 // first when `safety.emergency`, scam card first when `scam_risk` ≠ none, region control, the
+// language filter chip (default the UI language; the choice is the match request's `language`), the
 // matched resources with checklist, LSC note + "If that is not you", national fallbacks (from the
 // response, or the bundled subset offline), and "Save as quick sheet" → S15.
 
@@ -14,6 +15,8 @@ import { radius, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { usePackMeta, useT } from '@/i18n/useT';
 
+import { matchLanguage } from './browse';
+import { LanguageFilter } from './LanguageFilter';
 import { RegionControl, useRegion } from './RegionControl';
 import { buildMatchRequestForAnalysis, buildMatchRequestForTags, offlineMatchResponse } from './request';
 import { ResourceList } from './ResourceList';
@@ -62,15 +65,18 @@ export function HelpForDocument({ analysis, focus, tags }: HelpForDocumentProps)
   const t = useT();
   const meta = usePackMeta();
   const region = useRegion();
+  // Language filter chip: null = follow the UI language.
+  const [languagePick, setLanguagePick] = useState<string | null>(null);
+  const language = matchLanguage(languagePick ?? meta.tag, meta.tag);
   const tagsKey = (tags ?? []).join(',');
   const req = useMemo(
     () =>
       buildMatchRequestForAnalysis(analysis, {
         region,
-        language: meta.tag,
+        language,
         tags: tagsKey ? (tagsKey.split(',') as ResourceTag[]) : null,
       }),
-    [analysis, region, meta.tag, tagsKey],
+    [analysis, region, language, tagsKey],
   );
   const match = useResourceMatch(req, { documentId: analysis.analysis_id });
   const lsc = useLscAlternative(req);
@@ -86,6 +92,7 @@ export function HelpForDocument({ analysis, focus, tags }: HelpForDocumentProps)
       ) : null}
       {analysis.scam_risk && analysis.scam_risk !== 'none' ? <ScamNotice risk={analysis.scam_risk} /> : null}
       <RegionControl />
+      <LanguageFilter value={languagePick ?? meta.tag} uiTag={meta.tag} onChange={(tag) => setLanguagePick(tag === meta.tag ? null : tag)} />
       {match.offline ? (
         match.cached ? (
           <AppText color="textMuted">{t('help.offline_cached')}</AppText>

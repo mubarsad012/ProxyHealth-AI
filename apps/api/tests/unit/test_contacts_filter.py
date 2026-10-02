@@ -20,7 +20,7 @@ PAPER = (
 )
 DB_NAMES = {"Legal Aid Justice Center", "CASA", "ImmigrationLawHelp.org"}
 MARK = "[contact removed — see Get help nearby]"
-ORG = "an organization (see Get help nearby)"
+ORG = "a group or office (see Get help nearby)"
 
 
 @pytest.fixture()
@@ -100,7 +100,7 @@ def test_non_contacts_are_left_alone(scrubber: cf.ContactScrubber, text: str) ->
 def test_organisations_not_on_paper_or_in_db_are_replaced(scrubber: cf.ContactScrubber) -> None:
     assert scrubber.scrub("Ask Northern Virginia Immigrant Services Center.") == f"Ask {ORG}."
     assert scrubber.scrub("Kaiser Permanente Hospital sent this.") == (
-        "An organization (see Get help nearby) sent this."
+        "A group or office (see Get help nearby) sent this."
     )
     assert scrubber.orgs_replaced == 2
     assert scrubber.total == 2 and scrubber.warnings() == [WarningCode.contacts_stripped]
@@ -110,7 +110,7 @@ def test_a_leading_article_is_absorbed_into_the_org_marker(scrubber: cf.ContactS
     assert scrubber.scrub("Ask the Fake Immigrant Justice Center.") == f"Ask {ORG}."
     assert scrubber.scrub("Visit the Springfield Refugee Services Center.") == f"Visit {ORG}."
     assert scrubber.scrub("The Fake Immigrant Justice Center can help.") == (
-        "An organization (see Get help nearby) can help."
+        "A group or office (see Get help nearby) can help."
     )
     assert scrubber.orgs_replaced == 3
 
@@ -181,7 +181,7 @@ def test_a_leading_verb_is_not_swallowed_into_the_org(
 
 
 def test_a_marker_that_starts_a_sentence_is_capitalised(scrubber: cf.ContactScrubber) -> None:
-    capital = "An organization (see Get help nearby)"
+    capital = "A group or office (see Get help nearby)"
     assert scrubber.scrub("Acme Legal Services LLC can help.") == f"{capital} can help."
     assert scrubber.scrub("Call us. Acme Legal Services LLC can help.") == (
         f"Call us. {capital} can help."
@@ -395,3 +395,22 @@ def test_scrub_kinds_checks_only_phone_web_and_email(scrubber: cf.ContactScrubbe
     out = scrubber.scrub_kinds(text, cf.CONTACT_KINDS)
     assert "Help Center" in out and "555-0123" not in out and "renew-now" not in out
     assert scrubber.contacts_stripped >= 1
+
+
+# --- Phase 2C: a Spanish phrase run into a printed name with "de" is not an invented org
+
+
+def test_spanish_phrase_before_a_printed_name_is_kept() -> None:
+    paper = "U.S. Citizenship and Immigration Services\nRequest for Evidence"
+    s = cf.make_scrubber(paper, set(), en_t())
+    text = (
+        "Vengo por: una Solicitud de Evidencia de USCIS de U.S. Citizenship and Immigration "
+        "Services."
+    )
+    assert s.scrub(text) == text and s.total == 0
+
+
+def test_spanish_phrase_before_an_unprinted_name_is_still_replaced() -> None:
+    s = cf.make_scrubber("U.S. Citizenship and Immigration Services", set(), en_t())
+    out = s.scrub("Pida ayuda a la Solicitud de Fairfax Immigrant Legal Services hoy.")
+    assert "Fairfax Immigrant Legal Services" not in out and s.total == 1

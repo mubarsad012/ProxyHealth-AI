@@ -3,11 +3,15 @@
 // Offline: "Save to read later" saves the pages to My papers as "Not read yet" (when they can be
 // kept, `readLater.tsx`), and "I will read it when internet is back" waits on this screen and
 // starts reading as soon as the connection returns. A sample can be read offline (bundled result).
+// Above the CTA: the output-language chip, the "I think this is a…" hint chips and the collapsed
+// "Whose paper is this?" selector (`ReviewOptions.tsx`). Native pages are compressed on arrival
+// and their temp originals deleted (`arrival.ts`); a page still being prepared shows a spinner.
+// Each page image is labelled "Page {n} of {count}".
 
 import { Image } from 'expo-image';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useApi, useServerConfig } from '@/api/config';
 import { Banner } from '@/design/components/Banner';
@@ -26,13 +30,16 @@ import { useOnline } from '@/lib/network';
 import { pdfSizeMb } from '@/lib/pdf';
 import { type CapturedPage, useSession } from '@/store/session';
 
+import { useCompressOnArrival } from './arrival';
 import { useBlurHints } from './blurHints';
-import { turnPage } from './compress';
+import { PAGE_IMAGE_KEY } from './choices';
+import { discardPageFiles, turnPage } from './compress';
 import { usePickImage } from './index';
 import { MaskEditor } from './MaskEditor';
 import { movePage, pagesAfterPick, type PickOutcome } from './pageQueue';
 import { forgetWebFile } from './pick';
 import { readLaterBlockKey, useReadLater } from './readLater';
+import { ReviewOptions } from './ReviewOptions';
 import { samplePages } from './samples';
 
 /** Reorder copy is pending WP0 (CL line in DECISIONS §14); the controls appear once both keys
@@ -51,11 +58,13 @@ function useHydrated(): boolean {
   return useSyncExternalStore(subscribeNoop, () => true, () => false);
 }
 
-function PageCard({ page, n, total, sample, onRetake, onTurn, onRemove, onHide, onMove }: {
+function PageCard({ page, n, total, sample, preparing, onRetake, onTurn, onRemove, onHide, onMove }: {
   page: CapturedPage;
   n: number;
   total: number;
   sample: boolean;
+  /** Native: the page is being compressed (its temp original is deleted right after). */
+  preparing?: boolean;
   onRetake(e?: unknown): void;
   onTurn(): void;
   onRemove(): void;
@@ -83,7 +92,13 @@ function PageCard({ page, n, total, sample, onRetake, onTurn, onRemove, onHide, 
       }}
       style={[styles.card, { borderColor: colors.divider, backgroundColor: colors.surface }]}>
       <View style={styles.imageWrap}>
-        <Image source={{ uri: page.uri }} contentFit="contain" style={[styles.image, { aspectRatio: aspect }]} accessibilityLabel={`${n}`} />
+        <Image
+          source={{ uri: page.uri }}
+          cachePolicy="memory"
+          contentFit="contain"
+          style={[styles.image, { aspectRatio: aspect }]}
+          accessibilityLabel={t(PAGE_IMAGE_KEY, { n, count: total })}
+        />
         {page.masks.map((m, i) => (
           <View
             key={i}
@@ -91,6 +106,13 @@ function PageCard({ page, n, total, sample, onRetake, onTurn, onRemove, onHide, 
             style={[styles.mask, { left: `${m.x0 * 100}%`, top: `${m.y0 * 100}%`, width: `${(m.x1 - m.x0) * 100}%`, height: `${(m.y1 - m.y0) * 100}%` }]}
           />
         ))}
+        {preparing ? (
+          <View style={styles.preparing} testID={`review-preparing-${n}`}>
+            {/* A wash of the theme background (light in light mode, dark in dark mode). */}
+            <View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.background }]} />
+            <ActivityIndicator color={colors.primary} accessibilityLabel={t('review.preparing_page', { n })} />
+          </View>
+        ) : null}
       </View>
       <AppText weight="bold" align="center">
         <Bidi dir="ltr">{String(n)}</Bidi>
@@ -160,6 +182,7 @@ export function ReviewScreen() {
   const sample = Boolean(demoSampleId);
   const isPdf = pages.length === 1 && pages[0].mimeType === 'application/pdf';
   const blurry = useBlurHints(pages, !sample && !isPdf);
+  const preparing = useCompressOnArrival();
   const readLater = useReadLater(pages, sample, () => setMessage(t('review.read_later_saved')));
 
   // "I will read it when internet is back": start S6 once the connection returns.
@@ -194,10 +217,12 @@ export function ReviewScreen() {
         if (!picked.length) return;
         const s = useSession.getState();
         forgetWebFile(page.id);
+        discardPageFiles(page);
         s.setPages(s.pages.map((p) => (p.id === page.id ? picked[0] : p)));
       });
       return;
     }
+    discardPageFiles(page);
     useSession.getState().removePage(page.id);
     router.push('/scan/capture' as Href);
   };
@@ -210,6 +235,7 @@ export function ReviewScreen() {
 
   const remove = (page: CapturedPage) => {
     forgetWebFile(page.id);
+    discardPageFiles(page);
     useSession.getState().removePage(page.id);
   };
 
@@ -306,6 +332,7 @@ export function ReviewScreen() {
                 n={i + 1}
                 total={pages.length}
                 sample={sample}
+                preparing={preparing.has(p.id)}
                 onMove={(delta) => {
                   const s = useSession.getState();
                   s.setPages(movePage(s.pages, p.id, delta));
@@ -325,10 +352,12 @@ export function ReviewScreen() {
           <BigButton label={t('capture.add_page')} icon="camera" variant="secondary" size={56} onPress={(e) => addPages(e)} />
         </>
       ) : null}
+      <ReviewOptions sample={sample} />
       {editingPage ? (
         <MaskEditor
           page={editingPage}
           pageNumber={pages.indexOf(editingPage) + 1}
+          pageCount={pages.length}
           visible
           onChange={(masks) => useSession.getState().updatePage(editingPage.id, { masks })}
           onClose={() => setEditing(null)}
@@ -362,6 +391,8 @@ const styles = StyleSheet.create({
   cell: { flexGrow: 1, flexBasis: 160, maxWidth: '100%' },
   card: { borderWidth: 1, borderRadius: radius.lg, padding: space.md, gap: space.sm },
   imageWrap: { width: '100%', position: 'relative', direction: 'ltr' },
+  preparing: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
+  wash: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.4 },
   image: { width: '100%', borderRadius: radius.sm },
   mask: { position: 'absolute', backgroundColor: '#000000' },
   actions: { flexWrap: 'wrap', gap: space.xs },

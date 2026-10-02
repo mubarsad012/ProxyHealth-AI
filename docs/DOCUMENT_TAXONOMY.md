@@ -48,7 +48,7 @@ Every document type has the same eight blocks:
 3. **Deadline and urgency** — which roles drive `Urgency`, the doc-type floor, and which `deadlines.yaml` rule ids may apply (only when the paper prints the matching relative phrase **and** a verified anchor exists; D-11). "Printed date only" means no seeded rule applies: a printed date is `stated`, a relative phrase without a rule is `unresolved` and rendered "Ask the sender which date this means."
 4. **Common pitfalls** — what people get wrong; each becomes a fixed notice (§7), a glossary term, a plan step or a `questions_to_ask` item.
 5. **Plain-language guidance** — the shape of Card 1 / Card 2 / Card 3 at grade ≤ 4, plus the glossary terms the model should define. Card 1 always answers: *what is this paper, who sent it, and is anything cancelled, denied, approved, or only requested*.
-6. **The app does / refuses** — the information-not-advice boundary for that type (D-17). Every immigration, court and civic type ends the plan with a `professional` step naming "a licensed lawyer or a DOJ-accredited representative" and never a specific organization (the matcher supplies those).
+6. **The app does / refuses** — the information-not-advice boundary for that type (D-17). Every immigration, court and civic type ends the plan with a `professional` step naming the type's professional (§8.6: "a licensed lawyer or a DOJ-accredited representative" for immigration papers and the immigration-court types `nta`, `hearing_notice`, `ij_decision`, `bia_notice`, `ice_checkin`; "a licensed lawyer" for other court and civic papers — DOJ-accredited representatives practise immigration law only) and never a specific organization (the matcher supplies those).
 7. **Resource tags** — `resource_tags` the pipeline sets for the type (model proposal validated against this list; `tagging.py` adds the type's primary tag when the model returns none).
 8. **Clerk need line (fallback)** and **Prepare checklist keys** — the English need line used when the AI line fails lint (D-18; ≤ 200 chars, no contacts), and the `prepare.yaml` keys the matcher adds to every resource shown for this type.
 
@@ -697,7 +697,7 @@ Sections 4.1–4.10 follow the eight-block layout of §1.2. The **Does / Refuses
 - **PL** Card 1 states the sender and subject as written and says plainly "I could not match this to a known kind of paper. Here is what it says." Card 3: `call` the printed number **only if the paper is not a suspected scam** · `professional` by category · `verify`.
 - **DR** refuses everything the category's finer types refuse; with `scam_risk=likely` the plan never says "call the number on the paper" (the scam card carries reporting resources).
 - **RT** by category: `immigration` → `immigration_legal_help`; `court` → `court_notice`, `immigration_legal_help`; `medical` → `language_access`; `benefits` → `benefits_navigation`; `housing` → `housing_counseling`; `school` → `school_enrollment`; `employment` → `workers_rights`; `tax` → `tax_notice`; `civic`/`other` → none (211 fallback). `scam_report` first whenever `scam_risk ≠ none`.
-- **CL/PK** "understanding a paper I received" (= `clerk.generic_need`) / none.
+- **CL/PK** "reading a paper I got" (= `clerk.generic_need`) / none.
 
 #### `unknown` — unreadable or not a document
 - **RB** `quality.legibility=poor`, fewer than two readable lines, or not a document (a face, a room, a blank page). `quality.readable=false`, `reason` set; the pipeline stops after the first model call (fixture `blurry_unreadable_page`: exactly one call).
@@ -758,7 +758,7 @@ RESOURCE_DB §4.6 `urgent_doc_boost` mirrors the floors plus `asylum_fee_notice`
 
 ### 5.3 Rule → document-type applicability (`data/rules/deadlines.yaml`)
 
-`deadline_rules.py` emits `kind=estimated` only when all four D-11 conditions hold: (a) the paper prints a relative phrase matching `pattern`; (b) the anchor is a **verified, stated** Demand whose `role == anchor_role`; (c) `doc_type ∈ applies_to_doc_types`; (d) `valid_until` is unset or in the future. Otherwise the phrase is `unresolved` and the client shows `demand.ask_sender_date`. A printed date on the same Demand always wins (`stated`). `formula` is rendered as "{anchor_quote} + {days} {calendar|business} days{ (+{mail_days} mail days)}"; `receipt_based: true` adds "must be *received* by" to `notes_en`. Business days use the federal-holiday table in `deadline_rules.py` with `zoneinfo`. `rule_verification: likely` renders `demand.rule_likely` and never raises urgency above `medium` (it is `estimated` anyway).
+`deadline_rules.py` emits `kind=estimated` only when all four D-11 conditions hold: (a) the paper prints a relative phrase matching `pattern`; (b) the anchor is a **verified, stated** Demand whose `role == anchor_role`; (c) `doc_type ∈ applies_to_doc_types` — and, the **category gate**, on the catch-all `other_notice` (also the scam re-type target) the employment rules `eeoc_180_300d` and `osha_retaliation_30d` apply only when `category == employment` (`deadline_rules.OTHER_NOTICE_RULE_CATEGORY`), so a debt collector's "within 30 days" never gets an estimate cited to the OSHA retaliation rule; `pay_or_quit` and `eviction_summons` never get one at all (`NEVER_ESTIMATE_TYPES`); (d) `valid_until` is unset or in the future. Otherwise the phrase is `unresolved` and the client shows `demand.ask_sender_date`. A printed date on the same Demand always wins (`stated`). `formula` is rendered as "{anchor_quote} + {days} {calendar|business} days{ (+{mail_days} mail days)}"; `receipt_based: true` adds "must be *received* by" to `notes_en` ("of receiving …" phrases are not marked `receipt_based`; with the category gate that path is unreachable for non-employment letters). The estimate's `DateInfo.localized_line` is the readable date written like the printed anchor (`deadline_rules.estimate_text`: "October 17, 2026", or "11/13/2026" for a numeric anchor; Phase 2C). Numeric dates are read in the paper's order (an order cue on the page, else `paper_default_order` — month first for US-issued types); the reader's `Preferences.date_format` is never a parser input (AI_PROMPTS §11.4). Business days use the federal-holiday table in `deadline_rules.py` with `zoneinfo`. `rule_verification: likely` renders `demand.rule_likely` and never raises urgency above `medium` (it is `estimated` anyway).
 
 | `id` | `applies_to_doc_types` | `pattern` (regex on `relative_rule_text`, case-insensitive) | days / basis | `anchor_role` | receipt / mail | `source_url` | `verification` / `valid_until` | notes |
 |---|---|---|---|---|---|---|---|---|
@@ -840,24 +840,47 @@ When `scam_risk == likely` **and** `document_type ∈ {USCIS types, ice_checkin,
 
 ### 6.6 `scam.yaml` schema
 
+As built (seed `version: "2026-09-30"`, code-authoritative after Phase 2B; `analysis/scam.py`). Regexes are case-insensitive over NFKC-normalised, whitespace-collapsed block text (the `verify.py` normaliser), in **English, Spanish, Arabic, Dari and Pashto**; every pattern runs on every text, whatever the paper's language (brand names are Latin everywhere).
+
 ```yaml
-version: "2026-09-27"
+version: "2026-09-30"
 thresholds: {possible: 2, likely: 4}
 gov_tlds: [".gov", ".mil"]
-agency_names: ["USCIS", "U.S. Citizenship", "ICE", "DHS", "Homeland Security", "Social Security", "SSA", "IRS", "Internal Revenue", "Medicare", "Medicaid", "EOIR", "Immigration Court", "Department of State", "Department of Justice", "Department of Labor"]
+agency_names: ["USCIS", "U.S. Citizenship", "US Citizenship", "ICE", "DHS", "Homeland Security", "Social Security", "SSA", "IRS", "Internal Revenue", "Medicare", "Medicaid", "EOIR", "Immigration Court", "Department of State", "Department of Justice", "Department of Labor"]
 agency_document_types: [uscis_receipt, uscis_rfe, uscis_noid, uscis_biometrics, uscis_interview, uscis_approval, uscis_denial, ead_related, green_card_related, tps_related, asylum_fee_notice, parole_related, ice_checkin, irs_notice, itin, ssa_letter]
+agency_sender_kinds: [federal_agency, state_agency, local_agency, court, unknown]
+private_sender_kinds: [landlord, hospital_or_clinic, utility, pharmacy, school, employer]
+payment_signals: [gift_card, wire_transfer, payment_app, crypto]
+threat_signals: [arrest_threat, deportation_threat, impersonation, non_gov_domain]
+fee_signals: [expedite_fee, fee_for_free_form, upfront_fee]
+request_signals: [id_or_payment_data_request, gift_card, wire_transfer, payment_app, crypto, upfront_fee]
+likely_rules: [payment_and_agency_sender, payment_and_threat, nongov_and_request, guaranteed_and_fee]
+negation_cues:                            # agency boilerplate ("USCIS will never ask you to pay with gift cards") is not a demand
+  before: {en: [...], es: [...], ar: [...], prs: [...], ps: [...]}   # a cue before the match in the same sentence negates it ...
+  after:  {en: [...], es: [...]}          # ... or one after it ("… is a scam")
+  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|…)\\b|[,;:]\\s*(please |you must |…)?(pay|send|buy|…)"   # ... unless a break word stands between cue and match
 signals:
   - id: gift_card
-    reason_key: scam.gift_card          # null for signals without a fixed key
+    reason_key: scam.gift_card            # null = scores but shows no chip
     red_flag_kind: scam_payment_method
     weight: 3
     patterns:
-      en: ["gift ?cards?", "(iTunes|Google Play|Steam|Target|Walmart) card", "prepaid (debit )?card", "Green ?Dot|MoneyPak|Vanilla"]
-      es: ["tarjetas? de regalo", "tarjeta prepaga(da)?"]
-    guards: []                            # [{sender_kind: [...], document_type: [...], negative_regex: "...", weight: 0|1}]
-likely_rules: [payment_and_agency_sender, payment_and_threat, nongov_and_request, guaranteed_and_fee]
-reviewed_by: {en: null, es: null}
+      en: ["\\bgift ?cards?\\b", "\\b(itunes|google play|steam|target|walmart|amazon|ebay) (gift )?cards?\\b", "\\bprepaid (debit )?cards?\\b", "\\b(green ?dot|moneypak|vanilla) "]
+      es: ["\\btarjetas? de regalo\\b", "\\btarjetas? prepaga(da)?s?\\b"]
+      ar: ["بطاق(ة|ات|ه) (ال)?(هدية|هدايا|هديه)", "…"]
+      prs: ["کارت[\\s\\u200c]*(های[\\s\\u200c]*)?(هدیه|تحفه)", "…"]
+      ps: ["(ډالۍ|ډالئ|تحفه)[\\s\\u200c]*(کارت|کارډ)", "…"]
+    negation: true                        # skip a match inside a negated / anti-fraud sentence (negation_cues)
+    guards: []                            # first matching guard's weight replaces the signal weight
+  - id: payment_app
+    # …
+    guards:
+      - {gov_url_in_segment: true, weight: 0}   # the hit block prints a .gov/.mil address and no other contact: the agency's own portal
+      - {sender_kind: [landlord, hospital_or_clinic, utility, pharmacy, school, employer], requires_sender_name: true, weight: 1}
+reviewed_by: {en: null, es: null, ar: null, prs: null, ps: null}
 ```
+
+Guard fields: `sender_kind`, `document_type`, `negative_regex` (must match every text the hit came from), `requires_sender_name` (the paper names its sender), `unless_any_of: [signal ids]` (the full weight stays when one of those also fires), `gov_url_in_segment`, `weight` (0 = the signal never counts on its own). `negation: true` is set on the four payment signals (`gift_card`, `wire_transfer`, `payment_app`, `crypto`), whose words agencies print in fraud warnings; a `before` cue counts only within the same sentence and only when no `breaks` match stands between it and the hit ("never pay with gift cards, only by check" negates; "we do not accept checks, pay with gift cards" does not). `prs`/`ps` `before` cues are the bare "never" words (هرگز, هېڅکله); their patterns and cues are machine-assisted drafts (`reviewed_by: null`, DECISIONS Q6).
 
 ### 6.7 Troubleshoot `mode=scam_check`
 
@@ -873,7 +896,7 @@ D-20 cards are **reviewed fixed copy**: the client renders `t(fixed_copy_key)`; 
 
 | id | Document types | Condition (`when`) | `kind` | `severity` | `fixed_copy_key` | Exact English copy |
 |---|---|---|---|---|---|---|
-| `jury_citizenship` | `jury_summons` | always | `jury_citizenship_warning` | `high` | `fixed.jury_summons` | "You must answer this form. If you are not a U.S. citizen, mark *not a citizen* and send it back. Never check 'citizen' and never register to vote — it can permanently harm your immigration case." |
+| `jury_citizenship` | `jury_summons` | always | `jury_citizenship_warning` | `high` | `fixed.jury_summons` | "You must answer this form. If you are not a U.S. citizen, mark 'not a citizen' and send it back. Never check 'citizen' and never register to vote — it can permanently harm your immigration case." |
 | `ead_receipt` | `uscis_receipt`, `ead_related`, `i9` | `form_numbers_any: [I-765]` **and** `text_regex_any: ["I-?797C", "receipt notice", "we received your"]` **and not** `text_regex_any: ["Temporary Protected Status", "\\bA12\\b", "\\bC19\\b"]` (TPS Federal-Register extensions are the exception); date test: a verified `notice_date`/received date **≥ 2025-10-30**, or no such date (fail-open: show it) | `ead_receipt_not_work_authorization` | `high` | `fixed.uscis_receipt_i765` | "A receipt for a work-permit renewal filed on or after October 30, 2025 is **not** proof you can work. Ask a lawyer or DOJ-accredited representative about a possible work gap." |
 | `not_a_court_order` | `pay_or_quit` | always | `not_a_court_order` | `high` | `fixed.pay_or_quit` | "This is not a court order. Only a court can make you leave." |
 | `court_date_deadline_eviction` | `eviction_summons` | always | `court_date_is_the_deadline` | `high` | `fixed.eviction_summons` | "The court date on this paper is the date that matters. Go, or you can lose automatically." |
@@ -947,7 +970,7 @@ Linted fields: `summary.title/body/body_en`, `Demand.text`, `Demand.ambiguity_no
 | `school_decision` | `your child (needs\|does not need\|doesn't need\|qualifies for\|is eligible for\|should be in\|must be in) (special education\|an IEP\|a 504\|services\|this school)`, `the school (must\|cannot\|can't\|has to) (enroll\|exclude\|test\|evaluate)` unless attributed | `eligibility` | `school` |
 | `contact_like` | any phone-like digit run, URL, e-mail or street address (handled by `contacts_filter.py`, listed here so a rewrite never re-introduces one) | `contact_request` | all |
 
-**Code-authoritative (CL-021(d), CL-030(b)(c)).** `contact_like` never fails an original sentence for carrying a contact (scrubbing is `contacts_filter.py`'s job); it only rejects a rewrite candidate that adds a phone, URL, e-mail or address the original sentence lacked (`lint_sentence(..., original=)` via `contacts_filter.new_contacts`). `medical_interpret` narrows the bare `you (have\|…)` to "you have <condition>": it skips `you have to/until/<n> days/questions/them/an appointment …` and a sentence-final "you have" (otherwise the golden `prescription_label` plan step and ordinary appointment lines fail the D-16 lint gate); it adds "your <measure> (level\|count\|reading)? is (too\|very)? high/low/abnormal/normal/elevated/dangerous…" (bill words such as balance, amount, copay, rent excluded), "(which\|that\|this)? (can\|could\|may\|might) be (dangerous\|serious\|life-threatening)", and an optional modifier word before `results/levels/values/numbers/readings`, so PRODUCT_SPEC §7.2 row 3 is caught.
+**Code-authoritative (CL-021(d), CL-030(b)(c)).** `contact_like` never fails an original sentence for carrying a contact (scrubbing is `contacts_filter.py`'s job); it only rejects a rewrite candidate that adds a phone, URL, e-mail or address the original sentence lacked (`lint_sentence(..., original=)` via `contacts_filter.new_contacts`). `medical_interpret` narrows the bare `you (have\|…)` to "you have <condition>": it skips `you have to/until/<n> days/questions/them/an appointment …` and a sentence-final "you have" (otherwise the golden `prescription_label` plan step and ordinary appointment lines fail the D-16 lint gate); it adds "your <measure> (level\|count\|reading)? is (too\|very)? high/low/abnormal/normal/elevated/dangerous…" (bill words such as balance, amount, copay, rent excluded), "(which\|that\|this)? (can\|could\|may\|might) be (dangerous\|serious\|life-threatening)", and an optional modifier word before `results/levels/values/numbers/readings`, so PRODUCT_SPEC §7.2 row 3 is caught. **Phase 2B widenings (`phrasing.yaml` version 2026-09-30, code-authoritative):** `eligibility` also catches hedged forms ("you probably/likely/should/may/might/will/would qualify", "you're probably not eligible"); `outcome` adds "would" and adverbs ("you will probably be approved", "you would almost certainly lose"); `negated_duty` adds "you don't/never/won't/will not need to", "you need not" and "(there is) no need to (go\|attend\|appear\|answer\|respond\|reply\|pay\|show up\|come)"; `medical_interpret` adds up to two words before the measure ("your blood sugar levels are high"), a value in between ("your cholesterol is 260, which is high", "your A1C of 9.1 is above normal"; bill words excluded), "(is\|are\|was\|were) (above\|below\|outside\|out of) the normal/healthy/target/reference range", "of/at <number> means/shows/indicates" and dosing directives ("you should stop/skip/double/increase … your dose/medicine/insulin").
 
 ### 8.3 Attribution exemption and allowed phrasings
 
@@ -955,7 +978,7 @@ A sentence is **attributed** — and the `advice_verb`, `negated_duty`, `legal_s
 
 ### 8.4 Rewrite pass and fixed hedge
 
-- Prompt: `ai/prompts/phrasing_rewrite.md` with `{sentence}` and `{professional}`; `{professional}` by `DocumentCategory` exactly as PRODUCT_SPEC §7.2 and AI_PROMPTS §5.7: immigration/court/civic/employment → "a licensed lawyer or a DOJ-accredited representative" · medical → "your doctor, nurse or pharmacist" · housing → "a housing lawyer or counselor" · benefits → "the office that sent this paper" · school → "the school office or a parent center" · tax → "the IRS or a free tax helper" · other → "a professional" (in chat, by `refer_to_professional` when it is not `none`). Output ≤ 400 chars, one or two sentences, must re-pass the lint and the contacts filter.
+- Prompt: `ai/prompts/phrasing_rewrite.md` with `{sentence}` and `{professional}`; `{professional}` by document type first (`professional_by_document_type`), else by `DocumentCategory`, exactly as PRODUCT_SPEC §7.2 and AI_PROMPTS §5.7 (`phrasing.professional_for`): immigration and the immigration-court types → "a licensed lawyer or a DOJ-accredited representative" · other court/civic → "a licensed lawyer" · employment → "a licensed lawyer or a workers' rights office" (`w2_1099` → "a free tax helper or a tax professional", `itin` → "the IRS or a free tax helper") · medical → "your doctor, nurse or pharmacist" · housing → "a housing lawyer or counselor" · benefits → "the office that sent this paper" · school → "the school office or a parent center" · tax → "the IRS or a free tax helper" · other → "a professional" (in chat, by `refer_to_professional` when it is not `none`). Output ≤ 400 chars, one or two sentences, must re-pass the lint and the contacts filter.
 - Fixed hedge when the rewrite fails: the existing chat templates are reused via `t_server` so no new key is needed — `chat.refusal.eligibility` "I cannot say whether you qualify. The paper says what it says; a professional can tell you what it means for you." · `chat.refusal.filing_advice` "I cannot tell you what to file or send. I can explain what the paper asks for." · `chat.refusal.outcome` "I cannot predict what will happen. No one can promise a result." · `chat.refusal.medical_interpretation` "I cannot say what this means for your health. Ask your doctor, nurse or pharmacist." · `chat.refusal.contact_request` "I only share phone numbers and websites printed on your paper or checked by a person. See Get help nearby." For `dramatize`, the clause is deleted and, if nothing remains, the sentence is dropped. In chat, the hedge also sets `refusal_kind` and `refer_to_professional` by category (§8.5) so the UI renders `chat.refer.*`.
 - Every `PlanStep{kind: professional}` must name a professional; when the step names none at all (no lawyer/representative, clinician, counselor, office, helper or advocate word), `phrasing.py` appends the category's referral sentence `t_server("chat.refer.<ReferTo>")`: immigration/court/civic/employment → `lawyer_or_accredited_rep`; medical → `clinician`; housing → `housing_counselor`; benefits → `benefits_office`; tax/school/other → `sender`. Steps that already name the type-specific professional given in §4 (a hospital financial counselor, a workers' rights office, a free tax clinic, a parent center) are left as written.
 - Mock provider parity (BUILD_PLAN §5.8): `phrasing_rewrite` returns "The paper says " + the sentence with its first character lower-cased; the pipeline re-lints and falls back to the hedge.
@@ -964,7 +987,7 @@ A sentence is **attributed** — and the `advice_verb`, `negated_duty`, `legal_s
 
 | Category / types | The app **says** (fixed, from PRODUCT_SPEC Appendix A unless noted) | The app **never says** | Always routes to |
 |---|---|---|---|
-| `immigration`, `court`, `civic` (all USCIS, EOIR, ICE, jury, traffic types) | Header `disclaimer.legal_information_only`: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer or a DOJ-accredited representative can advise you." · Referral `chat.refer.lawyer_or_accredited_rep`: "A licensed lawyer or a DOJ-accredited representative can advise you about your case. Find one in Get help." · Notario line (proposed `fixed.notario_not_a_lawyer`, §7.2) · LSC line on restricted resources `status_note.lsc_restricted`: "This organization usually cannot help people without immigration papers, except survivors of violence or trafficking." + `help.lsc_alternative` "If that is not you, try these instead" | eligibility for any relief or status; what to file, argue or plead; outcome or timing predictions; whether the person may work, travel, vote or stay; any computed deadline without a seeded rule; any drafting | `immigration_legal_help` → ImmigrationLawHelp (`immlawhelp`), EOIR pro bono list (`eoir_probono`), DOJ roster (`eoir_roster`), USCIS Find Legal Services (`uscis_find_legal`); court dates → `eoir_hotline`/`eoir_acis`; never AILA when `scam_report` is active (`never_show_with_tags`) |
+| `immigration`, `court`, `civic` (all USCIS, EOIR, ICE, jury, traffic types) | Header `disclaimer.legal_information_only`: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer can advise you. For an immigration case, a DOJ-accredited representative can too." · Referral `chat.refer.lawyer_or_accredited_rep`: "A licensed lawyer can advise you about your case. For an immigration case, a DOJ-accredited representative can too. Find one in Get help." · Notario line (proposed `fixed.notario_not_a_lawyer`, §7.2) · LSC line on restricted resources `status_note.lsc_restricted`: "This organization usually cannot help people without immigration papers, except survivors of violence or trafficking." + `help.lsc_alternative` "If that is not you, try these instead" | eligibility for any relief or status; what to file, argue or plead; outcome or timing predictions; whether the person may work, travel, vote or stay; any computed deadline without a seeded rule; any drafting | `immigration_legal_help` → ImmigrationLawHelp (`immlawhelp`), EOIR pro bono list (`eoir_probono`), DOJ roster (`eoir_roster`), USCIS Find Legal Services (`uscis_find_legal`); court dates → `eoir_hotline`/`eoir_acis`; never AILA when `scam_report` is active (`never_show_with_tags`) |
 | `employment` (`legal_information_only`) | same header and referral; "A workers' rights office can check your pay for free." (model prose, lint-clean) | "you were underpaid", "this is wage theft/discrimination/retaliation", "you can/cannot be fired", immigration effects of a job | `workers_rights`, `wage_theft` → DOL WHD (`dol_whd`), EEOC, OSHA, `lawhelp` (LSC note shown) |
 | `housing` (`housing_information_only`) | Header: "This is general information about this type of paper, not legal advice. A housing lawyer or counselor can advise you about your home." · Referral `chat.refer.housing_counselor` · Fixed `fixed.pay_or_quit`, `fixed.eviction_summons` · D-17 state sentence (§8.3) | "you have to leave by…", "you do not have to leave", notice/answer periods, validity of a notice, defenses | `eviction`, `housing_counseling`, `rent_assistance` → HUD counselors, Virginia court self-help and helpline (geo), `lawhelp`/`lsc_find` with the LSC note |
 | `medical` (`medical_information_only`) | Header: "This explains what your paper says. It is not medical advice. Ask your doctor, nurse or pharmacist what it means for you." · Referral `chat.refer.clinician` · Fixed emergency card (S19) when the lexicon fires | diagnosis, interpretation of values, dosing, "you owe/do not pay", whether care was necessary, whether to appeal | `medical_bill`, `charity_care`, `insurance_denial`, `primary_care_uninsured`, `language_access` (HHS interpreter right via `hhs_ocr_lep`) |
@@ -976,19 +999,29 @@ Chat `refusal_kind` → `refer_to_professional` defaults by category when the mo
 ### 8.6 `phrasing.yaml` schema
 
 ```yaml
-version: "2026-09-27"
-attribution_regex: "^(The|This|Your|It) (paper|letter|notice|form|bill|summons|order|lease|label|court|judge|office|school|landlord|insurer|plan|IRS|USCIS|ICE|Social Security)? ?(says|asks|lists|states|tells you|orders|warns)"
-professional_by_category:          # PRODUCT_SPEC §7.2; identical to AI_PROMPTS §5.7
+version: "2026-09-30"
+attribution_regex: "\\b(the|this|your|it) ?(paper|letter|notice|form|bill|summons|order|lease|label|court|judge|office|school|landlord|insurer|plan|irs|uscis|ice|social security)? ?(says|asks|lists|states|tells you|orders|warns)\\b"   # unanchored ("begins with or contains", §8.3); regexes are case-insensitive
+professional_by_category:          # PRODUCT_SPEC §7.2; identical to AI_PROMPTS §5.7 (Phase 2B: DOJ-accredited reps practise immigration law only)
   immigration: "a licensed lawyer or a DOJ-accredited representative"
-  court: "a licensed lawyer or a DOJ-accredited representative"
-  civic: "a licensed lawyer or a DOJ-accredited representative"
-  employment: "a licensed lawyer or a DOJ-accredited representative"
+  court: "a licensed lawyer"
+  civic: "a licensed lawyer"
+  employment: "a licensed lawyer or a workers' rights office"
   medical: "your doctor, nurse or pharmacist"
   housing: "a housing lawyer or counselor"
   benefits: "the office that sent this paper"
   school: "the school office or a parent center"
   tax: "the IRS or a free tax helper"
   other: "a professional"
+professional_by_document_type:     # wins over the category (court → immigration court; tax-like employment papers)
+  nta: "a licensed lawyer or a DOJ-accredited representative"
+  hearing_notice: "a licensed lawyer or a DOJ-accredited representative"
+  ij_decision: "a licensed lawyer or a DOJ-accredited representative"
+  bia_notice: "a licensed lawyer or a DOJ-accredited representative"
+  ice_checkin: "a licensed lawyer or a DOJ-accredited representative"
+  w2_1099: "a free tax helper or a tax professional"
+  itin: "the IRS or a free tax helper"
+refer_to_by_category: {immigration: lawyer_or_accredited_rep, court: lawyer_or_accredited_rep, civic: lawyer_or_accredited_rep, employment: lawyer_or_accredited_rep, medical: clinician, housing: housing_counselor, benefits: benefits_office, school: sender, tax: sender, other: sender}
+professional_words: [lawyer, attorney, representative, "...", professional, preparer, tax help, tax-help, vita]   # a professional step naming one of these needs no appended referral (§8.4)
 hedge_key_by_family: {eligibility: chat.refusal.eligibility, outcome: chat.refusal.outcome, advice_verb: chat.refusal.filing_advice, negated_duty: chat.refusal.filing_advice, medical_interpret: chat.refusal.medical_interpretation, legal_status: chat.refusal.filing_advice, benefits_decision: chat.refusal.eligibility, housing_law: chat.refusal.filing_advice, tax_work_conclusion: chat.refusal.filing_advice, school_decision: chat.refusal.eligibility, contact_like: chat.refusal.contact_request, dramatize: null}
 languages:
   en:

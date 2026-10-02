@@ -12,11 +12,13 @@ import type { IcsEvent } from '@/lib/ics';
 import { type IcsOfferResult, notifications, offerIcs } from '@/lib/notifications';
 import { isWeb } from '@/lib/platform';
 import type { Reminder, Vault } from '@/storage/index';
+import { kv } from '@/storage/kv';
 import { useVault } from '@/storage/StorageProvider';
 import { useSettings } from '@/store/settings';
 
 import { icsEvents, offerEvents, rescheduleMissing, setReminderEnabled } from './manage';
 import { createRemindersService, type OwnDateInput, type RemindersDeps, type ScheduleOutcome } from './service';
+import { deviceZone, isZoneStamp, retimeForZoneChange, ZONE_KEY, type ZoneStore } from './timezone';
 
 export type { ScheduleOutcome } from './service';
 
@@ -93,4 +95,25 @@ export function useReminders(): RemindersApi {
 /** App start (native): put back notifications the OS lost. Safe to call more than once. */
 export function rescheduleLostReminders(vault: Vault): Promise<number> {
   return rescheduleMissing(remindersDeps(vault)).catch(() => 0);
+}
+
+/** The zone reminders were last checked in (kv; only a zone name and a UTC offset). */
+export const zoneStore: ZoneStore = {
+  get: async () => {
+    const value = await kv.getJSON<unknown>(ZONE_KEY);
+    return isZoneStamp(value) ? value : null;
+  },
+  set: (stamp) => kv.setJSON(ZONE_KEY, stamp),
+};
+
+/** Native: move reminders to 09:00 in the device's current zone if it changed (§10.2). */
+export function retimeRemindersForZone(vault: Vault): Promise<number> {
+  return retimeForZoneChange(remindersDeps(vault), zoneStore, deviceZone()).catch(() => 0);
+}
+
+/** App start (native): first follow a time-zone change, then put back what the OS lost. */
+export async function syncRemindersAtStart(vault: Vault): Promise<{ retimed: number; rescheduled: number }> {
+  const retimed = await retimeRemindersForZone(vault);
+  const rescheduled = await rescheduleLostReminders(vault);
+  return { retimed, rescheduled };
 }

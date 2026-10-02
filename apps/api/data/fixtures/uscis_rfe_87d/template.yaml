@@ -92,16 +92,19 @@ out:
     form_numbers: ["I-797E", "I-485"]
     legibility: good
   es:
+    clerk_cards:
+      - english: "Hello. I speak Spanish. I am here about: a USCIS request for evidence from U.S. Citizenship and Immigration Services. I need help with: a USCIS request for evidence and what I must send before the date on it. Please speak slowly or write it down. Thank you."
+        translated: "Hola. Hablo español. Vengo por: una Solicitud de Evidencia de USCIS de U.S. Citizenship and Immigration Services. Necesito ayuda con: una Solicitud de Evidencia de USCIS y lo que debo enviar antes de la fecha que dice. Por favor, hable despacio o escríbalo. Gracias."
     summary_title: "USCIS pide más papeles para su Formulario I-485"
-    summary_body: "Esta es una Solicitud de Evidencia de USCIS. Necesitan más papeles antes de decidir sobre su Formulario I-485. Su caso no está negado. Deben recibir su respuesta antes del 13 de octubre de 2026."
+    summary_body: "Esta es una Solicitud de Evidencia de USCIS. Necesitan más papeles antes de decidir sobre su Formulario I-485. Su caso no está negado. Deben recibir su respuesta antes del October 13, 2026."
     demands:
-      d1: {text: "USCIS debe recibir su respuesta antes del 13 de octubre de 2026."}
+      d1: {text: "USCIS debe recibir su respuesta antes del October 13, 2026."}
       d2: {text: "Envíe los tres papeles de la lista: acta de nacimiento con traducción, dos fotos y su declaración de impuestos."}
       d3: {text: "Ponga este aviso encima de su respuesta."}
     plan_steps:
       s1: {text: "Reúna cada papel de la lista. Haga copias para usted."}
       s2: {text: "Anote preguntas sobre los papeles que no tenga y pregunte a una persona que ayude."}
-      s3: {text: "Envíe todo en un solo paquete, con este aviso encima, para que llegue antes del 13 de octubre de 2026."}
+      s3: {text: "Envíe todo en un solo paquete, con este aviso encima, para que llegue antes del October 13, 2026."}
       s4: {text: "Hable con un abogado con licencia o un representante acreditado por el DOJ antes de enviar su respuesta."}
     glossary:
       "evidence": "Papeles que muestran que algo es verdad."
@@ -109,11 +112,14 @@ out:
       "certified English translation": "Una traducción completa al inglés con una nota firmada que dice que es correcta."
     questions_to_ask:
       - "¿Qué puedo enviar si no tengo mi acta de nacimiento?"
-      - "¿Mi respuesta debe llegar antes del 13 de octubre o enviarse antes de esa fecha?"
+      - "¿Mi respuesta debe llegar antes del October 13 o enviarse antes de esa fecha?"
       - "¿Puedo enviar los papeles en más de un paquete?"
     translated_pages:
-      - "Servicio de Ciudadanía e Inmigración de los Estados Unidos\nDepartamento de Seguridad Nacional\nI-797E, Aviso de Acción\nFecha del aviso: 18 de julio de 2026\nNúmero de recibo: IOE0987654321\nSOLICITUD DE EVIDENCIA\nNecesitamos más evidencia antes de tomar una decisión sobre su Formulario I-485.\nDebe presentar la evidencia solicitada dentro de 87 días. Su respuesta debe recibirse a más tardar el 13 de octubre de 2026.\nPresente la siguiente evidencia:\n1. Una copia de su acta de nacimiento con una traducción certificada al inglés.\n2. Dos fotos tamaño pasaporte tomadas en los últimos 30 días.\n3. Una copia de su declaración federal de impuestos más reciente.\nColoque este aviso encima de su respuesta.\nEnvíe toda la evidencia junta en un solo paquete.\nSi no responde antes de la fecha indicada, podemos considerar su caso abandonado."
+      - "Servicio de Ciudadanía e Inmigración de los Estados Unidos\nDepartamento de Seguridad Nacional\nI-797E, Aviso de Acción\nFecha del aviso: July 18, 2026\nNúmero de recibo: IOE0987654321\nSOLICITUD DE EVIDENCIA\nNecesitamos más evidencia antes de tomar una decisión sobre su Formulario I-485.\nDebe presentar la evidencia solicitada dentro de 87 días. Su respuesta debe recibirse a más tardar el October 13, 2026.\nPresente la siguiente evidencia:\n1. Una copia de su acta de nacimiento con una traducción certificada al inglés.\n2. Dos fotos tamaño pasaporte tomadas en los últimos 30 días.\n3. Una copia de su declaración federal de impuestos más reciente.\nColoque este aviso encima de su respuesta.\nEnvíe toda la evidencia junta en un solo paquete.\nSi no responde antes de la fecha indicada, podemos considerar su caso abandonado."
   prs:
+    clerk_cards:
+      - english: "Hello. I speak Dari. I am here about: a USCIS request for evidence from U.S. Citizenship and Immigration Services. I need help with: a USCIS request for evidence and what I must send before the date on it. Please speak slowly or write it down. Thank you."
+        translated: "سلام. من به دری صحبت می‌کنم. برای این آمده‌ام: یک درخواست شواهد USCIS از U.S. Citizenship and Immigration Services. در این مورد کمک لازم دارم: یک درخواست شواهد USCIS و آنچه باید پیش از تاریخ روی آن بفرستم. لطفاً آهسته صحبت کنید یا آن را بنویسید. تشکر."
     summary_title: "USCIS برای فورم I-485 شما اسناد بیشتر می‌خواهد"
     summary_body: "این یک درخواست شواهد از USCIS است. آنها پیش از تصمیم درباره فورم I-485 شما به اسناد بیشتر نیاز دارند. قضیه شما رد نشده است. جواب شما باید تا October 13, 2026 به آنها برسد."
     demands:
@@ -136,6 +142,9 @@ out:
     translated_pages:
       - "اداره خدمات تابعیت و مهاجرت ایالات متحده\nوزارت امنیت داخلی\nI-797E، اطلاعیه اقدام\nتاریخ اطلاعیه: July 18, 2026\nنمبر رسید: IOE0987654321\nدرخواست شواهد\nما پیش از تصمیم درباره فورم I-485 شما به شواهد بیشتر نیاز داریم.\nشما باید شواهد خواسته‌شده را در ظرف 87 روز بفرستید. جواب شما باید تا October 13, 2026 دریافت شود.\nلطفاً شواهد زیر را بفرستید:\n1. کاپی تذکره تولد شما با ترجمه تأییدشده انگلیسی.\n2. دو عکس پاسپورتی که در 30 روز گذشته گرفته شده باشد.\n3. کاپی تازه‌ترین اظهارنامه مالیاتی فدرال شما.\nلطفاً این اطلاعیه را روی جواب خود بگذارید.\nهمه شواهد را با هم در یک بسته بفرستید.\nاگر تا تاریخ بالا جواب ندهید، ممکن است قضیه شما را رهاشده بدانیم."
   ar:
+    clerk_cards:
+      - english: "Hello. I speak Arabic. I am here about: a USCIS request for evidence from U.S. Citizenship and Immigration Services. I need help with: a USCIS request for evidence and what I must send before the date on it. Please speak slowly or write it down. Thank you."
+        translated: "مرحباً. أتحدث العربية. أنا هنا بخصوص: طلب أدلة من USCIS من U.S. Citizenship and Immigration Services. أحتاج إلى مساعدة في: طلب أدلة من USCIS وما يجب أن أرسله قبل التاريخ المذكور فيه. من فضلك تكلّم ببطء أو اكتبه. شكراً."
     summary_title: "دائرة USCIS تطلب أوراقًا أكثر لنموذج I-485"
     summary_body: "هذا طلب أدلة من USCIS. يحتاجون أوراقًا أكثر قبل أن يقرروا في نموذج I-485 الخاص بك. قضيتك لم تُرفض. يجب أن يصلهم ردك قبل October 13, 2026."
     demands:

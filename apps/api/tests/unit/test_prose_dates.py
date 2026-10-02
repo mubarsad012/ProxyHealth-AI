@@ -5,6 +5,8 @@ from __future__ import annotations
 import threading
 from datetime import date
 
+import pytest
+
 from proxyhealth_api.analysis import pipeline
 from proxyhealth_api.analysis import prose_dates as pd
 from proxyhealth_api.contracts.analysis import DateInfo, Demand
@@ -84,3 +86,69 @@ async def test_offload_runs_image_work_off_the_event_loop() -> None:
     loop_thread = threading.get_ident()
     worker = await pipeline.offload(threading.get_ident)
     assert worker != loop_thread
+
+
+# --- Phase 2C: printed forms (D-26; AI_PROMPTS §5.0 rule 7) ------------------------------------
+
+BILL = PAPER + "\nAmount due: $1,240.00. Form I-130. Call by 10/14/2026."
+
+
+def forms() -> pd.PrintedForms:
+    return pd.printed_forms(BILL, "en", [hearing()])
+
+
+@pytest.mark.parametrize(
+    ("lang", "prose", "expected"),
+    [
+        # Persian digits and a translated month → the printed date (Dari).
+        ("prs", "تا ۷ اکتبر ۲۰۲۶ ساعت ۸:۳۰ به محکمه بروید.",
+         "تا October 7, 2026 ساعت 8:30 به محکمه بروید."),
+        # Month first with the Arabic comma before the year (the year is absorbed, not doubled).
+        ("prs", "تاریخ اکتبر ۷، ۲۰۲۶ است.", "تاریخ October 7, 2026 است."),
+        # Eastern Arabic digits, separators and a translated month (Arabic).
+        ("ar", "اذهب إلى المحكمة في ٧ أكتوبر ٢٠٢٦ وادفع ١٬٢٤٠٫٠٠ دولار.",
+         "اذهب إلى المحكمة في October 7, 2026 وادفع 1,240.00 دولار."),
+        # Western digits, translated (Levantine) month name.
+        ("ar", "الجلسة في 7 تشرين الأول 2026.", "الجلسة في October 7, 2026."),
+        # A numeric printed date keeps its numeric spelling; form numbers get Western digits.
+        ("ar", "اتصل قبل ١٤/١٠/٢٠٢٦ بخصوص النموذج I-١٣٠.",
+         "اتصل قبل 10/14/2026 بخصوص النموذج I-130."),
+        # Spanish month name on an English paper → as printed.
+        ("es", "Vaya a la corte el 7 de octubre de 2026.", "Vaya a la corte el October 7, 2026."),
+    ],
+)  # fmt: skip
+def test_localized_dates_and_digits_go_back_to_the_printed_form(
+    lang: str, prose: str, expected: str
+) -> None:
+    assert pd.as_printed(prose, forms(), lang) == expected
+
+
+def test_printed_forms_and_english_prose_are_left_alone() -> None:
+    f = forms()
+    for prose in (
+        "Go to court on October 7, 2026 at 8:30 AM.",
+        "Go to court on October 7.",  # an English month is never a translation
+        "Pay $1,240.00 by 10/14/2026.",
+        "تا October 7, 2026 به محکمه بروید.",
+    ):
+        assert pd.as_printed(prose, f, "prs") == prose
+
+
+def test_unprinted_dates_keep_their_words_and_get_western_digits() -> None:
+    # Today (allowed by check_text, printed nowhere): no spelling to restore, digits only.
+    assert pd.as_printed("امروز ۲ اکتبر ۲۰۲۶ است.", forms(), "prs") == "امروز 2 اکتبر 2026 است."
+
+
+def test_a_paper_that_prints_its_own_digits_keeps_them() -> None:
+    paper = "موعد الجلسة: ٧ أكتوبر ٢٠٢٦. المبلغ ١٢٠ دولار."
+    f = pd.printed_forms(paper, "ar")
+    prose = "الجلسة في ٧ أكتوبر ٢٠٢٦ والمبلغ ١٢٠ دولار."
+    assert pd.as_printed(prose, f, "ar") == prose
+    # A run the paper does not print still becomes Western.
+    assert pd.as_printed("ادفع ٣٠ دولار.", f, "ar") == "ادفع 30 دولار."
+
+
+def test_western_digits_keeps_listed_runs() -> None:
+    assert pd.western_digits("۱۲۳ و ٤٥٦") == "123 و 456"
+    assert pd.western_digits("۱۲۳ و ٤٥٦", frozenset({"٤٥٦"})) == "123 و ٤٥٦"
+    assert pd.western_digits("plain 123") == "plain 123"

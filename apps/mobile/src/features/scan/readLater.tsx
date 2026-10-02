@@ -9,12 +9,12 @@
 
 import { type ReactNode, useState } from 'react';
 
-import type { AnalysisResult } from '@/api/types';
 import { SaveToVaultSheet } from '@/features/vault';
 import { newId } from '@/lib/ids';
 import type { CapturedPage } from '@/store/session';
 import { useSettings } from '@/store/settings';
 
+import { useScanChoices } from './choices';
 import { compressPage } from './compress';
 
 /** Why "Save to read later" is not offered (`none` = it is). */
@@ -51,6 +51,8 @@ export interface ReadLater {
 export function useReadLater(pages: readonly CapturedPage[], sample: boolean, onSaved: (documentId: string) => void): ReadLater {
   const keepPageImages = useSettings((s) => s.keepPageImages);
   const hideIdNumbers = useSettings((s) => s.hideIdNumbers);
+  // "Whose paper is this?" from S5 preselects the member in the vault's sheet.
+  const memberId = useScanChoices((s) => s.memberId);
   const block = readLaterBlock(pages, { sample, keepPageImages, hideIdNumbers });
   const [pending, setPending] = useState<{ id: string; pages: CapturedPage[] } | null>(null);
   const [preparing, setPreparing] = useState(false);
@@ -73,10 +75,10 @@ export function useReadLater(pages: readonly CapturedPage[], sample: boolean, on
 
   const sheet = pending ? (
     <SaveToVaultSheet
-      // With `readLaterId` the sheet saves `analysis: null` ("Not read yet"); its prop type predates that.
-      analysis={null as unknown as AnalysisResult}
+      // With `readLaterId` and no `analysis` the sheet saves `analysis: null` ("Not read yet").
       readLaterId={pending.id}
       pages={pending.pages}
+      initialMemberId={memberId}
       onSaved={(documentId) => {
         setPending(null);
         onSaved(documentId);

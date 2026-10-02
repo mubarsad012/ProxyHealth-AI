@@ -1,7 +1,9 @@
 // Card 2 — "What is it asking for?" (PRODUCT_SPEC S7 item 8). One row per VERIFIED demand: kind
 // icon, plain text, the value exactly as printed (LTR-isolated, bold), role word, date rendering
-// by `DateInfo.kind`, the anchored fact row, "Remind me" only when `reminder_eligible`, and
-// "Call (number from your paper)" only for a contact number printed on the page.
+// by `DateInfo.kind` (an estimate leads with "About {date} (estimate)" from the server's written-out
+// `localized_line`, plus the pack-digit line — `estimatedDate.ts`), the anchored fact row, "Remind
+// me" only when `reminder_eligible`, and "Call (number from your paper)" only for a contact number
+// printed on the page.
 
 import { StyleSheet, View } from 'react-native';
 
@@ -20,6 +22,7 @@ import { useBidiText, usePackMeta, useT, type TFunction } from '@/i18n/useT';
 import { extraDateLine } from '@/lib/dates';
 import { useSettings } from '@/store/settings';
 
+import { ESTIMATE_ABOUT_KEY, estimatedDigitsLine, estimateReadable } from '../estimatedDate';
 import { printedPhoneHref } from '../urgencyCopy';
 import { DEMAND_ICONS, FactRow, type ResultCardProps, type ResultHandlers, SourceText } from './shared';
 
@@ -41,8 +44,19 @@ function DateLines({ d, handlers, lang }: { d: Demand; handlers: ResultHandlers;
   const date = d.date;
   if (!date) return null;
   if (date.kind === 'estimated') {
+    // "About {date} (estimate)": the date LTR-isolated, as `{date}` is everywhere (§5.5).
+    const about = estimateReadable(date);
+    const digits = estimatedDigitsLine(date, meta.digitSystem, order);
     return (
       <View style={styles.lines}>
+        {about ? (
+          <Interpolated template={t(ESTIMATE_ABOUT_KEY)} vars={{ date: about }} ltrKeys={['date']} weight="bold" testID={`estimate-${d.id}`} />
+        ) : null}
+        {digits ? (
+          <AppText color="textMuted" testID={`estimate-digits-${d.id}`}>
+            {digits}
+          </AppText>
+        ) : null}
         <AppText>
           {t('demand.estimate_prefix')} {date.formula ? <Bidi dir="auto">{date.formula}</Bidi> : null}
         </AppText>

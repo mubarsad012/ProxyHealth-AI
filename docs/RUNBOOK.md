@@ -50,6 +50,7 @@ Delete the leaked key in AI Studio **first** (it stops working at once), then do
 | slot `rpd_exhausted` | the 429 said the daily quota is used up; resets at midnight Pacific | add a project/key or raise the limit in AI Studio |
 | slot `disabled` | 401/403 from Google (key revoked, API disabled, billing removed) | check billing and the key; rotate (§2.1) |
 | `429 quota_exhausted` to users, `keys_healthy == 0` alert | every slot unavailable | users see "Our helper is very busy…" with retry time, Save to read later, Call 211, Try a sample paper; add capacity; never switch to mock silently (D-01) |
+| `429 rate_limited` to real users, `details.bucket = "ip_class"` | many users behind one carrier NAT or IPv6 `/48`, or `TRUSTED_PROXY_HOPS` too low (everyone shares the proxy's class — DEPLOYMENT §1.2) | check `TRUSTED_PROXY_HOPS` first (1 on Cloud Run, 2 behind an external HTTPS load balancer); then raise `RATE_LIMIT_IP_PER_MINUTE` / `RATE_LIMIT_IP_PER_DAY` (defaults 60 / 1000) |
 | `422 content_blocked` spikes | Gemini safety blocks | review `document_type` counts in the log; no retry on another key (by design) |
 
 ## 3. Resource database: weekly links, quarterly re-verification
@@ -116,7 +117,7 @@ Permissions must be exactly `CAMERA, INTERNET, POST_NOTIFICATIONS, VIBRATE` plus
 
 ### 7.3 iOS gates (before any iOS submission)
 
-- Vault directory excluded from iCloud backup, verified on a dev build (COMPLIANCE_PRIVACY §10.2, Q16). Until then: Android first.
+- Vault directory **and** the SQLite folder (`Documents/vault/`, `Documents/SQLite/`) excluded from iCloud backup, verified on a dev build (COMPLIANCE_PRIVACY §10.2, Q16). **Status 2026-10-01: not done — blocker.** SDK 57's `expo-file-system` / `expo-sqlite` have no backup-exclusion API, so this needs a config plugin or small native module setting `NSURLIsExcludedFromBackupKey` (install window), then a dev-build check: inspect the flag on both folders (or confirm in Settings → iCloud → Manage Storage that a backup does not include them), log it in §9, and set `IOS_VAULT_BACKUP_EXCLUDED = true` in `features/vault/platformCopy.ts`. iOS `consent.line3` must also stop saying "stay only on this phone" until then (COMPLIANCE_PRIVACY §10.2). Until then: Android first.
 - `["expo-sqlite", {"useSQLCipher": true}]` only after a dev build proves it; no copy claims it before.
 - Privacy manifest values accepted by App Store Connect on the first upload (fix from the rejection e-mail if any).
 
@@ -144,3 +145,4 @@ Record VoiceOver, TalkBack, 200 % text, high contrast, reduced motion and RTL re
 | Date | Who | What | Evidence |
 |---|---|---|---|
 | 2026-09-29 | WP8 | Runbook written; no production deployment exists yet; live gate not run — no keys (Q1) | this file |
+| 2026-10-01 | DOCS | iOS iCloud-backup exclusion (§7.3) checked: not implemented, no SDK 57 API — iOS submission stays blocked; Android first | COMPLIANCE_PRIVACY §10.2 |
