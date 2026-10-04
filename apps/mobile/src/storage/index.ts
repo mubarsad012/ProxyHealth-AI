@@ -84,8 +84,15 @@ export type Reminder = {
 export type ConsentRecord = {
   consent_version: string;
   accepted_at: string;
-  tier_seen: 'paid' | 'unpaid' | 'mixed' | 'demo' | 'none' | 'unknown';
+  tier_seen: 'paid' | 'unpaid' | 'mixed' | 'demo' | 'none' | 'local' | 'attested' | 'unknown';
   platform: 'ios' | 'android' | 'web';
+  /**
+   * Phase 3 (free-ai-providers §5.3): which AI the accepted S2 copy named when it named one —
+   * `openai_compat|{vendor}|{model}` from `/v1/config` `ai_vendor_name` / `ai_model_label`.
+   * Written only on `AI_PROVIDER=openai_compat` (absent for Gemini and the mock, so those records
+   * keep the four-field shape of COMPLIANCE_PRIVACY §4.2). A different value re-shows S2.
+   */
+  ai_seen?: string;
 };
 
 /** Platform re-export: Metro resolves `./vault` to `vault.native.ts` (expo-sqlite + files) or

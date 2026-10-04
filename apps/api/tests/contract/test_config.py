@@ -73,7 +73,7 @@ async def test_models_limits_versions(tmp_path: Path) -> None:
     assert cfg.limits.max_question_chars == 1000 and cfg.limits.max_user_goal_chars == 300
     en_bytes = (DATA_DIR / "langpacks" / "en.json").read_bytes()
     assert cfg.base_pack_version == hashlib.sha256(en_bytes).hexdigest()
-    assert cfg.consent_version == "2026-10-01" and cfg.region_notice == "us_only"
+    assert cfg.consent_version == "2026-10-04" and cfg.region_notice == "us_only"
     assert cfg.privacy_policy_url.startswith("https://")
     assert cfg.taxonomy_version and cfg.resource_db_version and cfg.rules_version
     assert cfg.server_time.tzinfo is not None

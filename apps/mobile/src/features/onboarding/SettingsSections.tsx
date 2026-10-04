@@ -191,7 +191,7 @@ export interface DeveloperSectionProps {
   rotateInstallId(): Promise<string>;
 }
 
-const PREVIEW_TIERS: UiTier[] = ['paid', 'unpaid', 'demo', 'unknown'];
+const PREVIEW_TIERS: UiTier[] = ['paid', 'unpaid', 'local', 'attested', 'demo', 'unknown'];
 
 export function DeveloperSection({ apiUrl, config, getInstallId, rotateInstallId }: DeveloperSectionProps) {
   const t = useT();

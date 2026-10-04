@@ -200,7 +200,7 @@ done
 
 [ "$ACTION" = self_test ] && { self_test; exit 0; }
 [ -f "$PRESET" ] || die 1 "missing preset ${PRESET#"$ROOT"/}"
-[ "$DRY_RUN" = 1 ] && say "DRY RUN: nothing is written, moved or deleted."
+[ "$DRY_RUN" = 1 ] && say "DRY RUN: nothing in the repo or apps/api/.env is written, moved or deleted (the Settings check uses a temp copy of the preset in \$TMPDIR, deleted on exit)."
 
 if [ -n "$MODEL" ]; then
   reason="$(model_refusal "$MODEL")"

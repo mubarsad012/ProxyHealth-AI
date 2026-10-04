@@ -40,7 +40,7 @@ function envelope(code: string, extra: Partial<ErrorResponse['error']> = {}): Er
 
 function setup(
   response: Response | (() => Promise<Response>),
-  consent: string | null = '2026-10-01',
+  consent: string | null = '2026-10-04',
   refuseUnconsentedUploads = false,
 ) {
   const calls: FetchArgs[] = [];
@@ -82,9 +82,9 @@ describe('headers', () => {
     await client.troubleshoot({} as never);
     await client.chat({} as never);
     await client.matchResources({} as never);
-    expect(header(0, 'X-Consent-Version')).toBe('2026-10-01');
-    expect(header(1, 'X-Consent-Version')).toBe('2026-10-01');
-    expect(header(2, 'X-Consent-Version')).toBe('2026-10-01');
+    expect(header(0, 'X-Consent-Version')).toBe('2026-10-04');
+    expect(header(1, 'X-Consent-Version')).toBe('2026-10-04');
+    expect(header(2, 'X-Consent-Version')).toBe('2026-10-04');
     expect(header(3, 'X-Consent-Version')).toBeNull();
   });
 
@@ -132,10 +132,10 @@ describe('consent guard (CL-070 defence in depth)', () => {
   });
 
   it('sends normally once consent is given', async () => {
-    const { client, calls, header } = setup(jsonResponse(200, {}), '2026-10-01', true);
+    const { client, calls, header } = setup(jsonResponse(200, {}), '2026-10-04', true);
     await client.analyze(analyzeReq);
     expect(calls).toHaveLength(1);
-    expect(header(0, 'X-Consent-Version')).toBe('2026-10-01');
+    expect(header(0, 'X-Consent-Version')).toBe('2026-10-04');
   });
 
   it("the app's client has the guard on", async () => {

@@ -66,7 +66,7 @@ jest.mock('@/api/offline', () => ({
 }));
 
 const API = 'http://127.0.0.1:8027';
-const CONSENT = '2026-10-01';
+const CONSENT = '2026-10-04';
 
 function demoConfig(): ServerConfig {
   return {
@@ -333,7 +333,7 @@ describe('S6 error rows', () => {
     expect(saved[0].doc.analysis).toBeNull(); // "Not read yet"
     expect(saved[0].pages).toHaveLength(1); // the page is kept, so "Read it now" can send it later
     expect(saved[0].pages[0].base64Jpeg).toBe('SlBFRw==');
-    expect(useSession.getState().offlineQueue).toHaveLength(0); // no in-memory queue that nothing reads
+    expect('offlineQueue' in useSession.getState()).toBe(false); // no in-memory queue at all (CL-064)
     expect(router.replace).toHaveBeenCalledWith('/papers');
   }, 10_000);
 

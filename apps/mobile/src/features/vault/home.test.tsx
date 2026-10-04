@@ -97,7 +97,7 @@ async function renderHome(vault: Vault) {
 function acceptConsent() {
   useConsentDecision.getState().set('accepted');
   useSession.getState().setConsent({
-    consent_version: '2026-10-01',
+    consent_version: '2026-10-04',
     accepted_at: '2026-09-28T12:00:00.000Z',
     tier_seen: 'demo',
     platform: 'ios',

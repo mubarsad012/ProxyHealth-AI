@@ -18,18 +18,30 @@ export interface TileProps {
   disabled?: boolean;
   /** Small count or word shown at the end of the tile (e.g. reminders in the next 7 days). */
   badge?: string | number;
+  /** Overrides the spoken "{title}. {line}" (keep the visible title in it — WCAG 2.5.3). */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
   testID?: string;
 }
 
-export function Tile({ title, line, icon, onPress, disabled, badge, accessibilityHint, testID }: TileProps) {
+export function Tile({
+  title,
+  line,
+  icon,
+  onPress,
+  disabled,
+  badge,
+  accessibilityLabel,
+  accessibilityHint,
+  testID,
+}: TileProps) {
   const { colors } = useTheme();
   const dir = useDirection();
   return (
     <Pressable
       testID={testID}
       role="button"
-      accessibilityLabel={`${title}. ${line}`}
+      accessibilityLabel={accessibilityLabel || `${title}. ${line}`}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}

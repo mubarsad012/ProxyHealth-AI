@@ -22,13 +22,17 @@ export function currentPlatform(): ConsentRecord['platform'] {
   return 'web';
 }
 
-export function buildConsentRecord(consentVersion: string, tierSeen: TierSeen): ConsentRecord {
-  return {
+/** `aiSeen` (the AI the S2 copy named, `openai_compat` only) is stored only when non-empty, so
+ *  Gemini and mock records keep the four-field shape of COMPLIANCE_PRIVACY §4.2. */
+export function buildConsentRecord(consentVersion: string, tierSeen: TierSeen, aiSeen?: string | null): ConsentRecord {
+  const record: ConsentRecord = {
     consent_version: consentVersion,
     accepted_at: new Date().toISOString(),
     tier_seen: tierSeen,
     platform: currentPlatform(),
   };
+  if (aiSeen) record.ai_seen = aiSeen;
+  return record;
 }
 
 export const consentStore = {
@@ -68,14 +72,21 @@ export const consentStore = {
   },
 };
 
-/** D-02: re-show S2 when the server's consent version or the tier differs from what was seen. */
+/**
+ * D-02: re-show S2 when the server's consent version or the tier differs from what was seen.
+ * Phase 3: also when the AI the copy names changed (`aiNow`, the current `ai_seen` value or null
+ * when the copy names none) — e.g. an `attested` server that moved from one vendor to another.
+ * `aiNow` undefined (config not known) and an unknown tier skip that check.
+ */
 export function consentIsCurrent(
   record: ConsentRecord | null,
   serverConsentVersion: string | null,
   tierNow: TierSeen | null,
+  aiNow?: string | null,
 ): boolean {
   if (!record) return false;
   if (serverConsentVersion && record.consent_version !== serverConsentVersion) return false;
   if (tierNow && tierNow !== 'unknown' && record.tier_seen !== tierNow) return false;
+  if (aiNow !== undefined && tierNow && tierNow !== 'unknown' && (record.ai_seen ?? null) !== aiNow) return false;
   return true;
 }

@@ -1,6 +1,6 @@
 # ProxyHealth AI — Runbook (operations)
 
-Owner: WP8 (the operator on call runs it). Written 2026-09-29 from `docs/DECISIONS.md` D-01, D-03, D-07, D-08, `docs/COMPLIANCE_PRIVACY.md` §2–§3, §9, §12.1, §13.2, §15, §18, `docs/RESOURCE_DB.md` §9 and `docs/research/gemini.md` §3. Deployment commands are in `docs/DEPLOYMENT.md`. Every action that produces evidence gets a dated line in §9 ("Records").
+Owner: WP8 (the operator on call runs it). Written 2026-09-29 (§1.5 added 2026-10-04 for D-32) from `docs/DECISIONS.md` D-01, D-03, D-07, D-08, `docs/COMPLIANCE_PRIVACY.md` §2–§3, §9, §12.1, §13.2, §15, §18, `docs/RESOURCE_DB.md` §9 and `docs/research/gemini.md` §3. Deployment commands are in `docs/DEPLOYMENT.md`. Every action that produces evidence gets a dated line in §9 ("Records").
 
 ## 1. Billing and the data-use tier (do this before any real paper is read)
 
@@ -28,6 +28,19 @@ For every production project: AI Studio → Logs → developer logging **OFF**. 
 
 Free (unbilled) keys run **sample papers only**. `ALLOW_UNPAID_REAL_DOCUMENTS=true` exists for synthetic test scans in `ENV=development`; it is a boot error in production. Never photograph a real person's paper through a free key — not your own, not a judge's.
 
+### 1.5 Local AI and other OpenAI-compatible endpoints (test builds only; D-32)
+
+`AI_PROVIDER=openai_compat` lets a development or staging API read papers with an open model on the API host (`local`) or, in development only, with a named vendor (`attested`). **Never in production:** `ENV=production` refuses the provider at boot, and a store build may point only at the `paid` tier (COMPLIANCE_PRIVACY §3). The developer's guide is `docs/LOCAL_AI.md`; these are the operator's checks.
+
+1. **Install only with the developer's OK** (COMPLIANCE_PRIVACY Q26). `make local-ai-setup ARGS=--dry-run` shows the plan; `make local-ai-setup` asks y/N before Ollama (~200 MB) and before the model (3.4 GB for `qwen3.5:4b`) and stops when the disk budget is short. No agent and no CI job runs it.
+2. **Point the API at it:** `scripts/use-local-ai.sh` (writes `apps/api/.env` from `apps/api/.env.local-ai.example`, backing up a different `.env`). Restart the API, then confirm `GET /v1/config` → `"provider": "openai_compat"`, `"data_use_tier": "local"`, `"ai_model_label": "Qwen"` and the raised `client_timeouts` (API_CONTRACT §3.2); `GET /health` → `keys_configured: 1`.
+3. **Before the first real paper on `local`:** run the Ollama marker check (`docs/LOCAL_AI.md` §4: a unique word sent once, then `grep -r` under `~/.ollama`) with debug logging off, and log the result in §9. Ollama does not say whether it writes API prompts to disk; the consent line "Our server does not keep it" relies on this check. Repeat it after an Ollama upgrade.
+4. **Check the pipeline on a sample first:** `make local-ai-check` (one sample paper through the real pipeline). Record the wall time and whether the output fit the schema in §9; they replace the research estimates.
+5. **Keep the paper on the machine:** `OPENAI_COMPAT_BASE_URL` points at the open model's own server (Ollama, LM Studio), never at a loopback proxy or tunnel that forwards to a hosted API, and `OPENAI_COMPAT_MODEL_LABEL` names that model — the boot check sees only the loopback address, so this is your claim, like `billing` (COMPLIANCE_PRIVACY §3). API, model and browser on one machine (`make dev`); the phone over the same trusted Wi-Fi only; no tunnel with a real paper; `RECORD_FIXTURES` off; never copy a real paper into `apps/api/data/fixtures/`. Only the operator's own papers, or papers from someone who said yes.
+6. **`attested` (development only):** before setting `OPENAI_COMPAT_NO_TRAINING_ATTESTED=1`, open the vendor's current API terms, find the no-training clause and log vendor, clause, URL and date in §9 (D-32 lists the clauses checked on 2026-10-01: Alibaba Model Studio International §4.48.1(e), Groq §4.2, Cloudflare Workers AI). Turn on the vendor's retention controls first (Groq Zero Data Retention; Alibaba "Free Quota Only"). Cerebras, Mistral free mode and OpenRouter `:free` qualify only after you find or switch on a no-training term; Chinese-hosted endpoints stay synthetic-samples-only except Alibaba International with the D-32 caveats. Set `OPENAI_COMPAT_VENDOR_NAME` to the vendor's name as the consent line should show it.
+7. **Any other hosted endpoint** runs on `OPENAI_COMPAT_DATA_TIER=unpaid` (the default): sample papers only, real papers and typed text get `403`, like a free Gemini key.
+8. **Switch back:** `scripts/use-local-ai.sh --off` (mock) or `--restore` (the previous `.env`); stop Ollama with `pkill -f 'ollama serve'`; `ollama rm qwen3.5:4b` frees 3.4 GB.
+
 ## 2. Keys: rotation, failure, quota
 
 ### 2.1 Routine rotation (quarterly, or when a team member with access leaves)
@@ -52,6 +65,9 @@ Delete the leaked key in AI Studio **first** (it stops working at once), then do
 | `429 quota_exhausted` to users, `keys_healthy == 0` alert | every slot unavailable | users see "Our helper is very busy…" with retry time, Save to read later, Call 211, Try a sample paper; add capacity; never switch to mock silently (D-01) |
 | `429 rate_limited` to real users, `details.bucket = "ip_class"` | many users behind one carrier NAT or IPv6 `/48`, or `TRUSTED_PROXY_HOPS` too low (everyone shares the proxy's class — DEPLOYMENT §1.2) | check `TRUSTED_PROXY_HOPS` first (1 on Cloud Run, 2 behind an external HTTPS load balancer); then raise `RATE_LIMIT_IP_PER_MINUTE` / `RATE_LIMIT_IP_PER_DAY` (defaults 60 / 1000) |
 | `422 content_blocked` spikes | Gemini safety blocks | review `document_type` counts in the log; no retry on another key (by design) |
+| `503 provider_not_configured` "Local AI server is not running." (`openai_compat`, loopback) | Ollama stopped (reboot, logout) | `scripts/setup-local-ai.sh --skip-smoke` restarts it; `curl -s http://127.0.0.1:11434/api/version` answers when it is up |
+| `503 provider_not_configured` "The AI model is not available on the AI server." | the endpoint answered 404 for `OPENAI_COMPAT_MODEL_*` (model not pulled, or a wrong id) | `ollama list`; pull the model with the developer's OK, or fix the id in `.env` |
+| the API will not boot on `openai_compat` | a boot rule (D-32): `local` needs a loopback URL and `OPENAI_COMPAT_MODEL_LABEL`; `attested` needs `ENV=development`, the vendor name, the attestation and a host off the denylist; hosted needs `OPENAI_COMPAT_API_KEY`; production refuses the provider | read the boot error (it names the rule and never prints a key); `scripts/use-local-ai.sh --dry-run` checks a preset |
 
 ## 3. Resource database: weekly links, quarterly re-verification
 
@@ -87,7 +103,7 @@ Known limitation: on Cloud Run without a mounted volume, `var/` is per-instance 
 
 Roles (fill in — COMPLIANCE_PRIVACY Q25): on-call operator `TODO`, counsel of record `TODO`, approver of public notices `TODO`.
 
-Treat as a **breach**: (a) a real paper reached Gemini Unpaid Services (misattested `billing:true`, `ALLOW_UNPAID_REAL_DOCUMENTS` outside development, a store build pointed at an unpaid API); (b) developer logging found ON for a production project; (c) any server-side write of content (log line, temp file, crash dump); (d) a compromised `GEMINI_KEYS` secret or Cloud project; (e) a client bug that uploaded without consent. Incidents that are **not** breaches: a user's lost phone; a user forwarding their own quick sheet.
+Treat as a **breach**: (a) a real paper reached Gemini Unpaid Services (misattested `billing:true`, `ALLOW_UNPAID_REAL_DOCUMENTS` outside development, a store build pointed at an unpaid API), or a vendor on an `openai_compat` test build under a false `OPENAI_COMPAT_NO_TRAINING_ATTESTED` statement, or any real person's paper other than the operator's own (or one given with a yes) on a `local`/`attested` test build; (b) developer logging found ON for a production project; (c) any server-side write of content (log line, temp file, crash dump); (d) a compromised `GEMINI_KEYS` secret or Cloud project; (e) a client bug that uploaded without consent. Incidents that are **not** breaches: a user's lost phone; a user forwarding their own quick sheet.
 
 | Clock | Do |
 |---|---|
@@ -138,6 +154,7 @@ Record VoiceOver, TalkBack, 200 % text, high contrast, reduced motion and RTL re
 | Full CI locally | `scripts/ci.sh` (resume with `CI_FROM=<step>`) |
 | Key-pool state | `curl -H "X-Admin-Token: …" https://<api>/v1/admin/keys` |
 | Tier and consent version | `curl https://<api>/v1/config` |
+| Local AI (test builds, §1.5) | `make local-ai-setup ARGS=--dry-run` · `scripts/use-local-ai.sh` · `make local-ai-check` |
 | Web deploy | DEPLOYMENT §2 |
 
 ## 9. Records (append one dated line per action; no personal data, no keys)
@@ -146,3 +163,4 @@ Record VoiceOver, TalkBack, 200 % text, high contrast, reduced motion and RTL re
 |---|---|---|---|
 | 2026-09-29 | WP8 | Runbook written; no production deployment exists yet; live gate not run — no keys (Q1) | this file |
 | 2026-10-01 | DOCS | iOS iCloud-backup exclusion (§7.3) checked: not implemented, no SDK 57 API — iOS submission stays blocked; Android first | COMPLIANCE_PRIVACY §10.2 |
+| 2026-10-04 | DOCS | §1.5 written for the `openai_compat` provider (D-32). Ollama not installed and no model pulled (waiting for the developer, COMPLIANCE_PRIVACY Q26); the Ollama marker check and `make local-ai-check` not run yet; no `attested` vendor configured | D-32; `docs/LOCAL_AI.md` |

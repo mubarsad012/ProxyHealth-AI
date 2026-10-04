@@ -1,7 +1,9 @@
 // Memory-only session store (BUILD_PLAN §4.2 / §5.0; owner WP4 after M0).
 // Holds the current scan pages, the unsaved analysis, the consent record, the server config, the
-// data-use tier, the clerk-mode flag and the offline scan queue. Nothing here is persisted
-// (D-22/D-23); "Delete everything" and app restarts clear it.
+// data-use tier and the clerk-mode flag. Nothing here is persisted (D-22/D-23); "Delete
+// everything" and app restarts clear it. There is no offline scan queue: an offline scan is saved
+// to read later or waits on S5 for the connection (CL-064, CL-085(c) — the never-drained
+// `offlineQueue` / `enqueueOfflineScan` / `QueuedScan` were removed in Phase 3).
 
 import { create } from 'zustand';
 
@@ -33,18 +35,10 @@ export type CapturedPage = {
   byteLength?: number;
 };
 
-/** A scan captured offline, kept until connectivity returns (ARCHITECTURE §3.1 "Offline behaviors").
- *  The docs name the type without defining its fields (CL-014); WP4 may extend, never rename. */
-export type QueuedScan = {
-  id: string;
-  pages: CapturedPage[];
-  targetLanguage: string;
-  memberId: string | null;
-  queuedAt: string;
-};
-
 /** The tier the UI reasons about: the server's `DataUseTier` or `'unknown'` while `/v1/config`
- *  is unreachable. `'none'` (no keys configured) is rendered like `'unknown'` (PRODUCT_SPEC §5.3). */
+ *  is unreachable. `'none'` (no keys configured) is rendered like `'unknown'` (PRODUCT_SPEC §5.3).
+ *  `'local'` / `'attested'` (Phase 3, `AI_PROVIDER=openai_compat`) allow real papers like `'paid'`
+ *  when `features.real_documents_allowed` says so (free-ai-providers §5.2). */
 export type UiTier = DataUseTier | 'unknown';
 
 export interface SessionState {
@@ -55,7 +49,6 @@ export interface SessionState {
   serverConfig: ServerConfig | null;
   tier: UiTier;
   clerkMode: boolean;
-  offlineQueue: QueuedScan[];
   /** ISO time until which the helper is out of quota (now + `retry_after_seconds` after a
    *  `quota_exhausted` error; set by `api/client.ts`, read by S3 `home.busy_until` — CL-039). */
   quotaCoolingUntil: string | null;
@@ -73,8 +66,6 @@ export interface SessionActions {
   setServerConfig(config: ServerConfig | null): void;
   setTier(tier: UiTier): void;
   setClerkMode(on: boolean): void;
-  enqueueOfflineScan(scan: QueuedScan): void;
-  dequeueOfflineScan(id: string): void;
   setQuotaCoolingUntil(iso: string | null): void;
   reset(): void;
 }
@@ -89,7 +80,6 @@ export const initialSessionState: SessionState = {
   serverConfig: null,
   tier: 'unknown',
   clerkMode: false,
-  offlineQueue: [],
   quotaCoolingUntil: null,
 };
 
@@ -108,9 +98,6 @@ export const useSession = create<SessionStore>()((set) => ({
     set({ serverConfig, tier: serverConfig ? serverConfig.data_use_tier : 'unknown' }),
   setTier: (tier) => set({ tier }),
   setClerkMode: (clerkMode) => set({ clerkMode }),
-  enqueueOfflineScan: (scan) => set((s) => ({ offlineQueue: [...s.offlineQueue, scan] })),
-  dequeueOfflineScan: (id) =>
-    set((s) => ({ offlineQueue: s.offlineQueue.filter((q) => q.id !== id) })),
   setQuotaCoolingUntil: (quotaCoolingUntil) => set({ quotaCoolingUntil }),
   reset: () => set({ ...initialSessionState }),
 }));

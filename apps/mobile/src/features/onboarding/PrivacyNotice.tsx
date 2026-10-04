@@ -16,16 +16,24 @@ import { usePackMeta, useT } from '@/i18n/useT';
 import { platformName } from '@/lib/platform';
 import { useSession, type UiTier } from '@/store/session';
 
-import { viewTier } from './consentModel';
+import { type AiCopyInput, consentVars, tierCopy, viewTier } from './consentModel';
 
-/** The notice's line keys in order (COMPLIANCE_PRIVACY §4.5 items 1–11). On the demo tier item 1
- *  ("… then to Google's AI (Gemini)") is left out, like S2's line 1 (`consentView`): nothing reaches
- *  an AI service there, and `consent.line2.demo` says so — the two lines contradicted each other. */
-export function privacyNoticeKeys(tier: UiTier, platform: 'ios' | 'android' | 'web'): string[] {
-  const view = viewTier(tier);
+/** The notice's line keys in order (COMPLIANCE_PRIVACY §4.5 items 1–11), chosen like S2's lines
+ *  (`tierCopy`, free-ai-providers §5.2). Item 1 is left out where S2 has no line 1: on the demo tier
+ *  nothing reaches an AI service and `consent.line2.demo` says so (Phase 2B). On `local` item 1 is
+ *  `privacy.notice.sent.local`, followed by `privacy.notice.model.local`; on `attested` and on
+ *  `unpaid` with another vendor, `privacy.notice.sent` (which names Google) is replaced by S2's own
+ *  `consent.line1.vendor`. Pass `consentVars(ai)` to `t()` for `{model}` / `{vendor}`. */
+export function privacyNoticeKeys(
+  tier: UiTier,
+  platform: 'ios' | 'android' | 'web',
+  ai?: AiCopyInput | null,
+): string[] {
+  const copy = tierCopy(viewTier(tier), ai);
   return [
-    ...(view === 'demo' ? [] : ['privacy.notice.sent']),
-    `consent.line2.${view}`,
+    ...(copy.noticeSent ? [copy.noticeSent] : []),
+    ...copy.noticeExtra,
+    copy.line2,
     'privacy.notice.what_we_keep',
     platform === 'web' ? 'privacy.notice.device_web' : 'privacy.notice.device',
     'privacy.notice.hide_parts',
@@ -48,15 +56,17 @@ export function PrivacyNoticeContent() {
   const dir = useDirection();
   const meta = usePackMeta();
   const tier = useSession((s) => s.tier);
-  const policyUrl = useSession((s) => s.serverConfig?.privacy_policy_url ?? null);
+  const config = useSession((s) => s.serverConfig);
+  const policyUrl = config?.privacy_policy_url ?? null;
+  const vars = consentVars(config);
   return (
     <View style={styles.list}>
-      {privacyNoticeKeys(tier, platformName()).map((key) => (
-        <View key={key} style={[styles.row, { flexDirection: dir.row }]}>
+      {privacyNoticeKeys(tier, platformName(), config).map((key) => (
+        <View key={key} testID={`privacy-notice-${key}`} style={[styles.row, { flexDirection: dir.row }]}>
           <View style={styles.text}>
-            <AppText>{t(key)}</AppText>
+            <AppText>{t(key, vars)}</AppText>
           </View>
-          <SpeakButton text={t(key)} lang={meta.tag} />
+          <SpeakButton text={t(key, vars)} lang={meta.tag} />
         </View>
       ))}
       {policyUrl ? <ExternalLink href={policyUrl}>{t('privacy.notice.full_policy')}</ExternalLink> : null}

@@ -403,7 +403,8 @@ def add_usage(total: Usage, more: Usage) -> Usage:
 class OpenAICompatProvider:
     """``AIProvider`` for ``AI_PROVIDER=openai_compat``. One synthetic key-pool slot (index 0);
     a per-process semaphore (``OPENAI_COMPAT_CONCURRENCY``) bounds parallel calls, and each
-    ``generate_structured`` call — retries included — stays within ``OPENAI_COMPAT_TIMEOUT_S``."""
+    ``generate_structured`` call — queue wait and retries included — stays within
+    ``OPENAI_COMPAT_TIMEOUT_S``."""
 
     name: Provider = Provider.openai_compat
 
@@ -468,6 +469,9 @@ class OpenAICompatProvider:
         if slot_index not in (None, 0):
             raise ValueError(f"slot_index {slot_index} out of range (0..0)")
         started = self._clock()
+        # One budget for the whole call: the queue wait counts against OPENAI_COMPAT_TIMEOUT_S,
+        # so a call can never outlast the client_timeouts the server advertises (CL-092(a)).
+        deadline = started + self._timeout_s
         try:
             async with asyncio.timeout(self._timeout_s):
                 await self._semaphore.acquire()
@@ -479,7 +483,7 @@ class OpenAICompatProvider:
             )
             return await self._generate(
                 tier=tier, parts=parts, urls=urls, system=system, schema=schema,
-                thinking=thinking, max_output_tokens=max_output_tokens,
+                thinking=thinking, max_output_tokens=max_output_tokens, deadline=deadline,
             )  # fmt: skip
         finally:
             self._semaphore.release()
@@ -488,6 +492,7 @@ class OpenAICompatProvider:
     async def _generate(
         self, *, tier: ModelTier, parts: Sequence[Part], urls: list[str], system: str,
         schema: type[BaseModel], thinking: ThinkingLevel | None, max_output_tokens: int,
+        deadline: float | None = None,
     ) -> StructuredResult:  # fmt: skip
         has_images = bool(urls)
         mode = self._mode_override.get(has_images) or pick_json_mode(
@@ -500,7 +505,8 @@ class OpenAICompatProvider:
         )
         max_tokens = min(max_output_tokens, self._settings.openai_compat_max_output_tokens)
         effort = reasoning_effort(self._settings, thinking)
-        deadline = self._clock() + self._timeout_s
+        if deadline is None:
+            deadline = self._clock() + self._timeout_s
         usage = Usage()
         protocol_retries = 0
         repaired = False

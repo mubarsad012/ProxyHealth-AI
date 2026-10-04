@@ -2,7 +2,7 @@
 // high-contrast toggle OR the OS accessibility flags, reduce-motion and the text-size setting with
 // the pure tokens in `tokens.ts`. Nothing here touches the network or storage.
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
 
 import { motion, palette, type Palette, type PaletteName, tokens } from '@/design/tokens';
@@ -55,9 +55,34 @@ async function readFlag(fn: A11yFlagFn): Promise<boolean> {
   }
 }
 
+/** Web: the browser's "more contrast" preference (CSS Media Queries 5 `prefers-contrast: more`,
+ *  set by macOS/iOS "Increase contrast" and Windows contrast themes). Null without `matchMedia`. */
+export function webHighContrastQuery(
+  win: { matchMedia?: (q: string) => MediaQueryList } | undefined = typeof window === 'undefined' ? undefined : window,
+): MediaQueryList | null {
+  if (Platform.OS !== 'web' || !win || typeof win.matchMedia !== 'function') return null;
+  try {
+    return win.matchMedia('(prefers-contrast: more)');
+  } catch {
+    return null;
+  }
+}
+
+function subscribeWebHighContrast(onChange: () => void): () => void {
+  const mq = webHighContrastQuery();
+  if (!mq) return () => {};
+  mq.addEventListener?.('change', onChange);
+  return () => mq.removeEventListener?.('change', onChange);
+}
+
+const webHighContrastSnapshot = (): boolean => webHighContrastQuery()?.matches ?? false;
+/** Static rendering / hydration: no preference known yet (the client re-renders with the real one). */
+const webHighContrastServerSnapshot = (): boolean => false;
+
 /** OS-level "increase contrast" signals: Android `isHighTextContrastEnabled`, iOS
- *  `isDarkerSystemColorsEnabled`. Web has no API for this, so the toggle alone applies. */
+ *  `isDarkerSystemColorsEnabled`, web `prefers-contrast: more` (followed live). */
 export function useSystemHighContrast(): boolean {
+  const webOn = useSyncExternalStore(subscribeWebHighContrast, webHighContrastSnapshot, webHighContrastServerSnapshot);
   const [on, setOn] = useState(false);
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -78,7 +103,7 @@ export function useSystemHighContrast(): boolean {
       subs.forEach((s) => s?.remove());
     };
   }, []);
-  return on;
+  return webOn || on;
 }
 
 function safeAddListener(

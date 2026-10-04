@@ -5,13 +5,22 @@
 //   introspected list (`npx expo config --type introspect`) is then CAMERA, INTERNET, VIBRATE, plus
 //   POST_NOTIFICATIONS from expo-notifications at build time.
 // - WCAG 2.2 AA 1.3.4 Orientation (COMPLIANCE_PRIVACY §15): the app is not locked to portrait.
+// - Apple 5.1.1: no purpose string for a capability the app never uses. expo-secure-store adds
+//   NSFaceIDUsageDescription by default, but the app never asks for biometrics
+//   (`requireAuthentication` appears nowhere), so the plugin runs with `faceIDPermission: false`.
+//   The dev launcher's NSLocalNetworkUsageDescription / NSBonjourServices stay: expo-dev-client
+//   needs them in development builds and strips them from every non-Debug build itself.
 
 import appJson from '../../app.json';
+
+type PluginEntry = string | [string, Record<string, unknown>];
 
 type AppJson = {
   expo: {
     orientation?: string;
+    ios?: { infoPlist?: Record<string, unknown> };
     android?: { blockedPermissions?: string[]; permissions?: string[] };
+    plugins?: PluginEntry[];
   };
 };
 
@@ -35,5 +44,13 @@ describe('app.json', () => {
 
   it('does not lock phones to one orientation (WCAG 1.3.4)', () => {
     expect(config.orientation ?? 'default').toBe('default');
+  });
+
+  it('asks for no Face ID purpose string (biometrics are never used)', () => {
+    const entry = (config.plugins ?? []).find((p) => (Array.isArray(p) ? p[0] : p) === 'expo-secure-store');
+    expect(Array.isArray(entry)).toBe(true);
+    expect((entry as [string, Record<string, unknown>])[1].faceIDPermission).toBe(false);
+    expect(config.ios?.infoPlist ?? {}).not.toHaveProperty('NSFaceIDUsageDescription');
+    expect(config.ios?.infoPlist ?? {}).not.toHaveProperty('NSLocalNetworkUsageDescription');
   });
 });

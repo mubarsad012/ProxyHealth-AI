@@ -52,9 +52,14 @@ export function resetConsentState(): void {
 // forget the in-memory decision and the cached load too, so after S1 the user lands on S2 again.
 registerWipeHook(resetConsentState, 'memory');
 
-/** "I understand, continue": store `{consent_version, accepted_at, tier_seen, platform}`. */
-export async function acceptConsent(consentVersion: string, tierSeen: TierSeen): Promise<ConsentRecord> {
-  const record = buildConsentRecord(consentVersion, tierSeen);
+/** "I understand, continue": store `{consent_version, accepted_at, tier_seen, platform}` (+
+ *  `ai_seen` when the copy named an `openai_compat` vendor/model — `consentModel.aiSeenFor`). */
+export async function acceptConsent(
+  consentVersion: string,
+  tierSeen: TierSeen,
+  aiSeen?: string | null,
+): Promise<ConsentRecord> {
+  const record = buildConsentRecord(consentVersion, tierSeen, aiSeen);
   await consentStore.set(record);
   useSession.getState().setConsent(record);
   useConsentDecision.getState().set('accepted');

@@ -7,7 +7,7 @@ import { ensureServerConfig } from '@/api/config';
 import { useSession } from '@/store/session';
 import { useSettings, waitForSettings } from '@/store/settings';
 
-import { startRoute, type StartRoute } from './consentModel';
+import { aiSeenFor, startRoute, type StartRoute } from './consentModel';
 import { loadConsent, useConsentDecision } from './consentState';
 
 let configTried = false;
@@ -37,5 +37,6 @@ export function useStartRoute(): StartRoute | null {
     record,
     serverConsentVersion: serverConfig?.consent_version ?? null,
     tier,
+    aiNow: serverConfig ? aiSeenFor(serverConfig) : undefined,
   });
 }

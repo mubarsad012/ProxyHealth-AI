@@ -2,7 +2,7 @@
 // Import from here: `import { BigButton, Card } from '@/design/components';`
 
 export { AppProviders, type AppProvidersProps } from './Providers';
-export { Banner, BANNER_KEYS, type BannerKind, type BannerProps } from './Banner';
+export { Banner, BANNER_KEYS, type BannerKind, type BannerProps, TierBanner, tierBannerKind } from './Banner';
 export { BigButton, type BigButtonProps, type BigButtonVariant } from './BigButton';
 export { Bidi, type BidiDir, type BidiProps, isolate, stripIsolates } from './Bidi';
 export { Card, type CardProps } from './Card';

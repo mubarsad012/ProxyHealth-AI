@@ -22,6 +22,12 @@ export interface BigButtonProps {
   variant: BigButtonVariant;
   size: 56 | 72;
   disabled?: boolean;
+  /**
+   * Overrides what screen readers say instead of the visible label (+ sublabel), e.g. S11's
+   * "Call {organization}, {digits grouped}" for a "Call 1-800-…" button (CL-076(a)). Keep the
+   * visible words in it (WCAG 2.5.3 Label in Name).
+   */
+  accessibilityLabel?: string;
   accessibilityHint?: string;
   /** Optional second line under the label (e.g. `home.busy_until`). */
   sublabel?: string;
@@ -35,6 +41,7 @@ export function BigButton({
   variant,
   size,
   disabled,
+  accessibilityLabel,
   accessibilityHint,
   sublabel,
   testID,
@@ -51,7 +58,7 @@ export function BigButton({
     <Pressable
       testID={testID}
       role="button"
-      accessibilityLabel={sublabel ? `${label}. ${sublabel}` : label}
+      accessibilityLabel={accessibilityLabel || (sublabel ? `${label}. ${sublabel}` : label)}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}

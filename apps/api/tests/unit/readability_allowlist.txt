@@ -46,6 +46,7 @@ key:emergency.dv                 # COMPLIANCE §7 fixed emergency copy (reviewed
 key:consent.line3.web            # D-02 consent copy; rewording needs a CONSENT_VERSION bump (§4.7)
 key:consent.line4.masks          # D-02 / D-19 consent copy (§4.7)
 key:consent.line4.masks_web      # D-02 / D-19 consent copy (§4.7)
+key:consent.line4.masks_local    # D-02 / D-19 consent copy fixed verbatim in free-ai-providers §5.3 (15 words; §4.7)
 key:privacy.notice.delete        # COMPLIANCE §4.5, reused verbatim in the privacy policy (§16, §4.7)
 key:privacy.notice.device_web    # COMPLIANCE §4.5 / §16 (§4.7)
 key:privacy.notice.settings_sent # COMPLIANCE §4.5 / §16 (§4.7)

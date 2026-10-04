@@ -40,6 +40,8 @@ export function getClient(): ApiClient {
       getInstallId: installIdForRequests,
       appToken: env.appToken || undefined,
       getLanguageTag: () => useI18n.getState().tag,
+      // free-ai-providers §4.6: a slow local model must not be cut off by the fixed 120/60/30 s.
+      getTimeouts: () => useSession.getState().serverConfig?.client_timeouts ?? null,
     });
   }
   return singleton;

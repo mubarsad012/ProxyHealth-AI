@@ -93,8 +93,8 @@ describe('privacy notice lines per tier (COMPLIANCE_PRIVACY §4.5)', () => {
 });
 
 describe('startRoute (S0)', () => {
-  const record = { consent_version: '2026-10-01', accepted_at: 'x', tier_seen: 'paid' as const, platform: 'ios' as const };
-  const base = { languageDecided: true, decision: 'accepted' as const, record, serverConsentVersion: '2026-10-01', tier: 'paid' as const };
+  const record = { consent_version: '2026-10-04', accepted_at: 'x', tier_seen: 'paid' as const, platform: 'ios' as const };
+  const base = { languageDecided: true, decision: 'accepted' as const, record, serverConsentVersion: '2026-10-04', tier: 'paid' as const };
   it('routes language → consent → tabs', () => {
     expect(startRoute({ ...base, languageDecided: false })).toBe('/onboarding/language');
     expect(startRoute({ ...base, decision: 'none', record: null })).toBe('/onboarding/consent');
@@ -175,7 +175,7 @@ function demoConfig(): ServerConfig {
       hide_parts_server_masking: true,
     },
     limits: {} as ServerConfig['limits'],
-    consent_version: '2026-10-01',
+    consent_version: '2026-10-04',
     privacy_policy_url: 'https://proxyhealth.expo.app/privacy',
     base_pack_version: 'base',
     languages: [],
@@ -210,12 +210,12 @@ describe('<ConsentScreen>', () => {
     await new Promise((r) => setTimeout(r, 10));
     const record = await consentStore.get();
     expect(record).toEqual({
-      consent_version: '2026-10-01',
+      consent_version: '2026-10-04',
       accepted_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       tier_seen: 'demo',
       platform: 'ios',
     });
-    expect(useSession.getState().consent?.consent_version).toBe('2026-10-01');
+    expect(useSession.getState().consent?.consent_version).toBe('2026-10-04');
     expect(navigate).toHaveBeenCalledWith('/(tabs)');
   });
 

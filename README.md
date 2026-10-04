@@ -6,10 +6,10 @@ One codebase for iOS, Android and the web. Photograph a letter, bill, notice or 
 
 | | |
 |---|---|
-| **Status (2026-10-01)** | Phase 1 built and merged (`85e1e68`): API core, Gemini provider with key failover, the full analysis/safety pipeline, resources, fixtures and the mobile app (web walk-through verified end to end in Dari with zero keys). Phase 2A (dev tooling, CI, store docs, artwork; `3eccd27`) and 2B (audit and hardening; `95e620f`) merged; Phase 2C (leftovers plus S5/S11/S16 should-haves) in progress. iOS store submission stays blocked on the iCloud-backup gate (COMPLIANCE_PRIVACY §10.2); Android first. The API test suite passes (`make test`; the live tests skip without keys); ruff and strict mypy are clean; mobile `tsc`, `jest`, `expo lint`, web export and `expo config --type prebuild` are green. |
+| **Status (2026-10-04)** | Phase 1 built and merged (`85e1e68`): API core, Gemini provider with key failover, the full analysis/safety pipeline, resources, fixtures and the mobile app (web walk-through verified end to end in Dari with zero keys). Phase 2A (dev tooling, CI, store docs, artwork; `3eccd27`), 2B (audit and hardening; `95e620f`) and 2C (leftovers plus S5/S11/S16 should-haves; `c948de8`) merged. Phase 3 (branch `phase3-wip`) adds an OpenAI-compatible provider and the `local`/`attested` test tiers so you can [test with your own papers for free on a local AI](#test-with-your-own-papers-for-free-local-ai) (D-32). iOS store submission stays blocked on the iCloud-backup gate (COMPLIANCE_PRIVACY §10.2); Android first. The API test suite passes (`make test`; the live tests skip without keys); ruff and strict mypy are clean; mobile `tsc`, `jest`, `expo lint`, web export and `expo config --type prebuild` are green. |
 | **Try it** | `make dev`, then open <http://localhost:8081>. Zero API keys: `AI_PROVIDER=mock` serves 17 synthetic sample papers and 1 portal screenshot end to end. |
 | **Models** | `MODEL_PRO=gemini-3.8-flash` (document analysis, screenshot help) · `MODEL_FAST=gemini-3.5-flash-lite` (language packs, chat, tagging, rewrites). Env-configurable; `gemini-1.5`/`2.0`/`2.5` and `-latest` IDs are refused at boot. |
-| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only; typed text (chat questions, a troubleshoot goal) is refused there too, even about a sample, so `features.chat` is off and the app hides the chat box. |
+| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). Test builds can instead read them with an open model on your own machine (**local** tier; loopback only, never in production) or, in development only, with a named vendor whose terms say no training (**attested**). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only; typed text (chat questions, a troubleshoot goal) is refused there too, even about a sample, so `features.chat` is off and the app hides the chat box. |
 | **Stores** | Not submitted. Android development build first, iOS after an organization Apple account; see [Store roadmap](#store-roadmap) and [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md). |
 
 ## Contents
@@ -20,14 +20,15 @@ One codebase for iOS, Android and the web. Photograph a letter, bill, notice or 
 4. [Architecture](#architecture)
 5. [Quickstart (zero keys)](#quickstart-zero-keys)
 6. [Adding Gemini keys — the paid-tier requirement](#adding-gemini-keys--the-paid-tier-requirement)
-7. [Environment variables](#environment-variables)
-8. [Scripts and commands](#scripts-and-commands)
-9. [Repository layout](#repository-layout)
-10. [API at a glance](#api-at-a-glance)
-11. [Docs index](#docs-index)
-12. [Store roadmap](#store-roadmap)
-13. [Contributing and testing](#contributing-and-testing)
-14. [Open questions and license](#open-questions-and-license)
+7. [Test with your own papers for free (local AI)](#test-with-your-own-papers-for-free-local-ai)
+8. [Environment variables](#environment-variables)
+9. [Scripts and commands](#scripts-and-commands)
+10. [Repository layout](#repository-layout)
+11. [API at a glance](#api-at-a-glance)
+12. [Docs index](#docs-index)
+13. [Store roadmap](#store-roadmap)
+14. [Contributing and testing](#contributing-and-testing)
+15. [Open questions and license](#open-questions-and-license)
 
 ---
 
@@ -63,7 +64,7 @@ Decision numbers point into [`docs/DECISIONS.md`](docs/DECISIONS.md).
 **Keep it private**
 - Family vault on the device only, opt-in after each scan; one-tap "Delete everything". Web keeps papers for the tab session unless the user opts into browser storage (labelled "not encrypted by the app"). [D-22, D-23]
 - Nothing on the server: request bodies live in memory; logs are an allow-list of content-free fields; feedback is counts only. [D-08, D-31]
-- Consent that is literally true per tier (paid / unpaid / demo / unknown), CI-tested against an approved list. [D-02]
+- Consent that is literally true per tier (paid / unpaid / demo / unknown, plus the `local` and `attested` test-build tiers that name the model or vendor), CI-tested against an approved list. [D-02, D-32]
 
 **Speak the reader's language**
 - Bundled packs `en`, `es`, `prs` (Dari), `ar`, `ps` (Pashto); any typed language gets a generated pack while the screen says *"Adapting system environment to your language..."* (keys required; mock mode shows a pseudo-localized pack). Computer-translated packs are labelled. [D-25]
@@ -103,6 +104,7 @@ Decision numbers point into [`docs/DECISIONS.md`](docs/DECISIONS.md).
 │ request id → content-free log → body limit → CORS → tier headers → consent (428)       │
 │   → tier gate (403) → rate limit (429)                                                  │
 │ routers → pipelines → AIProvider ─┬─ GeminiProvider (failover ⇄ key pool, per slot)    │
+│                                   ├─ OpenAICompatProvider (test builds · local AI)     │
 │                                   └─ MockProvider (sample papers · dHash · latency)    │
 │ safety pipeline: uploads → redaction → model → verify quotes → contacts filter →       │
 │   deadline rules → urgency → scam → emergency → phrasing lint → injection re-run →     │
@@ -112,6 +114,7 @@ Decision numbers point into [`docs/DECISIONS.md`](docs/DECISIONS.md).
 └───────────────┬────────────────────────────────────────────────────────────────────────┘
                 │ google-genai · generate_content · response_schema · no Files API
        Gemini API — MODEL_PRO / MODEL_FAST · one key per DISTINCT billed Cloud project
+       test builds (D-32): Ollama / LM Studio on 127.0.0.1, or a hosted OpenAI-compatible API
 ```
 
 **Trust boundary = the device.** Pydantic models in `apps/api/proxyhealth_api/contracts/` are the single source of truth; `apps/api/openapi.json` is committed and snapshot-tested; `apps/mobile/src/api/schema.d.ts` is generated from it with `openapi-typescript`. Full trees and module internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -164,6 +167,28 @@ GEMINI_KEYS='[{"key":"AIza...","project":"proxyhealth-prod-a","billing":true},{"
 
 ---
 
+## Test with your own papers for free (local AI)
+
+No budget, but you want to see how the app reads a real letter? Never send it through a free Gemini key: Google may train on it and people may read it (D-01). Instead, run an open vision model, **Qwen3.5-4B**, on this Mac with **Ollama**. The API then sends the paper to `127.0.0.1`, not to an AI company. The full guide is [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) (disk math, safety checks, speed, quality, troubleshooting); the decision is D-32 and the research is [`docs/research/free-ai-providers.md`](docs/research/free-ai-providers.md).
+
+```sh
+make local-ai-setup ARGS=--dry-run   # read the plan: nothing is downloaded or changed
+make local-ai-setup                  # asks y/N before Ollama (~200 MB), then before the model (3.4 GB)
+scripts/use-local-ai.sh              # writes apps/api/.env for the local tier (backs up yours first)
+make local-ai-check                  # a SAMPLE paper through the real pipeline with the local model
+make dev                             # the app at http://localhost:8081, data use tier "local"
+```
+
+- **What changes.** `apps/api/.env` gets `AI_PROVIDER=openai_compat`, `OPENAI_COMPAT_BASE_URL=http://127.0.0.1:11434/v1`, `OPENAI_COMPAT_DATA_TIER=local` and `OPENAI_COMPAT_MODEL_LABEL=Qwen` (preset: `apps/api/.env.local-ai.example`). `GET /v1/config` then reports `data_use_tier: "local"`; the consent screen shows "Test build — AI on our server", names the model, and offers "I understand, continue".
+- **What the server enforces.** `local` boots only when the model endpoint is a loopback address (`127.0.0.0/8`, `::1`, `localhost`) and never with an Ollama `:cloud` model; `ENV=production` refuses the provider entirely. Any hosted OpenAI-compatible endpoint runs on `unpaid` by default (sample papers only, real papers get a 403). The `attested` tier, for a vendor whose API terms you attest say "no training", boots only in `ENV=development` and refuses denylisted hosts.
+- **Your part.** Use only your own papers, or papers from someone who said yes. Black out ID numbers with **Hide parts**. Run the Ollama disk check once (`docs/LOCAL_AI.md` §4) and note it in [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §9. No tunnels (`expo start --tunnel`) with a real paper, and never copy one into `apps/api/data/fixtures/`.
+- **Expect** about 1–4 minutes per paper on this fanless M4 Air (an estimate), so the API tells the app to wait longer (`client_timeouts` in `GET /v1/config`). A 4B model is weaker than `gemini-3.8-flash`: check every answer against the paper, and have a native speaker check Dari, Pashto and Haitian Creole output.
+- **Nobody installs Ollama or a model for you.** Agents and CI never run these scripts; `make dev`, `make test`, `make smoke` and `make ci` never call them.
+- **Switch back** with `scripts/use-local-ai.sh --off` (mock, zero keys) or `--restore` (your previous `.env`), then restart `make dev`.
+- **Hosted second opinions** (Groq, Cloudflare Workers AI, Alibaba Model Studio International, …) use the same provider; which ones may see your own papers and which are synthetic-samples-only (Chinese-hosted services, with one documented Alibaba exception) is in `docs/LOCAL_AI.md` §8 and D-32.
+
+---
+
 ## Environment variables
 
 Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working directory; real environment variables win). Unknown variables are a boot error; secrets never appear in `repr` or logs. Full meanings: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6 and `apps/api/.env.example`.
@@ -173,7 +198,7 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | Variable | Default | Meaning |
 |---|---|---|
 | `ENV` | `development` | `development \| staging \| production`; production refuses unbilled slots (unless `ALLOW_UNPAID_KEYS=1`) and `ALLOW_UNPAID_REAL_DOCUMENTS`. |
-| `AI_PROVIDER` | `mock` | `mock \| gemini` (`gemini_interactions` is LATER and refused). |
+| `AI_PROVIDER` | `mock` | `mock \| gemini \| openai_compat` (`gemini_interactions` is LATER and refused). `openai_compat` = test builds only, refused in production (D-32). |
 | `GEMINI_KEYS` | `[]` | JSON list of `{"key","project","billing"}`; one key per **distinct** project; `billing` = your attestation. |
 | `ALLOW_UNPAID_KEYS` | `0` | Lets production boot with unbilled slots (sample papers only). |
 | `ALLOW_UNPAID_REAL_DOCUMENTS` | `false` | Dev-only bypass of the 403 gate for synthetic scans; boot error in production. |
@@ -182,7 +207,7 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `ANALYSIS_MODE` | `auto` | `auto \| single \| two_call` (D-06). |
 | `TRANSLATE_FULL_MAX_PAGES` | `4` | Full translation up to this many pages. |
 | `RPD_SOFT_CAP_PRO` / `RPD_SOFT_CAP_FAST` | `0` | Per-slot daily soft caps (0 = off). |
-| `UPSTREAM_TIMEOUT_S` / `FAILOVER_DEADLINE_S` | `90` / `100` | Per call / per request across slots. |
+| `UPSTREAM_TIMEOUT_S` / `FAILOVER_DEADLINE_S` | `90` / `100` | Per call / per request across slots. On `openai_compat` the deadline must be ≥ `OPENAI_COMPAT_TIMEOUT_S + 10` (raised automatically when unset). |
 | `MAX_PAGES` · `MAX_PAGE_BYTES` · `MAX_PDF_BYTES` · `MAX_PDF_PAGES` · `MAX_REQUEST_BYTES` · `MAX_UPSTREAM_INLINE_BYTES` | `12` · 4 MiB · 12 MiB · `60` · 20 MiB · 18 MiB | Upload caps (D-21). |
 | `MAX_CHAT_HISTORY` | `8` | Prior chat turns accepted. |
 | `CORS_ORIGINS` | `http://localhost:8081` | Comma list; add the web host. `make dev` passes `http://localhost:8081,http://127.0.0.1:8081`. |
@@ -190,11 +215,17 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `INSTALL_HASH_SECRET` | random per process | HMAC secret for install-id hashing (set it in production). |
 | `RATE_LIMIT_ANALYZE_PER_HOUR` / `_PER_DAY` · `RATE_LIMIT_IP_PER_MINUTE` / `_PER_DAY` | `20` / `100` · `60` / `1000` | Soft limits per install (when `X-Install-Id` is sent) / per IP class (`/24`, `/48`; every model-calling request). 429 `details.bucket` says which. |
 | `TRUSTED_PROXY_HOPS` | `0` (the Dockerfile sets `1`) | Proxies that append to `X-Forwarded-For`; Cloud Run 1, behind an external HTTPS load balancer 2 (DEPLOYMENT §1.2). |
-| `CONSENT_VERSION` | `2026-10-01` | Bump when consent copy changes (clients re-consent). |
+| `CONSENT_VERSION` | `2026-10-04` | Bump when consent copy changes (clients re-consent). |
 | `PRIVACY_POLICY_URL` | `https://proxyhealth.expo.app/privacy` | The public HTML policy (`apps/mobile/public/privacy/index.html`). |
 | `VAR_DIR` · `LANGPACK_CACHE_TTL_DAYS` | `./var` · `180` | Runtime state (never user content) · pack cache age. |
 | `MOCK_LATENCY_MIN_MS` / `_MAX_MS` · `MOCK_PHASH_MAX_HAMMING` | `300` / `900` · `10` | Mock latency · sample-photo match threshold. |
 | `RECORD_FIXTURES` · `LOG_LEVEL` · `RUN_LIVE` | `false` · `info` · `0` | Recording provider (dev) · log level (content-free either way) · live tests. |
+| `OPENAI_COMPAT_BASE_URL` · `OPENAI_COMPAT_API_KEY` | `http://127.0.0.1:11434/v1` · empty | `AI_PROVIDER=openai_compat` only. The OpenAI-compatible endpoint (Ollama, LM Studio or hosted) · its key (required for any non-loopback host; Ollama ignores it). |
+| `OPENAI_COMPAT_MODEL_PRO` / `_FAST` | `qwen3.5:4b` / `qwen3.5:4b` | The only model ids on this provider. |
+| `OPENAI_COMPAT_DATA_TIER` | `unpaid` | `local` (loopback endpoint; real papers in dev/staging) · `attested` (development only; vendor terms say no training — your attestation) · `unpaid` (samples only). |
+| `OPENAI_COMPAT_MODEL_LABEL` · `OPENAI_COMPAT_VENDOR_NAME` · `OPENAI_COMPAT_NO_TRAINING_ATTESTED` | empty · empty · `false` | `{model}` (required for `local`) · `{vendor}` (required for `attested` and `unpaid`) in the consent copy · your no-training statement (required for `attested`). |
+| `OPENAI_COMPAT_JSON_MODE` · `OPENAI_COMPAT_REASONING` | `auto` · `none` | `auto \| json_schema \| json_object \| prompt` · `none \| mapped \| omit` (`none` turns Qwen's thinking off). |
+| `OPENAI_COMPAT_TIMEOUT_S` · `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` · `OPENAI_COMPAT_MAX_IMAGES` · `OPENAI_COMPAT_CONCURRENCY` | 300 loopback / 90 hosted · `6144` · `12` · 1 loopback / 4 hosted | Per call · output cap · page images per call · parallel calls. Full meanings: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6.1. |
 
 ### Mobile (Expo public env — baked in at build/export time; never secrets)
 
@@ -220,6 +251,9 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `make host-rules` | After `make export-web`: `scripts/web-host-rules.py` writes `dist/_redirects` + `dist/404.html` so Netlify / Cloudflare Pages serve `/result/<id>` and `/papers/member/<id>` (EAS Hosting needs nothing; `--vercel` prints the `vercel.json` rewrites, `--verify <url>` checks a deploy — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §2.3). |
 | `make types` / `make types-check` | `scripts/gen-types.sh`: regenerate / verify `apps/api/openapi.json` and `apps/mobile/src/api/schema.d.ts` (regeneration is the contract owner's job). |
 | `make sync` / `make sync-check` | `apps/api/scripts/sync_to_mobile.py` (packs, languages, fixtures, fonts, national fallbacks into the app). |
+| `make local-ai-setup` | `scripts/setup-local-ai.sh`: Ollama + `qwen3.5:4b` on this Mac, asking y/N before each download (`ARGS=--dry-run` shows the plan). Run it yourself; agents and CI never do. |
+| `scripts/use-local-ai.sh` | Writes `apps/api/.env` for the `local` tier from `apps/api/.env.local-ai.example` (backs up a different `.env`; `--off`, `--restore`, `--dry-run`). |
+| `make local-ai-check` | `apps/api/scripts/provider_check.py`: one sample paper through the real pipeline with the configured provider (schema fit, verified facts, time, JSON mode). |
 | `apps/api/.venv/bin/ruff check apps/api` | Lint. |
 | `apps/api/.venv/bin/mypy --config-file apps/api/pyproject.toml apps/api/proxyhealth_api apps/api/scripts apps/api/tests` | Strict type-check (mypy reads config only from the cwd, hence the flag). |
 | `RUN_LIVE=1 apps/api/.venv/bin/pytest apps/api/tests/live` | Live golden gate (billed keys only). |
@@ -236,22 +270,22 @@ Parallel-agent rule: never run `npm install`, `npx expo install` or `pip install
 
 ```
 ProxyHealth/
-  Makefile  scripts/{dev,smoke,gen-types,ci}.sh · make_artwork.py  .github/workflows/ci.yml
+  Makefile  scripts/{dev,smoke,gen-types,ci,setup-local-ai,use-local-ai}.sh · make_artwork.py  .github/workflows/ci.yml
   CLAUDE.md                 agent rules for this machine
   docs/                     the specification set (below) + research/
   apps/api/                 Python 3.13 · FastAPI · google-genai · in memory only
     proxyhealth_api/        main, settings, errors, middleware, ratelimit, logging_, deps
       contracts/            Pydantic = the API contract (→ openapi.json → schema.d.ts)
-      ai/                   provider Protocol, gemini, mock, recording, keypool, failover, routing, prompts/
+      ai/                   provider Protocol, gemini, openai_compat, mock, recording, keypool, failover, routing, prompts/
       analysis/             pipeline + verify, contacts filter, deadline rules, urgency, scam, emergency,
                             phrasing, injection, clerk, fixed notices, redaction, uploads, troubleshoot, chat
       packs/ resources/ quicksheet/ demo/ feedback/ routers/
     data/                   langpacks/ (en canonical + es prs ar ps) · languages.yaml · resources/*.yaml ·
                             rules/*.yaml · safety/*.yaml · fixtures/<18 samples> · fonts/ (Noto, OFL)
     scripts/                export_openapi · sync_to_mobile · make_fixtures · gen_packs · spike_schema ·
-                            check_links · eval_golden · smoke
+                            check_links · eval_golden · smoke · provider_check
     tests/                  unit/ · contract/ · golden/ · live/ (RUN_LIVE=1)
-    Dockerfile  requirements.txt  .env.example  openapi.json  pyproject.toml
+    Dockerfile  requirements.txt  .env.example  .env.local-ai.example  openapi.json  pyproject.toml
   apps/mobile/              Expo SDK 57 · React Native 0.86 · React 19 · TypeScript 6
     app.json  eas.json      store config, plugins, permission strings, EAS profiles
     public/privacy/         the public privacy policy (copied into the web export)
@@ -290,7 +324,7 @@ Read in this order: [`CLAUDE.md`](CLAUDE.md) → DECISIONS → API_CONTRACT → 
 
 | Document | What it holds |
 |---|---|
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Product stance, decisions D-01…D-31, rejected ideas, open questions, brand, the append-only change log (§14). |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Product stance, decisions D-01…D-32, rejected ideas, open questions, brand, the append-only change log (§14). |
 | [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | Every endpoint, model, enum and error, with examples. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Directory trees, module internals, ownership map, dev/CI/deploy, env vars, invariants. |
 | [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | Personas, journeys, screens S0–S19, copy (Appendix A), demo, acceptance criteria. |
@@ -301,9 +335,10 @@ Read in this order: [`CLAUDE.md`](CLAUDE.md) → DECISIONS → API_CONTRACT → 
 | [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) | Work packages, ownership, milestones, verification commands, definition of done. |
 | [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | The three-minute zero-key demo and the keyed, samples-only variant. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cloud Run API and demo service, web hosting with exact headers, EAS profiles, secrets, release checklist. |
-| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Paid-tier billing setup, key rotation, quota, quarterly resource re-verification, incidents/breach steps, device and store evidence. |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Paid-tier billing setup, local-AI and attested test-build steps, key rotation, quota, quarterly resource re-verification, incidents/breach steps, device and store evidence. |
+| [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) | Test with your own papers for free: Ollama + Qwen on this Mac, the `local` tier, safety checks, speed, hosted options. |
 | [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md) | App Store and Google Play copy and declarations, screenshot list, blockers. |
-| [`docs/research/`](docs/research/) | `gemini.md`, `expo.md`, `compliance.md`, `resources.md` (the facts the decisions rest on) and the three candidate specs in `specs/`. |
+| [`docs/research/`](docs/research/) | `gemini.md`, `expo.md`, `compliance.md`, `resources.md`, `free-ai-providers.md` (the facts the decisions rest on) and the three candidate specs in `specs/`. |
 | [`apps/mobile/README.md`](apps/mobile/README.md) · [`apps/mobile/AGENTS.md`](apps/mobile/AGENTS.md) | Mobile-app commands and Expo rules (verify every Expo API against the SDK 57 docs). |
 
 ---
@@ -351,7 +386,7 @@ Hard rules (from [`CLAUDE.md`](CLAUDE.md)): no installs while other agents run; 
 
 ## Open questions and license
 
-Questions only the user can answer: [`docs/DECISIONS.md`](docs/DECISIONS.md) §12 (Q1 billing owner, Q2 developer accounts, Q3 counsel, Q4 bundle id and web host, Q5 pilot geography, Q6–Q7 language reviewers, Q8 per-device budget, Q9 web positioning, Q10 Interactions API, Q11 hosting) and [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) §19 (Q15 operator identity for the privacy policy, Q16 iOS backup exclusion, Q17 label stance, Q18–Q25). Until Q1 is answered, keyed runs use sample papers only.
+Questions only the user can answer: [`docs/DECISIONS.md`](docs/DECISIONS.md) §12 (Q1 billing owner, Q2 developer accounts, Q3 counsel, Q4 bundle id and web host, Q5 pilot geography, Q6–Q7 language reviewers, Q8 per-device budget, Q9 web positioning, Q10 Interactions API, Q11 hosting) and [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) §19 (Q15 operator identity for the privacy policy, Q16 iOS backup exclusion, Q17 label stance, Q18–Q25, Q26 approving the local-AI install, Q27 a hosted second opinion). Until Q1 is answered, keyed runs use sample papers only.
 
 **License:** not chosen yet. `apps/mobile/LICENSE` is the MIT notice from Expo's template and covers only that template code. The Noto fonts in `apps/api/data/fonts/` and `apps/mobile/assets/fonts/` are under the SIL Open Font License (`OFL.txt`).
 

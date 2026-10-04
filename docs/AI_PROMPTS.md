@@ -135,6 +135,8 @@ Enforcement inside `route()` (unit-tested in `tests/unit/test_routing.py`):
 
 `max_output_tokens` for `tag` (1024), `clerk_translate` (512), `phrasing_rewrite` (256) and `resolve_language` (256) are not stated in D-04 and are set here (BUILD_PLAN §4.1 mirrors these numbers); the rest are D-04's numbers.
 
+**`AI_PROVIDER=openai_compat` (D-32, Phase 3).** The same tasks, prompts and schemas; the model column reads `OPENAI_COMPAT_MODEL_PRO` / `OPENAI_COMPAT_MODEL_FAST` (`Settings.active_model_pro/fast`), there is no degraded row, `thinking` is `None` unless `OPENAI_COMPAT_REASONING=mapped` (then `minimal` → effort `none`, `low`/`medium`/`high` → the same effort), `media_resolution` is not sent, and every `max_output_tokens` above is further capped at `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` (default 6144). §9.6 has the call recipe.
+
 ---
 
 ## 4. Model-output schemas (`contracts/model_out.py`) — per-field prompt guidance
@@ -924,6 +926,16 @@ Rules: `is_schema_rejection(text)` matches `re.search(r"schema|response_schema|U
 ### 9.5 Unit testing without network (`tests/unit/test_gemini_*.py`, WP1)
 
 A `FakeAioModels` object with an async `generate_content(**kw)` that records `kw` and returns a canned `types.GenerateContentResponse` (built with `types.Candidate(finish_reason=…, content=types.Content(parts=[types.Part(text=json)]))` and `parsed=` set). Tests assert: text part precedes media parts; `system_instruction` is the rendered system prompt; `response_mime_type == "application/json"`; `response_schema is schema`; `thinking_config.include_thoughts is False`; no `temperature`/`top_p`/`top_k`/`candidate_count` attribute is set on the config; `MAX_TOKENS` → `incomplete=True`; `SPII` finish → `blocked_reason="spii"`; empty candidates → `"other"`; `ClientError(429, …)` with a `Retry-After` header → keypool cools for that many seconds; `timeout` passed to `HttpOptions` equals `UPSTREAM_TIMEOUT_S * 1000`.
+
+### 9.6 OpenAI-compatible call recipe (`ai/openai_compat.py`, D-32; test builds only)
+
+`OpenAICompatProvider.generate_structured` takes the same arguments as the Gemini provider and returns the same `StructuredResult`. Differences from §9.1–§9.4:
+
+- **Messages.** One `system` message = the system prompt of §5 (the preamble included), plus the flattened JSON schema as text when the JSON mode is `json_object` or `prompt` (Alibaba requires the word "JSON" in the prompt; the schema text supplies it). One `user` message = every text part (the user template of §5) first, then every page as `{"type": "image_url", "image_url": {"url": "data:image/…;base64,…"}}` (D-04 order; `detail: "high"` only where a host documents it). A PDF is rasterised in memory to one PNG per page; the provider never sends `application/pdf`.
+- **Body.** `model`, `messages`, `stream: false`, `temperature: 0` (provider-specific exception to D-04), `max_tokens`, `reasoning_effort` (`"none"` by default), `response_format` per JSON mode: `{"type": "json_schema", "json_schema": {"name", "schema", "strict": true}}` with `$defs` inlined, `additionalProperties: false` and every property listed in `required`; or `{"type": "json_object"}`; or nothing (`prompt`). On OpenRouter it adds `provider.require_parameters: true` and `provider.data_collection: "deny"`.
+- **Reading the reply.** `<think>…</think>` blocks and code fences are stripped, then `schema.model_validate_json`. On a validation error the provider appends the model's reply as an `assistant` turn and a `user` turn that lists only the Pydantic error `loc` and `type` (never input values) and asks for corrected JSON — one repair retry inside the same call budget. Still invalid → `parsed=None, incomplete=True`, so §9.4's single → two-call fallback runs exactly as for a Gemini `MAX_TOKENS` reply. `finish_reason: "length"` → `incomplete`; `content_filter` or a `refusal` field → `blocked_reason="other"` → `422 content_blocked` (§9.3). `usage.prompt_tokens` / `completion_tokens` / `completion_tokens_details.reasoning_tokens` → `Usage(input, output, thought)`.
+- **Errors.** `OpenAICompatError(status_code, message, response)`, mapped onto §8 as listed in D-32 (429 → cooldown, per-day → Pacific midnight; 401/402/403 → disabled; 404 and a refused loopback connection → `503 provider_not_configured`; 413 → `413`; 5xx → next slot / one same-slot retry). `message` (≤ 300 characters of the upstream error) is used in memory for the regexes and never logged.
+- **Tests.** `tests/unit/test_openai_compat_provider.py` drives the provider through `httpx.MockTransport` (no network, no Ollama); `tests/contract/test_openai_compat_config.py` runs the app on the `local`/`attested`/`unpaid` tiers against a fake OpenAI-compatible server. `scripts/spike_schema.py` and `scripts/eval_golden.py` take `--provider openai_compat`; `make local-ai-check` (`scripts/provider_check.py`) runs one sample paper through the real pipeline.
 
 ---
 

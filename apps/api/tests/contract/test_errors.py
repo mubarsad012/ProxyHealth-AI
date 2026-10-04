@@ -22,7 +22,7 @@ from tests.contract._fixtures_wp1 import demo_body, gemini, page_body, running
 from tests.contract.test_analyze import install
 from tests.contract.test_chat import context_for
 
-CONSENT = {"X-Consent-Version": "2026-10-01"}
+CONSENT = {"X-Consent-Version": "2026-10-04"}
 
 
 def envelope(r: httpx.Response, status: int, code: str) -> ErrorResponse:
@@ -188,7 +188,7 @@ async def test_500_is_content_free(raising: httpx.AsyncClient) -> None:
 async def test_428_without_consent(client: httpx.AsyncClient, tiny_png_base64: str) -> None:
     r = await client.post("/v1/analyze", json=page_body(tiny_png_base64))
     body = envelope(r, 428, "consent_required")
-    assert body.error.details == {"consent_version": "2026-10-01"}
+    assert body.error.details == {"consent_version": "2026-10-04"}
 
 
 @pytest.mark.parametrize("given", ["2026-01-01", "not-a-date", "zzzz", ""])

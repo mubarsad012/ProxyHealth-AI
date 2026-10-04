@@ -1,6 +1,8 @@
 // S2 — What happens to your paper (D-02, PRODUCT_SPEC S2, COMPLIANCE_PRIVACY §4.2). Badge + lines
-// that are literally true per tier, 18+ line, "Read more" notice, Continue / Not now / Try a sample.
-// unknown → Continue disabled with a hint; unpaid/mixed → Continue hidden, sample is primary.
+// that are literally true per tier and AI provider (free-ai-providers §5.2: `{model}` / `{vendor}`
+// from `/v1/config`), 18+ line, "Read more" notice, Continue / Not now / Try a sample. Every line,
+// the 18+ line included, has a speaker button (§4.2). unknown → Continue disabled with a hint;
+// unpaid/mixed → Continue hidden, sample is primary; local/attested → Continue shown.
 // Backing out equals "Not now" (the route file wires the hardware back button).
 
 import { type Href, router } from 'expo-router';
@@ -23,7 +25,7 @@ import { platformName } from '@/lib/platform';
 import type { ConsentRecord } from '@/storage/index';
 import type { TierSeen } from '@/storage/consent';
 
-import { consentView, type ConsentLine } from './consentModel';
+import { aiSeenFor, consentView, type ConsentLine } from './consentModel';
 import { acceptConsent, declineConsent, previousRecord, useConsentDecision } from './consentState';
 import { PrivacyNotice } from './PrivacyNotice';
 
@@ -70,6 +72,7 @@ export function ConsentScreen({ navigate = (h) => router.replace(h) }: ConsentSc
     tier,
     platform: platformName(),
     features: config?.features ?? null,
+    ai: config,
     previous,
   });
   const waiting = loading && !config;
@@ -78,7 +81,7 @@ export function ConsentScreen({ navigate = (h) => router.replace(h) }: ConsentSc
     if (!config || view.continueDisabled) return;
     setBusy(true);
     try {
-      await acceptConsent(config.consent_version, tier as TierSeen);
+      await acceptConsent(config.consent_version, tier as TierSeen, aiSeenFor(config));
       navigate(TABS_HREF);
     } finally {
       setBusy(false);
@@ -128,14 +131,19 @@ export function ConsentScreen({ navigate = (h) => router.replace(h) }: ConsentSc
                 color={line.tone === 'danger' ? 'danger' : 'text'}
                 weight={line.tone === 'danger' ? 'bold' : 'regular'}
                 variant={line.pictogram ? 'body' : 'caption'}>
-                {t(line.key)}
+                {t(line.key, view.vars)}
               </AppText>
             </View>
-            <SpeakButton text={t(line.key)} lang={meta.tag} />
+            <SpeakButton text={t(line.key, view.vars)} lang={meta.tag} />
           </View>
         ))}
       </View>
-      <AppText weight="bold">{t('consent.adults_only')}</AppText>
+      <View testID="consent-adults-only" style={[styles.adults, { flexDirection: dir.row }]}>
+        <View style={styles.lineText}>
+          <AppText weight="bold">{t('consent.adults_only')}</AppText>
+        </View>
+        <SpeakButton text={t('consent.adults_only')} lang={meta.tag} />
+      </View>
       <Pressable role="link" hitSlop={size.hitSlop} onPress={() => setNoticeOpen(true)} style={styles.link}>
         <AppText color="link" style={styles.underline}>
           {t('consent.read_more')}
@@ -185,6 +193,10 @@ const styles = StyleSheet.create({
     gap: space.md,
     padding: space.sm,
     borderRadius: 12,
+  },
+  adults: {
+    alignItems: 'center',
+    gap: space.md,
   },
   pictogramSpace: {
     width: size.iconLarge,

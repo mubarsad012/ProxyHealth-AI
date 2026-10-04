@@ -64,7 +64,7 @@ gcloud run deploy proxyhealth-api \
   --image "$IMAGE" --region "$REGION" --allow-unauthenticated \
   --cpu 1 --memory 1Gi --concurrency 32 --timeout 120 \
   --min-instances 0 --max-instances 4 \
-  --set-env-vars "ENV=production,AI_PROVIDER=gemini,LOG_LEVEL=info,CORS_ORIGINS=https://proxyhealth.expo.app,PRIVACY_POLICY_URL=https://proxyhealth.expo.app/privacy,CONSENT_VERSION=2026-10-01" \
+  --set-env-vars "ENV=production,AI_PROVIDER=gemini,LOG_LEVEL=info,CORS_ORIGINS=https://proxyhealth.expo.app,PRIVACY_POLICY_URL=https://proxyhealth.expo.app/privacy,CONSENT_VERSION=2026-10-04" \
   --set-secrets "GEMINI_KEYS=GEMINI_KEYS:latest,INSTALL_HASH_SECRET=INSTALL_HASH_SECRET:latest,ADMIN_TOKEN=ADMIN_TOKEN:latest"
 ```
 
@@ -260,7 +260,8 @@ Name "ProxyHealth AI", slug and scheme `proxyhealth`, version `1.0.0`; icons and
 | `APP_TOKEN` (optional) | Secret Manager; the matching `EXPO_PUBLIC_APP_TOKEN` is public by nature | API | treat it as abuse friction, not security |
 | Google Play service account JSON | EAS (upload as a submit credential) or a local git-ignored `apps/mobile/google-service-account.json` | `eas submit` | the repo (`.gitignore` covers `*service-account*.json`) |
 | Apple credentials | EAS-managed (App Store Connect API key) | `eas build` / `eas submit` | the repo |
-| Local development | `apps/api/.env` (git-ignored; start from `apps/api/.env.example`) | `make dev` | commits |
+| Local development | `apps/api/.env` (git-ignored; start from `apps/api/.env.example`, or `scripts/use-local-ai.sh` for the `local` tier) | `make dev` | commits |
+| `OPENAI_COMPAT_API_KEY` (test builds only; hosted OpenAI-compatible vendors) | `apps/api/.env` on a development or staging machine; never Secret Manager for production (the provider is refused there) | API (`Authorization` header only) | the repo, the image, the app, logs (`SecretStr`); `.env.local-ai.example` holds only Ollama's placeholder `ollama` |
 
 Rotation and leak handling: RUNBOOK §2.
 
@@ -269,7 +270,7 @@ Rotation and leak handling: RUNBOOK §2.
 ## 5. Release checklist (production)
 
 1. `scripts/ci.sh` green on the release commit; `make smoke` green; the `docker` CI job green.
-2. Production API deployed (§1.2) with every guard; `GET /v1/config` → `paid`, `consent_version` = the page's printed version, `privacy_policy_url` = the live `/privacy`.
+2. Production API deployed (§1.2) with every guard; `GET /v1/config` → `"provider": "gemini"` and `paid` (`ENV=production` refuses `AI_PROVIDER=openai_compat`, so a local-AI `.env` can never boot there — D-32), `consent_version` = the page's printed version, `privacy_policy_url` = the live `/privacy`.
 3. Web exported with the production API URL and deployed with the §2.2 headers; `/privacy/` loads without JavaScript; on any host other than EAS Hosting, `make host-rules` applied and `web-host-rules.py --verify <host>` green (§2.3).
 4. `CORS_ORIGINS` = the web host only.
 5. EAS `production` build; manifest check logged; STORE_LISTING §0 blockers cleared (B5, the iOS iCloud-backup exclusion, is still open on 2026-10-01 — Android only until it closes); COMPLIANCE_PRIVACY §18 ticked.

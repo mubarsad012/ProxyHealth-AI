@@ -21,7 +21,7 @@ from proxyhealth_api.settings import DATA_DIR, Settings
 from tests.conftest import make_settings
 from tests.contract._fixtures_wp1 import demo_body, gemini, running
 
-CONSENT = {"X-Consent-Version": "2026-10-01"}
+CONSENT = {"X-Consent-Version": "2026-10-04"}
 SAMPLE = "medicaid_address_confirmation"
 
 

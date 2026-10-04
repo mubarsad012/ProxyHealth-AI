@@ -1,7 +1,9 @@
 // Typed fetch wrapper (BUILD_PLAN §4.2, API_CONTRACT §0, ARCHITECTURE §3.1 "API client").
 // Headers: X-Request-Id, X-Install-Id, X-Consent-Version (analyze/troubleshoot/chat), X-App-Token,
-// Accept-Language, If-None-Match. Timeouts 120/60/30 s via AbortController. Every non-2xx becomes
-// an `ApiError`; transport failures become `code: 'network'`, aborts `code: 'timeout'`.
+// Accept-Language, If-None-Match. Timeouts via AbortController: the server's `/v1/config`
+// `client_timeouts` when known (free-ai-providers §4.6 — a local model may need minutes), else the
+// fixed 120/60/30 s. Every non-2xx becomes an `ApiError`; transport failures become
+// `code: 'network'`, aborts `code: 'timeout'`.
 
 import { ApiError, apiErrorFromStatus, timeoutError, toApiError } from '@/api/errors';
 import { useSession } from '@/store/session';
@@ -9,6 +11,7 @@ import type {
   AnalysisResult,
   AnalyzeRequest,
   ChatAnswer,
+  ClientTimeouts,
   ChatRequest,
   DemoFixture,
   ErrorResponse,
@@ -28,12 +31,44 @@ import type {
   TroubleshootResult,
 } from '@/api/types';
 
+/** The fixed limits (API_CONTRACT §0), used until `/v1/config` names its own. Chat uses `default`. */
 export const TIMEOUT_MS = {
   analyze: 120_000,
   troubleshoot: 60_000,
   postPack: 60_000,
   default: 30_000,
 } as const;
+
+export type TimeoutKind = 'analyze' | 'troubleshoot' | 'postPack' | 'chat' | 'default';
+
+/** Server values are clamped to this range (a bad config can neither abort at once nor hang). */
+export const TIMEOUT_BOUNDS_MS = { min: 5_000, max: 30 * 60_000 } as const;
+
+const FALLBACK_BY_KIND: Record<TimeoutKind, number> = {
+  analyze: TIMEOUT_MS.analyze,
+  troubleshoot: TIMEOUT_MS.troubleshoot,
+  postPack: TIMEOUT_MS.postPack,
+  chat: TIMEOUT_MS.default,
+  default: TIMEOUT_MS.default,
+};
+
+const FIELD_BY_KIND: Record<TimeoutKind, keyof ClientTimeouts> = {
+  analyze: 'analyze_s',
+  troubleshoot: 'troubleshoot_s',
+  postPack: 'language_pack_s',
+  chat: 'chat_s',
+  default: 'default_s',
+};
+
+/**
+ * How long to wait for one kind of request: `client_timeouts` from `/v1/config` (seconds) when the
+ * server sent a usable number, clamped to `TIMEOUT_BOUNDS_MS`; otherwise the fixed fallback.
+ */
+export function timeoutFor(kind: TimeoutKind, limits: Partial<ClientTimeouts> | null | undefined): number {
+  const seconds = limits?.[FIELD_BY_KIND[kind]];
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return FALLBACK_BY_KIND[kind];
+  return Math.min(TIMEOUT_BOUNDS_MS.max, Math.max(TIMEOUT_BOUNDS_MS.min, Math.round(seconds * 1000)));
+}
 
 export interface CreateClientOptions {
   baseUrl: string;
@@ -52,6 +87,8 @@ export interface CreateClientOptions {
   appToken?: string;
   /** Active UI language for `Accept-Language` (error copy fallback on the server). */
   getLanguageTag?(): string | null;
+  /** `/v1/config` `client_timeouts` (read per request); absent/null → the fixed `TIMEOUT_MS`. */
+  getTimeouts?(): Partial<ClientTimeouts> | null | undefined;
   /** Injected for tests; defaults to the global fetch. */
   fetch?: typeof fetch;
   /** Injected for tests; defaults to `crypto.randomUUID` when available. */
@@ -202,6 +239,15 @@ export function noteQuotaCooling(err: ApiError, now: number = Date.now()): void 
 export function createClient(options: CreateClientOptions): ApiClient {
   const doFetch: typeof fetch = options.fetch ?? ((...args) => fetch(...args));
   const newRequestId = options.newRequestId ?? fallbackRequestId;
+  const limit = (kind: TimeoutKind): number => {
+    let limits: Partial<ClientTimeouts> | null | undefined = null;
+    try {
+      limits = options.getTimeouts?.();
+    } catch {
+      limits = null;
+    }
+    return timeoutFor(kind, limits);
+  };
 
   async function buildHeaders(path: string, extra: Record<string, string>): Promise<Headers> {
     const headers = new Headers(extra);
@@ -225,7 +271,7 @@ export function createClient(options: CreateClientOptions): ApiClient {
     body: unknown,
     opts: RequestOptions & { headers?: Record<string, string>; accept?: string } = {},
   ): Promise<Response> {
-    const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS.default;
+    const timeoutMs = opts.timeoutMs ?? limit('default');
     if (
       options.refuseUnconsentedUploads &&
       CONSENT_ROUTES.has(path) &&
@@ -297,11 +343,11 @@ export function createClient(options: CreateClientOptions): ApiClient {
       return { pack, status: 200, etag: etag ?? pack.etag ?? null };
     },
     postPack: (req, opts) =>
-      post('/v1/language-packs', req, { timeoutMs: TIMEOUT_MS.postPack, ...opts }),
-    analyze: (req, opts) => post('/v1/analyze', req, { timeoutMs: TIMEOUT_MS.analyze, ...opts }),
+      post('/v1/language-packs', req, { timeoutMs: limit('postPack'), ...opts }),
+    analyze: (req, opts) => post('/v1/analyze', req, { timeoutMs: limit('analyze'), ...opts }),
     troubleshoot: (req, opts) =>
-      post('/v1/troubleshoot', req, { timeoutMs: TIMEOUT_MS.troubleshoot, ...opts }),
-    chat: (req, opts) => post('/v1/chat', req, opts),
+      post('/v1/troubleshoot', req, { timeoutMs: limit('troubleshoot'), ...opts }),
+    chat: (req, opts) => post('/v1/chat', req, { timeoutMs: limit('chat'), ...opts }),
     matchResources: (req, opts) => post('/v1/resources/match', req, opts),
     listResources: (q = {}, opts) =>
       get(

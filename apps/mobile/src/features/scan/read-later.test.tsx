@@ -148,7 +148,7 @@ describe('<ReviewScreen> offline', () => {
     expect(saved[0].doc.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(saved[0].doc.keepPages).toBe(true);
     expect(saved[0].pages.map((p) => p.page)).toEqual([1, 2]);
-    expect(useSession.getState().offlineQueue).toEqual([]);
+    expect('offlineQueue' in useSession.getState()).toBe(false); // no in-memory queue (CL-064)
     expect(screen.getByTestId('review-message')).toHaveTextContent(t('review.read_later_saved'));
     // The old promise ("I saved the photo. I will read it when internet is back.") is gone.
     expect(screen.queryByText(t('capture.offline_queue'))).toBeNull();

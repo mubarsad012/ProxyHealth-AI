@@ -168,7 +168,9 @@ def test_attested_needs_the_explicit_no_training_statement(tmp_path: Path) -> No
     [
         "api.deepseek.com", "open.bigmodel.cn", "dashscope.aliyuncs.cn", "api.moonshot.ai",
         "api.moonshot.cn", "api.kimi.ai", "kimi.ai", "api.minimax.io", "api.stepfun.ai",
-        "integrate.api.nvidia.com", "generativelanguage.googleapis.com",
+        "integrate.api.nvidia.com", "generativelanguage.googleapis.com", "api.z.ai",
+        "api.siliconflow.com", "qianfan.baidubce.com", "api.stepfun.com", "api.minimaxi.com",
+        "api.minimax.chat",
     ],
 )  # fmt: skip
 def test_attested_refuses_denylisted_hosts(tmp_path: Path, host: str) -> None:
@@ -178,7 +180,10 @@ def test_attested_refuses_denylisted_hosts(tmp_path: Path, host: str) -> None:
 
 @pytest.mark.parametrize(
     "host",
-    ["api.groq.com", "dashscope-intl.aliyuncs.com", "api.cerebras.ai", "api.z.ai", "nvidia.com"],
+    [
+        "api.groq.com", "dashscope-intl.aliyuncs.com", "api.cerebras.ai", "nvidia.com",
+        "zai.example.org",
+    ],  # fmt: skip
 )
 def test_attested_allows_hosts_off_the_denylist(tmp_path: Path, host: str) -> None:
     assert attested(tmp_path, host=host).data_use_tier is DataUseTier.attested

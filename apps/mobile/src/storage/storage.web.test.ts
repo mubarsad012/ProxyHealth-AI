@@ -124,7 +124,7 @@ describe('web vault (memory)', () => {
 
   it('consent wraps kv (no vault table) and wipeAll leaves an empty state', async () => {
     const record = {
-      consent_version: '2026-10-01',
+      consent_version: '2026-10-04',
       accepted_at: '2026-09-27T14:03:11Z',
       tier_seen: 'demo' as const,
       platform: 'web' as const,

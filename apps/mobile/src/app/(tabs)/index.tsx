@@ -17,7 +17,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
 import { useServerConfig } from '@/api/config';
-import { Banner } from '@/design/components/Banner';
+import { Banner, TierBanner } from '@/design/components/Banner';
 import { BigButton } from '@/design/components/BigButton';
 import { Icon } from '@/design/components/Icon';
 import { Interpolated } from '@/design/components/Interpolated';
@@ -212,7 +212,7 @@ export default function HomeScreen() {
   return (
     <Screen title={t('app.name')} testID="home-screen">
       {!online ? <Banner kind="offline" /> : null}
-      {unpaid ? <Banner kind="unpaid" /> : null}
+      <TierBanner tier={tier} />
       {tier === 'demo' || sample.enabled ? <Banner kind="demo" /> : null}
       {isWeb && webPersist === 'session' ? (
         <AppText variant="caption" color="textMuted">

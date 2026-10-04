@@ -160,7 +160,12 @@
         }
       ],
       "expo-sharing",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-sqlite",
       [
         "expo-localization",

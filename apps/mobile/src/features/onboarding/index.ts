@@ -2,7 +2,20 @@
 // S1b adapting, S2 consent view-model and screen, the in-app privacy notice, S18.
 
 export { AdaptingScreen, type AdaptingScreenProps, STEP_TIMERS_MS } from './AdaptingScreen';
-export { consentView, type ConsentView, startRoute, type StartRoute, viewTier } from './consentModel';
+export {
+  type AiCopyInput,
+  aiSeenFor,
+  consentView,
+  type ConsentView,
+  consentVars,
+  namesOtherAi,
+  startRoute,
+  type StartRoute,
+  tierCopy,
+  type TierCopy,
+  viewTier,
+  type ViewTier,
+} from './consentModel';
 export { ConsentScreen, TABS_HREF, TABS_SAMPLE_HREF } from './ConsentScreen';
 export {
   acceptConsent,

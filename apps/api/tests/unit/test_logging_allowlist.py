@@ -101,7 +101,7 @@ async def test_request_cycle_logs_only_allowed_keys(
 ) -> None:
     secret = "SECRET-QUESTION-TEXT"
     async with running(make_settings(tmp_path)) as (_app, client):
-        consent = {"X-Consent-Version": "2026-10-01", "X-Install-Id": "install-123"}
+        consent = {"X-Consent-Version": "2026-10-04", "X-Install-Id": "install-123"}
         await client.post("/v1/analyze", json=page_body(tiny_png_base64), headers=consent)
         await client.post("/v1/analyze", json=demo_body())
         await client.post("/v1/analyze", json=page_body(tiny_png_base64))  # 428

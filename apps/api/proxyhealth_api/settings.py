@@ -75,9 +75,13 @@ _LOG_LEVELS = frozenset({"debug", "info", "warning", "error", "critical"})
 # also matches ``x`` itself; ``*.x.*`` matches any host with the label ``x``. The Gemini free tier
 # must go through ``AI_PROVIDER=gemini`` with ``billing:false``.
 ATTESTED_HOST_DENYLIST: tuple[str, ...] = (
-    "*.cn", "*.deepseek.com", "open.bigmodel.cn", "*.moonshot.*", "*.kimi.ai", "*.minimax.io",
-    "*.stepfun.ai", "integrate.api.nvidia.com", "generativelanguage.googleapis.com",
+    "*.cn", "*.deepseek.com", "open.bigmodel.cn", "*.moonshot.*", "*.kimi.ai",
+    "*.minimax.io", "*.minimaxi.com", "*.minimax.chat", "*.stepfun.ai", "*.stepfun.com",
+    "*.z.ai", "*.siliconflow.com", "*.baidubce.com",
+    "integrate.api.nvidia.com", "generativelanguage.googleapis.com",
 )  # fmt: skip
+# D-32 verdicts enforced: Z.ai (terms forbid medical/legal-substitute use and HIPAA data),
+# SiliconFlow (no commercial use) and Baidu Qianfan (PRC ID) are synthetic-samples-only.
 
 # §1.5 "two more traps": Ollama ``:cloud`` / ``-cloud`` tags run on Ollama's servers, so the
 # ``local`` sentence "runs on our server" would be false.
@@ -209,7 +213,7 @@ class Settings(BaseSettings):
     # Proxies in front that each append to X-Forwarded-For (Cloud Run: 1; + external HTTPS load
     # balancer: 2). 0 = rate-limit the socket peer (uvicorn reachable directly, local dev).
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
-    consent_version: str = "2026-10-01"
+    consent_version: str = "2026-10-04"
     privacy_policy_url: str = "https://proxyhealth.expo.app/privacy"
     var_dir: Path = Path("./var")
     langpack_cache_ttl_days: int = Field(default=180, ge=1)

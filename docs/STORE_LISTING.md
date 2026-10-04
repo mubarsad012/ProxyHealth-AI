@@ -3,7 +3,7 @@
 Status: **draft, pending counsel** (DECISIONS §12 Q3; COMPLIANCE_PRIVACY §18.6). Owner: WP8. Written 2026-09-29 from `docs/research/compliance.md` §1 (the declaration checklist), `docs/COMPLIANCE_PRIVACY.md` §5.4, §10–§12, §16–§17 and DECISIONS §13. Nothing here may be pasted into a console until the blockers in §0 are cleared.
 
 Rules for every word below (COMPLIANCE_PRIVACY §5.4, §17):
-- Store copy is literally true for a **paid-tier** build — the only tier a store build may point at (COMPLIANCE_PRIVACY §3). A build whose `EXPO_PUBLIC_API_URL` answers `data_use_tier` ≠ `paid` is a release blocker.
+- Store copy is literally true for a **paid-tier** build — the only tier a store build may point at (COMPLIANCE_PRIVACY §3). A build whose `EXPO_PUBLIC_API_URL` answers `data_use_tier` ≠ `paid` is a release blocker — that includes the test-build tiers `local` and `attested` of `AI_PROVIDER=openai_compat`, which production refuses anyway (D-32).
 - Boundary sentences are the §5.1 disclaimers **verbatim**; otherwise never "advice", "diagnosis", "eligible", "guaranteed", "certified", "lawyer-reviewed", "doctor-approved" or "HIPAA".
 - Copy meant for a console field lives in ```` ```text ```` blocks. `apps/api/tests/unit/test_privacy_claims.py::test_store_listing_copy_has_no_forbidden_phrase` scans those blocks for the §17 `forbidden_phrases`.
 - Screenshots come from the synthetic fixtures only (SAMPLE watermark visible). Never a real person's paper.

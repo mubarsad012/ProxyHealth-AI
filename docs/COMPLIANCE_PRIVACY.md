@@ -1,6 +1,6 @@
 # ProxyHealth AI — Compliance, Privacy, Safety and Accessibility (spec)
 
-Status: **authoritative for copy, disclosures, store declarations and privacy controls**. Implements `docs/DECISIONS.md` (D-01, D-02, D-03, D-08, D-10, D-13, D-14, D-17, D-18, D-19, D-20, D-22, D-23, D-24, D-25, D-28, D-31), `docs/API_CONTRACT.md` and `docs/ARCHITECTURE.md`. Written 2026-09-27 from `docs/research/compliance.md`, `docs/research/gemini.md`, `docs/research/expo.md`, `docs/research/resources.md` and the candidate specs in `docs/research/specs/`. Owner: WP8 (store/devops) for the file; WP0 adds the approved strings to `apps/api/data/langpacks/en.json`; WP1/WP2/WP4/WP5/WP6 implement the controls named per section. When this document and code disagree, fix one and say which in the PR.
+Status: **authoritative for copy, disclosures, store declarations and privacy controls**. Implements `docs/DECISIONS.md` (D-01, D-02, D-03, D-08, D-10, D-13, D-14, D-17, D-18, D-19, D-20, D-22, D-23, D-24, D-25, D-28, D-31, D-32), `docs/API_CONTRACT.md` and `docs/ARCHITECTURE.md`. Written 2026-09-27 from `docs/research/compliance.md`, `docs/research/gemini.md`, `docs/research/expo.md`, `docs/research/resources.md` and the candidate specs in `docs/research/specs/`. Owner: WP8 (store/devops) for the file; WP0 adds the approved strings to `apps/api/data/langpacks/en.json`; WP1/WP2/WP4/WP5/WP6 implement the controls named per section. When this document and code disagree, fix one and say which in the PR.
 
 How to read this file:
 - Every sentence in double quotes under a `key:` is **final English copy**. It goes into `en.json` under that key exactly (WP0). Every other language is a pack translation (D-25). Copy is written for a 4th–5th grade reading level; the legally fixed sentences in §5 and §6 are exempt from the readability check (their keys are allow-listed in `tests/unit/readability_allowlist.txt`, BUILD_PLAN §5.9 step 4 — see §5).
@@ -8,7 +8,7 @@ How to read this file:
 - §17 `privacy_claims` is machine-readable and is the source for `apps/api/tests/unit/test_privacy_claims.py` (D-02).
 - Nothing here asks the model to write disclaimers, contacts, dates or legal conclusions. Those are fixed copy or code (D-10, D-11, D-12, D-17).
 
-Definitions: **paper** = any document the user photographs or picks. **Content** = page bytes, transcript blocks, translations, quotes, model prose, chat text, quick-sheet text. **Tier** = `DataUseTier` from `GET /v1/config` (`paid | unpaid | mixed | demo | none`) plus the client-only state `unknown` (API unreachable). **Operator** = whoever runs `apps/api` with keys.
+Definitions: **paper** = any document the user photographs or picks. **Content** = page bytes, transcript blocks, translations, quotes, model prose, chat text, quick-sheet text. **Tier** = `DataUseTier` from `GET /v1/config` (`paid | unpaid | mixed | demo | none | local | attested`; the last two exist only on `AI_PROVIDER=openai_compat` test builds, D-32) plus the client-only state `unknown` (API unreachable). **Operator** = whoever runs `apps/api` with keys.
 
 ---
 
@@ -29,6 +29,8 @@ Definitions: **paper** = any document the user photographs or picks. **Content**
 | Unauthorized practice of law (state law; *Upsolve v. James*, 2d Cir. 2025) | Yes | Generic information about the paper type; no individualized advice, no filing recommendation, no outcome prediction, no form drafting; referrals only to DOJ rosters / EOIR pro bono list / vetted DB | §6.1 |
 | WCAG 2.2 AA (floor), Apple HIG, Material a11y; Section 508 / ADA Title II only if a government body deploys | Yes | "Big Calm" tokens (D-28): 18 base, 56/72 pt controls, 7:1 body, icon+word+color, per-pane language, live regions, RTL/bidi | §15 |
 | COPPA | No (18+, not directed at children) | No child-directed features; school papers are framed for parents/guardians | §4.6 |
+| Other AI vendors' API terms (OpenAI-compatible endpoints; test builds only) | Only in development/staging test builds | `AI_PROVIDER=openai_compat` is refused in production. `local` runs an open model on a loopback endpoint of the API host (no AI company receives the paper); `attested` (development only) rests on the operator's statement that the vendor's API terms say no training, with a denylist of hosts that store data in mainland China, train by default or ban personal data; every other hosted endpoint is `unpaid` (samples only). Vendor clauses checked 2026-10-01 are listed in D-32 | D-32; `settings.py`, `tests/unit/test_openai_compat_settings.py`, `tests/contract/test_openai_compat_config.py` |
+| DOJ Data Security Program (28 CFR Part 202) | Not for testing; would apply to production on a PRC-parented vendor | Restricts bulk US sensitive data (health data: more than 10,000 US persons in 12 months) reaching countries of concern or their covered persons. The developer's own test papers are far below every threshold; no production plan may use Alibaba, Z.ai, DeepSeek, Moonshot, MiniMax, StepFun or Baidu; counsel decides any edge case | D-32 |
 
 ---
 
@@ -40,6 +42,7 @@ Definitions: **paper** = any document the user photographs or picks. **Content**
 2. **Transport.** HTTPS only. JSON body with base64 pages (no multipart). Headers: `X-Request-Id` (random UUID), `X-Install-Id` (random per-install UUID, rotatable), `X-Consent-Version` (the consent version the user accepted), optional `X-App-Token`. No cookies, no account, no device identifiers other than the app-generated install id.
 3. **API (`apps/api`, in memory only).** Pure ASGI middleware, outermost first: CORS → request context (request id, `X-Contract-Version`/`X-Data-Use-Tier` headers, optional `X-App-Token` check, content-free access log) → unhandled-error guard (content-free `500 internal`) → body limit (413). On the gated routers, FastAPI dependencies then run the consent check (428) → tier gate (403) (`consent_and_tier_gate`, exported from `middleware.py`, because it must read `demo_sample_id` from the body; only a `demo_sample_id` that names a bundled fixture is exempt — CL-031 — and on `unpaid`/`mixed` not when the request carries typed text, `/v1/chat` or a troubleshoot `user_goal`) → rate limit (429, `ratelimit.rate_limit_dependency`) — BUILD_PLAN §4.1. `analysis/uploads.py` validates MIME by magic bytes and enforces caps (D-21). `analysis/redaction.py` burns native masks with Pillow **before** any model call and before thumbnails. Bytes live only in the request's memory and are released when the response is sent. No temp files. No database of content.
 4. **Gemini (paid project keys).** `client.aio.models.generate_content` with `response_schema`; text prompt then media parts. On the paid tier Google does not use prompts or responses to improve products; Google keeps a short abuse-detection log "for a limited period of time". Optional AI Studio developer logging is **off**. The Files API is **never** used (48-hour retention). If the Interactions provider is ever enabled (LATER), every call sets `store=False`.
+   - **Test builds only — `AI_PROVIDER=openai_compat` (D-32).** In place of Gemini, the API sends the same prompt and the masked page images (a PDF is turned into page images in memory) to one OpenAI-compatible endpoint. On `local` that endpoint is a loopback address on the API host (boot-checked), for example Ollama on `127.0.0.1:11434`, so no AI company receives the paper; Ollama does not say whether it writes API prompts to disk, so the marker check in `docs/LOCAL_AI.md` §4 runs once before real papers (RUNBOOK §1.5). On `attested` (development only) it is the named vendor, whose API terms the operator attests say "no training" but which may keep a copy (Groq up to 30 days unless Zero Data Retention is on; Alibaba does not say). On `unpaid` it is a hosted endpoint that receives sample papers only. `ENV=production` refuses this provider.
 5. **API post-processing.** Verification, contact filter, deadline rules, urgency, scam, emergency lexicon, phrasing lint, injection re-run, SSN masking (`***-**-1234` always; A-/receipt numbers only when `hide_id_numbers`), disclaimers. Result returned; nothing written.
 6. **Device.** The result is shown. Saving to the vault is **opt-in** ("Save" → "Whose paper is this?"). Chat re-sends the stored transcript text (never images). Quick sheets are rendered from the result. Reminders store only demand label + date.
 
@@ -61,6 +64,8 @@ Trust boundary = the device. **The server holds nothing a subpoena could return*
 | `POST /v1/feedback` | enums only (`kind`, `surface`, `language_tag`, `document_type`, `card_id`, `resource_id`, `app_version`, `platform`, `model_id`) — never text | no | counters in `var/feedback_counts.sqlite` | route, status |
 | `GET /v1/demo/*` | none | no | no | route, status |
 | `GET /v1/admin/keys` | none (operator) | no | no | route, status |
+
+On an `openai_compat` test build (D-32) read "Forwarded to Gemini" as "forwarded to the configured AI endpoint": on `local` a model on a loopback address of the API host, on `attested` the named vendor (development only), on `unpaid` a hosted endpoint that only ever receives sample papers. The same requests and fields leave the device on every tier.
 
 Sensitive-by-nature fields and their handling:
 - `preferences.calendar_notes` (e.g. "Ramadan") can reveal religion. Device-only storage (AsyncStorage). Sent only inside the prompt for tone. Never logged. Settings copy (§4.5) says it travels with each paper.
@@ -84,6 +89,8 @@ Explicitly forbidden anywhere in logs, metrics, error messages, exception traces
 | `var/langpacks/` | generated UI-string packs | `LANGPACK_CACHE_TTL_DAYS` (180) | operator |
 | `var/feedback_counts.sqlite` | counters keyed by enums | indefinite (aggregate, no content) | operator |
 | Google Gemini paid tier | abuse-detection log of prompts/responses | Google-defined "limited period"; developer logging **off**; Files API never; Interactions `store=False` | Google |
+| Local AI server on `local` test builds (e.g. Ollama on the API host) | started with debug logging off; whether it writes API prompts to disk is not stated by Ollama | check once with a marker string (`docs/LOCAL_AI.md` §4) before any real paper and record it (RUNBOOK §9); models live in `~/.ollama/models` and hold no user data | operator |
+| Vendor on `attested` test builds (development only) | whatever the vendor's API terms keep | vendor-defined: Groq up to 30 days unless Zero Data Retention is on; Alibaba Model Studio retention not stated; Cerebras does not retain | vendor |
 | Device vault (native) | saved analyses, page JPEGs, checklist state, reminders, consent record | until the user deletes (per paper, per member, or "Delete everything") | user |
 | Device prefs (AsyncStorage) | language, text size, region, preferences, consent record, install id, pack cache, server-config cache | until "Delete everything" | user |
 | Web (default) | session memory only | tab close | user |
@@ -94,7 +101,7 @@ No analytics, advertising, attribution or crash-reporting SDK is shipped (Apple 
 ### 2.4 Hosting configuration that keeps §2.1 true
 
 - Cloud Run (recommended) in the same Google account as the billed Gemini project: no persistent disk except an optional small volume for `var/`; request timeout 120 s; secrets (`GEMINI_KEYS`, `INSTALL_HASH_SECRET`, `ADMIN_TOKEN`, `APP_TOKEN`) from Secret Manager; request-body logging disabled (Cloud Run does not log bodies by default — do not add a logging proxy that does); Cloud Logging retention per §2.3; no Cloud Armor/CDN that caches POST responses.
-- `ENV=production` MUST have: every slot `billing:true`; `ALLOW_UNPAID_KEYS` unset; `ALLOW_UNPAID_REAL_DOCUMENTS` unset (boot error otherwise); `LOG_LEVEL=info`; `CORS_ORIGINS` = the web host only.
+- `ENV=production` MUST have: `AI_PROVIDER=gemini` (production refuses `openai_compat` at boot, D-32); every slot `billing:true`; `ALLOW_UNPAID_KEYS` unset; `ALLOW_UNPAID_REAL_DOCUMENTS` unset (boot error otherwise); `LOG_LEVEL=info`; `CORS_ORIGINS` = the web host only.
 - AI Studio project settings: developer logging OFF for every production project; confirm in the AI Studio logs page that no interactions are stored.
 - A separate **demo instance** runs `AI_PROVIDER=mock` permanently (`data_use_tier: demo`).
 - Web hosting (EAS Hosting or static host) serves `/privacy` as HTML (not PDF) at `PRIVACY_POLICY_URL`.
@@ -106,13 +113,19 @@ No analytics, advertising, attribution or crash-reporting SDK is shipped (Apple 
 | Tier (`X-Data-Use-Tier`) | When | Real papers allowed? | What the user sees (S2 badge + line, §4.2) | Store submission allowed? |
 |---|---|---|---|---|
 | `paid` | `AI_PROVIDER=gemini`, every slot `billing:true` | yes | "Paid service" badge; paid line | **yes** — the only tier a store build may point at |
-| `unpaid` | any slot `billing:false` | **no** (403) — fixtures only | red badge "Test build — free AI key"; unpaid line; scan tiles disabled | **no** — release blocker; a store build whose `EXPO_PUBLIC_API_URL` resolves to an `unpaid`/`mixed` API fails the pre-launch checklist (§18) |
+| `unpaid` | any slot `billing:false`, **or** `AI_PROVIDER=openai_compat` with `OPENAI_COMPAT_DATA_TIER=unpaid` (any hosted endpoint by default) | **no** (403) — fixtures only | red badge "Test build — free AI key"; unpaid line (on `openai_compat`: `consent.line1.vendor` + `consent.line2.unpaid_vendor`, naming the vendor); scan tiles disabled | **no** — release blocker; a store build whose `EXPO_PUBLIC_API_URL` resolves to an `unpaid`/`mixed` API fails the pre-launch checklist (§18) |
 | `mixed` | some slots billed, some not | **no** (routed as unpaid) | same as unpaid | no |
 | `demo` | `AI_PROVIDER=mock` | scans go to our server for sample matching only; no AI service | "Sample mode" badge; demo line | only as a clearly labelled demo build (`EXPO_PUBLIC_DEFAULT_SAMPLE_MODE=true`); not for public store release |
 | `none` | gemini with zero slots (dev only) | no | treated as `unknown` | no |
+| `local` | `AI_PROVIDER=openai_compat`, `OPENAI_COMPAT_DATA_TIER=local`, base URL on a loopback address of the API host (boot-checked), `OPENAI_COMPAT_MODEL_LABEL` set, no Ollama `:cloud` model; `ENV` development or staging | yes, after consent — but only the operator's own papers or papers from someone who said yes (D-32) | badge "Test build — AI on our server"; `consent.line1.local` + `consent.line2.local` naming the model; `banner.local_tier` | **no** — production refuses the provider; a store build may point only at `paid` |
+| `attested` | `AI_PROVIDER=openai_compat`, `OPENAI_COMPAT_DATA_TIER=attested`, **`ENV=development` only**, `OPENAI_COMPAT_VENDOR_NAME`, `OPENAI_COMPAT_NO_TRAINING_ATTESTED=1`, host not on `ATTESTED_HOST_DENYLIST` | yes in development only, after consent — only the developer's own papers (`consent.line2.attested` says so) | badge "Test build — outside AI"; `consent.line1.vendor` + `consent.line2.attested` naming the vendor; `banner.attested_tier` | **no** |
 | `unknown` (client only) | `GET /v1/config` unreachable | not until the tier is known — S2 "I understand, continue" is disabled, so consent cannot be recorded; with consent already recorded the scan CTA stays enabled and an offline scan can be saved on the device to read later (`review.read_later_cta`) or wait on S5 for the connection; nothing is sent while the API is unreachable and nothing is queued in the background (CL-064); samples enabled (PRODUCT_SPEC §5.3) | "Cannot confirm" badge; unknown line | n/a |
 
 Operator attestation: `billing` in `GEMINI_KEYS` is a human statement that a Cloud Billing account is attached to that project; the SDK cannot detect it. `.env.example` says so. Falsely marking an unbilled key as billed would make every paid-tier privacy sentence false — treat it as a reportable incident (§13.2).
+
+Operator attestation for `attested` (D-32): `OPENAI_COMPAT_NO_TRAINING_ATTESTED=1` is a human statement that the vendor's API terms say "no training on API content"; the server cannot check it. Record the clause, its URL and the date you read it in RUNBOOK §9 before the first real paper. A false statement makes every `attested` sentence false and is a reportable incident (§13.2; RUNBOOK §6). The vendors checked on 2026-10-01 and their clauses are listed in D-32; Chinese-hosted endpoints stay synthetic-samples-only except Alibaba Cloud Model Studio International (Singapore) with the caveats recorded there.
+
+Operator claim for `local` (D-32, CL-091(e)): the server checks only that the base URL is a loopback address. Pointing it at a loopback proxy that forwards to a hosted API, or setting `OPENAI_COMPAT_MODEL_LABEL` to something other than the open-weight model actually running there, would make every `local` sentence false — treat that like a false `billing:true`.
 
 Dev-only bypass: `ALLOW_UNPAID_REAL_DOCUMENTS=true` (boot error in production) exists for synthetic test scans on free keys. Never use it with a real person's paper, even your own. Keyed demos and hackathon judging use fixtures or a photographed printed SAMPLE sheet only (D-29).
 
@@ -145,6 +158,11 @@ Shown before the first upload and again whenever `consent_version` from `/v1/con
   - `consent.line2.unknown`: "I cannot confirm how your paper would be handled right now. You can try a sample paper or come back later."
 - Line 3 — `consent.line3`: "Papers you save stay only on this phone. You can delete everything any time." Web variant `consent.line3.web`: "Papers you save stay only in this browser, if you choose to keep them."
 - "Hide parts" line (fourth small line): native, shown only when `features.hide_parts_server_masking` is true — `consent.line4.masks`: "Parts you hide are blacked out on our server before Google's AI sees them." Web — `consent.line4.masks_web`: "Parts you hide are blacked out on your device before anything is sent."
+- **`openai_compat` test builds (D-32, Phase 3; free-ai-providers §5.3).** `{model}` = `ServerConfig.ai_model_label`, `{vendor}` = `ServerConfig.ai_vendor_name`. Lines 3, 18+ and the buttons are unchanged.
+  - `local` — badge `consent.badge.local`: "Test build — AI on our server"; line 1 `consent.line1.local`: "Your photo is read by {model}, an AI program that runs on our server. Our server does not keep it."; line 2 `consent.line2.local`: "No other company's AI sees your paper. This is a test build. Check every answer against your paper."; native masks line `consent.line4.masks_local`: "Parts you hide are blacked out on our server before the AI reads the paper." True because the server boots `local` only on a loopback base URL of the API host, one provider runs per process (fast-tier tasks and language packs use the same local model), and the Ollama marker check (`docs/LOCAL_AI.md` §4) backs "does not keep it" for the model server. Line 1 shows the server pictogram with `consent.pictogram2_alt`, because the cloud alt text would be false.
+  - `attested` (development only) — badge `consent.badge.attested`: "Test build — outside AI"; line 1 `consent.line1.vendor`: "Your photo is sent to {vendor}'s AI to be read. Our server does not keep it."; line 2 `consent.line2.attested`: "{vendor} says it will not use your paper to train its AI. It may still keep a copy. This is a test build. Send only your own papers." "Says" reports the vendor's own terms (the operator's attestation, §3); "may still keep a copy" covers Groq's logs of up to 30 days and Alibaba's unstated retention. The native masks line is the vendor-neutral `consent.line4.masks_local`, because `consent.line4.masks` names Google.
+  - `unpaid` / `mixed` with a non-Google vendor — line 1 `consent.line1.vendor` (above); line 2 `consent.line2.unpaid_vendor`: "This test build uses a free AI service. {vendor} may read and use what is sent. Do not send real papers. Sample papers only."; native masks line `consent.line4.masks_local`; badge `consent.badge.unpaid` as for Gemini. Known gap (CL-091(e)): "a free AI service" (and `banner.unpaid_tier` "a free AI key") is not literally true for a paid hosted endpoint that lands on the default `unpaid` tier; reword both without "free" at the next copy round.
+  - Never on any tier: "private AI", "100% private", "never leaves your device", "nothing leaves this device" — a phone does send the photo to our server; and "nothing leaves the laptop" is true only when the API, the model and the browser all run on one machine.
 - 18+ — `consent.adults_only`: "This app is for adults 18 and older."
 - Link — `consent.read_more`: "Read more" → opens the in-app notice (§4.5, `features/onboarding/PrivacyNotice.tsx`) whose last row links to `privacy_policy_url`.
 - Primary (72 pt) — `consent.btn_continue`: "I understand, continue"
@@ -153,8 +171,9 @@ Shown before the first upload and again whenever `consent_version` from `/v1/con
 
 Behaviour:
 - `unknown`: "I understand, continue" disabled with `consent.unknown_hint`: "Come back when you have internet to confirm this.", so consent cannot be recorded while the tier is unknown; samples enabled. The S3 scan CTA is not disabled by `unknown` itself: without recorded consent a tap opens S2; with consent already recorded, scanning works and an offline scan can be saved to read later (`review.read_later_cta`) or wait on S5 for the connection; nothing is sent (PRODUCT_SPEC §5.3, CL-044(a)).
+- `local` / `attested`: "I understand, continue" is shown, as on `paid`. If the server leaves out the name the tier's sentence needs (`ai_model_label` on `local`, `ai_vendor_name` on `attested` and vendor `unpaid`), the button stays disabled with `consent.unknown_hint`, because the sentence would be broken. The consent record gains an optional `ai_seen` (`openai_compat|{vendor}|{model}`, written only on `openai_compat`, so Gemini and mock records keep the four fields below); a changed value re-shows S2 with line 1 highlighted (for example an `attested` server moved to another vendor). A cached `openai_compat` config on `unknown` shows no Google line 1 and no notice item 1.
 - `unpaid`/`mixed`: "I understand, continue" is **not shown** (there is nothing to consent to — real papers are blocked server-side and sample requests are exempt from consent); "Try a sample paper first" becomes the primary action, "Not now" stays. `PRODUCT_SPEC.md` S2 and J-J follow this.
-- Consent record (device, AsyncStorage via `storage/kv.ts`): `{ "consent_version": "2026-10-01", "accepted_at": "2026-09-27T14:03:11Z", "tier_seen": "paid", "platform": "android" }`. Never sent to the server except as the `X-Consent-Version` header value.
+- Consent record (device, AsyncStorage via `storage/kv.ts`): `{ "consent_version": "2026-10-04", "accepted_at": "2026-09-27T14:03:11Z", "tier_seen": "paid", "platform": "android" }`. Never sent to the server except as the `X-Consent-Version` header value.
 - API: `X-Consent-Version` required on `/v1/analyze`, `/v1/troubleshoot`, `/v1/chat`; missing or older than `CONSENT_VERSION` → `428 consent_required`; the client re-shows S2. A request whose `demo_sample_id` names a bundled fixture is exempt; an unknown id is gated like no id (CL-031); on `unpaid`/`mixed` a sample request that carries typed text (every `/v1/chat` request, a non-blank troubleshoot `user_goal`) is gated like a real paper, and `/v1/config` `features.chat` is `false` (it equals `real_documents_allowed`), so the app shows `chat.unavailable_unpaid` in place of the chat box and sends nothing (Phase 2C). A chat with a known `demo_sample_id` never uses the client's context: the server rebuilds it from the fixture (`chat_pipeline.sample_context`).
 - Backing out (Android back / swipe) equals "Not now" (Play: no consent by backing out).
 
@@ -164,6 +183,7 @@ Behaviour:
 - Sample explainer (before the sample list) — `demo.explainer`: "Sample papers are made up. They are not real people's papers. You can try everything with them. None of your papers or photos are sent."
 - Sample-mode banner on Home in `demo` tier — `banner.sample_mode`: "Sample mode: the helper is not connected. Try the sample papers."; on a sample (S5 review of sample pages, S7, S9, S16) — `banner.demo_sample`: "This is a made-up sample paper. What you type is still sent to be answered." (2026-09-30: the former "Nothing of yours was sent" was false — a sample request carries the reader's settings, a chat question or troubleshoot goal typed about a sample reaches our server, and on the paid tier a sample chat question goes on to Google before consent, because the gate exempts known `demo_sample_id`s there; §9.1)
 - Unpaid banner (dev builds) — `banner.unpaid_tier`: "Test build with a free AI key. Sample papers only."
+- Local-tier banner (test builds, D-32) — `banner.local_tier`: "Test build. The AI runs on our server." Attested-tier banner (development only) — `banner.attested_tier`: "Test build with an outside AI. Send only your own papers." `TierBanner` picks the tier's banner (`banner.unpaid_tier` also for an `unpaid` `openai_compat` vendor, since that sentence names no company). Home must render `<TierBanner tier={tier} />` for these to appear (CL-090(b), WP6).
 - Offline line on Home — `home.offline_line`: "No internet. I can take the photo now and read it later."
 
 ### 4.4 Withdrawing consent (Settings → "How your data is handled")
@@ -177,6 +197,7 @@ Behaviour:
 Plain-language, one screen, every line has a speaker button. Keys `privacy.notice.*`:
 
 1. `privacy.notice.sent`: "When you read a paper, the photo goes to our server and then to Google's AI (Gemini). Our server does not keep it." — left out of the notice on the `demo` tier, where no AI service is contacted (`features/onboarding/PrivacyNotice.tsx`, Phase 2B).
+   On `openai_compat` test builds (D-32) item 1 changes with the tier (`consentModel.ts` `tierCopy`): `local` — `privacy.notice.sent.local`: "When you read a paper, the photo goes to our server. An AI program on our server reads it. Our server does not keep it.", followed by `privacy.notice.model.local`: "{model} is an open AI model. The company that made it does not get your paper." (true because open weights run on the API host and the maker receives nothing at inference time); `attested` and vendor `unpaid` — the S2 line `consent.line1.vendor` (there is no vendor variant of `privacy.notice.sent`).
 2. Tier line (same strings as `consent.line2.*`).
 3. `privacy.notice.what_we_keep`: "Our server does not keep your papers or photos. It keeps short technical notes, like the kind of paper and how long it took. It deletes them after 30 days. The notes never hold your paper's words, what you type, or the AI's words." (2026-09-30, CL-061: the structured log of §2.3 keeps per-request enums, so "only counts" was not literally true.)
 4. `privacy.notice.device`: "Papers you choose to save stay on this phone, protected by your phone's own encryption. Turn on a phone passcode." Web — `privacy.notice.device_web`: "In this browser, papers are kept only while the tab is open, unless you turn on 'Keep on this device'. The app does not encrypt them."
@@ -364,6 +385,9 @@ Rules: (1) wording is "likely"/"possible", never "this is a scam" or a named acc
 | `paid` | yes, after consent | our API (memory only) → Gemini Paid Services | our server process for the request's lifetime; Google's abuse-detection log "for a limited period of time" (gemini.md §3) | `consent.line1` + `consent.line2.paid` |
 | `unpaid` / `mixed` | **never** — `403 unpaid_tier_real_documents_disabled`; only `demo_sample_id` requests, whose bytes are loaded from disk | fixture bytes → Gemini Unpaid Services (may be read by Google reviewers — fixtures are synthetic), with the settings sent alongside (language, `state`/`zip3`, `preferences`). **Typed text never reaches these keys**: a demo request that carries it — `/v1/chat` (client analysis context, history, question) or a troubleshoot `user_goal` — is gated like a real paper on these tiers (428 without consent, then 403; `consent_and_tier_gate`, SEC-01/02 fix 2026-09-30), and a sample troubleshoot never puts the typed goal into the prompt on any tier. `features.chat = real_documents_allowed = false`, so the app replaces the S9 box and S7's Ask prompts with `chat.unavailable_unpaid` (Phase 2C) | Google | `consent.line2.unpaid`; continue button hidden |
 | `demo` | a photographed page is posted to our API for dHash matching only, then released | our API memory; no AI service | our server process only | `consent.line2.demo` |
+| `local` (test builds; D-32) | yes, after consent | our API (memory only) → a model on a loopback address of the API host (e.g. Ollama), never another company | our server process and the local model server for the request's lifetime (Ollama's disk behaviour is checked once with a marker string — `docs/LOCAL_AI.md` §4) | `consent.line1.local` + `consent.line2.local` (+ notice `privacy.notice.model.local`) |
+| `attested` (development only) | yes, after consent; the developer's own papers only | our API (memory only) → the named vendor's OpenAI-compatible endpoint | our server process; the vendor under its API terms (no training per the operator's attestation; it may keep a copy) | `consent.line1.vendor` + `consent.line2.attested` |
+| `unpaid` on `openai_compat` | **never** — as Gemini `unpaid` above (403; typed text gated) | fixture bytes → the hosted endpoint | the vendor (fixtures are synthetic) | `consent.line1.vendor` + `consent.line2.unpaid_vendor`; continue button hidden |
 | `unknown` | nothing while the tier is unknown (S2 Continue disabled; a scan by a user who already consented stays on the device — saved to read later or waiting on S5 — and is not sent; CL-044(a)) | — | — | `consent.line2.unknown` |
 
 Always, on every tier: `X-Install-Id` (random UUID, HMAC-hashed server-side), `X-Consent-Version`, `X-Request-Id`, `target_language`, `state`/`zip3` if set, `preferences` (tone, calendar notes, date format), `client_platform`, `analysis_id`, `document_hint`, `hide_id_numbers`, `user_goal` (troubleshoot), the question and `AnalysisContext` (chat), feedback enums. Never: names, e-mail, phone, GPS, full ZIP, immigration status, device identifiers, advertising ids, contacts, photo-library metadata (EXIF stripped client-side), account data (there are no accounts).
@@ -524,6 +548,8 @@ Rules: (1) the camera rationale inside the app is `capture.permission_rationale`
 
 `cd apps/mobile && npx expo config --type prebuild` (plugin strings resolve); after the Android build, inspect the merged manifest of the `.aab`/`.apk` (e.g. `aapt2 dump permissions` or the EAS build log) and confirm the permission set is exactly `CAMERA, INTERNET, POST_NOTIFICATIONS, VIBRATE` plus whatever `expo-notifications` adds for scheduling, and contains none of `READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, RECORD_AUDIO, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION`. Record the list in `docs/RUNBOOK.md`; a diff re-opens §10.3/§11.1.
 
+iOS (checked 2026-10-04, CL-090(d)): `app.json` runs `expo-secure-store` with `faceIDPermission: false`, so the build has no `NSFaceIDUsageDescription` (the app never uses biometrics). `NSLocalNetworkUsageDescription` and `NSBonjourServices` appear in development builds only: `expo-dev-client`'s dev launcher adds them, and its own build phase (`expo-dev-launcher/plugin/build/withDevLauncher.js`) deletes them from every non-Debug configuration. Confirm on the first EAS production build that the uploaded `Info.plist` has neither key, and record it in `docs/RUNBOOK.md` §9.
+
 ---
 
 ## 13. HIPAA, the FTC Health Breach Notification Rule and state law
@@ -621,6 +647,7 @@ Sections in order, with the sentences that MUST appear (plain language; the `pri
 1. **Who we are** — operator legal name, address, contact e-mail for privacy questions (open: §19), effective date, consent version ("This policy matches consent version {CONSENT_VERSION} shown in the app.").
 2. **What the app does** — one paragraph; "ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms."
 3. **What is sent when you read a paper** — `privacy.notice.sent`; the list of fields from §9.1 in plain words, where the page-photos bullet reuses `consent.line4.masks` (phone app: blacked out on our server) and `consent.line4.masks_web` (web: on the device) verbatim (`test_privacy_claims.py::test_policy_states_where_masks_are_applied`, CL-069(b)); "The app does not ask for your name, e-mail, phone number, contacts, exact location, full ZIP code or immigration status, and it never sends them on its own. Apart from what is printed on a paper, shown in a screenshot or typed in a question that you choose to send, none of these leave your device." (CL-069(c)); "None of your own photos or papers are sent until you tap "I understand, continue"." (not "photos, papers or questions": a question about a sample goes to `/v1/chat` with `demo_sample_id` before consent — CL-069(a)) followed by what *is* sent before consent: the server config request, the words of the app in the chosen language and, if the user types one, the language name (§2.2), because the shorter "Nothing is sent until you tap…" would be false for S1b; then the sample path ("Try a sample paper first" / "Not now"): `GET /v1/demo/fixtures`, the chosen sample with the same settings as a real paper (language, state and ZIP prefix if typed, preferences, client platform — `POST /v1/analyze` with `demo_sample_id`, `tests/contract/test_demo.py::test_demo_sample_analyze_without_consent`), and what is done with a sample: its questions (`/v1/chat`), a troubleshoot goal (`/v1/troubleshoot`), state + ZIP prefix on "Get help nearby" (`/v1/resources/match`), "Was this clear?" answers (`/v1/feedback`) and the sample's cards in a quick sheet (`/v1/quicksheet/pdf`); tier sentence: `consent.line2.paid` (the paid deployment) — plus, for any demo instance, `consent.line2.demo`, and one line saying free-key test builds refuse real papers (the 403 gate, §3).
+   - **Test builds with a different AI** (anchor `#test-builds`; D-32, added 2026-10-04): "We also make test builds of the app for our own testing. They are not the app in the app stores. We use them with the made-up sample papers, with our own papers, or with papers from people who said yes. A test build may use an AI that is not Google's. Its consent screen names that AI before you send a paper:" then three items — `local`: "AI on our server: an open AI model runs on the same computer as our server and reads the photo there. No other company's AI sees the paper."; `attested`: "An outside AI: the photo goes to our server and then to the company named on the consent screen. That company says it will not use the paper to train its AI. It may still keep a copy. We use this kind of test build only while we build the app, and only with our own papers."; vendor `unpaid`: "Sample papers only: some test builds use their AI only with the made-up sample papers. They refuse real papers and anything you type about a sample." (no "free": a paid endpoint can land on `unpaid` too, CL-091(e)) Each is true by a boot rule (loopback host for `local`; `ENV=development`, the no-training attestation and the denylist for `attested`; the 403 gate for `unpaid`). Section 4 adds "(Test builds can use a different AI; see section 3.)"
 4. **Google Gemini** — named as the AI provider on paid terms: "Google does not use your paper to improve its products. Google keeps a short safety log for a limited time, then deletes it." with a link to Google's Gemini API terms; "We do not turn on Google's optional logging."
 5. **What our server keeps** — `privacy.notice.what_we_keep`; the §9.2 table in prose; retention: 30 days for technical logs, 7 days for connection logs; "We cannot see, retrieve or delete your paper because we do not have it."
 6. **Your settings that travel with a paper** — `privacy.notice.settings_sent`; `privacy.notice.no_status`.
@@ -646,7 +673,7 @@ Cross-checks: every sentence about data handling is either a `privacy.notice.*` 
 
 ```yaml
 privacy_claims:
-  version: "2026-09-30"
+  version: "2026-10-04"
   approved_keys:
     # consent screen (D-02)
     - consent.line1
@@ -718,6 +745,20 @@ privacy_claims:
     # added 2026-09-30 (Phase 2B) with the web variants of CL-047(a), reviewed in §17.1
     - wipe.title.web
     - settings.wipe_offer.web
+    # added 2026-10-04 (Phase 3) for the openai_compat tiers — free-ai-providers §5.2/§5.3, CL-090;
+    # copy fixed verbatim by §5.3 and reviewed in §17.1 (CONSENT_VERSION bump required, §4.7)
+    - consent.badge.local
+    - consent.line1.local
+    - consent.line2.local
+    - consent.line4.masks_local    # native, only with features.hide_parts_server_masking (local, attested, unpaid on openai_compat)
+    - privacy.notice.sent.local
+    - privacy.notice.model.local
+    - banner.local_tier
+    - consent.badge.attested
+    - consent.line1.vendor
+    - consent.line2.attested
+    - banner.attested_tier
+    - consent.line2.unpaid_vendor
   claim_markers:               # a string containing any of these must be an approved key
     - "our server"
     - "Google"
@@ -736,6 +777,10 @@ privacy_claims:
     - "do not sell"
     - "trackers"
     - "reviewed by"
+    - "AI program"                 # added 2026-10-04 (free-ai-providers §5.3 step 3)
+    - "runs on our server"
+    - "outside AI"
+    - "says it will not"
   forbidden_phrases:           # never in en.json, store copy or the privacy policy (FTC §5 literal truth; D-22, D-25)
     - "encrypted by the app"
     - "end-to-end encrypted"
@@ -753,6 +798,9 @@ privacy_claims:
     - "doctor-approved"
     - "nothing of yours"              # retired sample copy (2026-09-30): typed questions and goals about a sample are sent
     - "keeps only counts"             # retired privacy.notice.what_we_keep (CL-061): the 30-day log keeps per-request enums
+    - "private AI"                    # free-ai-providers §5.3 "must NOT be used, even on local" (2026-10-04)
+    - "100% private"
+    - "nothing leaves the laptop"     # true only with API, model and client on one Mac; a phone sends to our server
 ```
 
 Rules the seed encodes: every sentence must be true on **every** tier it can appear on (tier-specific sentences are keyed per tier); web variants exist wherever the native sentence would be false in a browser; nothing claims app-layer encryption, human review, or iOS backup exclusion until verified (D-22, D-25).
@@ -780,6 +828,29 @@ Added 2026-09-30 (Phase 2B, CL-047(a) web variants from the mobile vault round; 
 - `settings.wipe_offer.web`: "Do you also want to delete everything saved in this browser?" — the web variant of the offer after "Stop sending papers" (§4.4); a question, not a claim.
 
 - `btn.delete_everything_web`, `settings.reviewed_by`, `source.no_image` are fixed in Appendix A; `settings.reviewed_by` ("Reviewed by {name}") renders only when a pack's `reviewed_by` is non-null (D-25), and `source.no_image` only when the user turned off "Keep page images" (§9.4).
+
+Added 2026-10-04 (Phase 3, `AI_PROVIDER=openai_compat`; copy fixed verbatim by `docs/research/free-ai-providers.md` §5.3, tier table §5.2; the key per tier is chosen in `features/onboarding/consentModel.ts` `tierCopy`, CL-090; `CONSENT_VERSION` bump required, §4.7). `{model}` and `{vendor}` are the `/v1/config` fields `ai_model_label` and `ai_vendor_name`, set only from `OPENAI_COMPAT_MODEL_LABEL` and `OPENAI_COMPAT_VENDOR_NAME`. The server refuses to boot without the name a tier's sentences need (the model label on `local`, the vendor name on `attested` and `unpaid`), and S2 also disables "I understand, continue" if a config arrives without it. `ENV=production` refuses `openai_compat` at boot (`Settings` validator), so every sentence below appears only in development or staging builds, and "test build" is literally true. Each line was checked against the implementation on 2026-10-04.
+
+`local` tier. Boot rule: a loopback `OPENAI_COMPAT_BASE_URL` (127.0.0.0/8, ::1 or localhost), `OPENAI_COMPAT_MODEL_LABEL` set, and no Ollama `:cloud`/`-cloud` model (those run on Ollama's servers).
+
+- `consent.badge.local`: "Test build — AI on our server" — the model endpoint is loopback on the API host (boot-checked), and production refuses this provider.
+- `consent.line1.local`: "Your photo is read by {model}, an AI program that runs on our server. Our server does not keep it." — the same boot rule; one provider per process (`main.build_provider`); the provider builds every request in memory and logs no prompt, image or reply (`ai/openai_compat.py`, covered by the write-site scan of `test_privacy_claims.py`). For the model server itself, "does not keep it" rests on the Ollama on-disk check (free-ai-providers §4.9, `docs/LOCAL_AI.md` §4: send a marker, then grep `~/.ollama`). **That check is open until the developer installs Ollama and runs it once**; the setup script already starts Ollama with `OLLAMA_DEBUG` unset.
+- `consent.line2.local`: "No other company's AI sees your paper. This is a test build. Check every answer against your paper." — one `AIService` wraps the single provider for every AI task: both model tiers, chat, troubleshoot and language-pack generation all call the loopback endpoint (the mock that builds sample chat contexts runs in-process). A tunnel that carries a phone's traffic to the Mac is not an AI, and this sentence makes no "nothing leaves" claim.
+- `consent.line4.masks_local`: "Parts you hide are blacked out on our server before the AI reads the paper." — native only, and only when `features.hide_parts_server_masking` is true. It also replaces the Google masks line on `attested`, on `unpaid`/`mixed` with `openai_compat`, and on `unknown` with a cached `openai_compat` config (CL-090), because the native masks line names Google. True on every one of them: the pipeline blacks out the masks during redaction (`analysis/pipeline.py`: upload validation → redaction → model reading) before any provider call, whatever the provider. Web keeps its own masks line (masks are burned in on the device).
+- `privacy.notice.sent.local`: "When you read a paper, the photo goes to our server. An AI program on our server reads it. Our server does not keep it." — notice item 1 on `local`; true on native and on web, where the photo is uploaded to our server too; "does not keep it" as for line 1 (the Ollama check is open).
+- `privacy.notice.model.local`: "{model} is an open AI model. The company that made it does not get your paper." — open weights run on the API host, so the maker receives nothing at inference time (free-ai-providers §1.5 [V S4]); `:cloud`/`-cloud` tags are refused at boot. The boot check sees only the host: the operator must point `local` at a server that runs the weights itself (Ollama, LM Studio), never at a loopback proxy that forwards to a hosted API, and `OPENAI_COMPAT_MODEL_LABEL` must name an open-weight model. Like `billing` in `GEMINI_KEYS`, a false setting makes this tier's sentences false and is a reportable incident (§3, §13.2).
+- `banner.local_tier`: "Test build. The AI runs on our server." — the same facts as the badge (`design/components/Banner.tsx` `tierBannerKind`).
+
+`attested` tier. Development only: it boots only with `ENV=development`, `OPENAI_COMPAT_VENDOR_NAME`, `OPENAI_COMPAT_NO_TRAINING_ATTESTED=1`, an API key for the hosted endpoint, and a host that is not on `ATTESTED_HOST_DENYLIST`; `Settings.samples_only` would close the real-paper gate outside development even if it booted there.
+
+- `consent.badge.attested`: "Test build — outside AI" — development only, and the endpoint is another company's hosted API.
+- `consent.line1.vendor`: "Your photo is sent to {vendor}'s AI to be read. Our server does not keep it." — line 1 and notice item 1 on `attested` and on `unpaid`/`mixed` with `openai_compat` (CL-090); the vendor name is required at boot on both tiers; our server handles the request in memory (§2.1) and the provider logs nothing. On `unpaid`/`mixed` real photos are refused (403; only the dev-only `ALLOW_UNPAID_REAL_DOCUMENTS` bypass lifts it), so sample pages are what reach the vendor, the same pattern as the Gemini line 1 on those tiers.
+- `consent.line2.attested`: "{vendor} says it will not use your paper to train its AI. It may still keep a copy. This is a test build. Send only your own papers." — "says" reports the vendor's API terms as the operator states them (`OPENAI_COMPAT_NO_TRAINING_ATTESTED`, a human claim like `billing`); "may still keep a copy" covers logged retention (Groq up to 30 days, Alibaba unstated; free-ai-providers §5.3). The D-xx entry naming the vendor, the clause and the date (free-ai-providers §5.2) is not written yet; a false attestation is a reportable incident (§3, §13.2).
+- `banner.attested_tier`: "Test build with an outside AI. Send only your own papers." — the same facts as the badge.
+
+`unpaid`/`mixed` with a non-Google vendor (`OPENAI_COMPAT_DATA_TIER=unpaid`, the default; samples only: real papers get `403 unpaid_tier_real_documents_disabled` unless the dev-only bypass is set, and "I understand, continue" is hidden).
+
+- `consent.line2.unpaid_vendor`: "This test build uses a free AI service. {vendor} may read and use what is sent. Do not send real papers. Sample papers only." — mirrors the Gemini unpaid line; "may read and use" is the cautious reading of free-tier terms, and the 403 gate makes "sample papers only" true. "A free AI service" assumes the endpoint is a free tier, the only `unpaid` use free-ai-providers §1.2 plans. A paid endpoint whose terms nobody checked also lands on `unpaid` by default, and there "free" would be false: reword it without "free" at the next copy round (CL-091).
 
 
 ---
@@ -824,6 +895,7 @@ Owner: WP8 assembles; the user's counsel (DECISIONS Q3) answers §18.1–§18.6;
 ### 18.7 Engineering gates (proof = command or file)
 - [ ] `ENV=production`; every slot `billing:true` with the Cloud Billing screenshot filed; `ALLOW_UNPAID_KEYS`, `ALLOW_UNPAID_REAL_DOCUMENTS`, `LOG_LEVEL=debug` unset; `GET /v1/config` on the store API returns `data_use_tier: paid`.
 - [ ] AI Studio developer logging OFF for every production project (dated screenshot in RUNBOOK).
+- [ ] `GET /v1/config` on the store build's API → `"provider": "gemini"` (production refuses `AI_PROVIDER=openai_compat`, D-32); no `.env` copied from `apps/api/.env.local-ai.example` on any production or staging host that a store build reaches.
 - [ ] `apps/api/.venv/bin/pytest apps/api` green incl. `test_privacy_claims.py`, `test_readability.py`, `test_logging_allowlist.py`, `test_errors.py`, `test_loader.py::test_emergency_numbers_match_fixed_copy`, and `test_privacy_claims.py::test_server_writes_only_at_reviewed_sites` (every server file write is a reviewed site — BUILD_PLAN §7 row 11; it replaces the old `open(… 'w')` grep, which flagged the pack-cache write and missed `write_text`/`sqlite3.connect`).
 - [ ] iOS: vault directory excluded from iCloud backup and verified on a dev build (§10.2) — or iOS submission deferred.
 - [ ] Android merged manifest matches §12.1; `android.allowBackup: false`.
@@ -848,3 +920,5 @@ Owner: WP8 assembles; the user's counsel (DECISIONS Q3) answers §18.1–§18.6;
 - **Q23 Demo build in stores.** Confirm the labelled demo build (`EXPO_PUBLIC_DEFAULT_SAMPLE_MODE=true`, `demo` tier) is for judges/internal tracks only and never published publicly (§3).
 - **Q24 Accessibility label claims.** Which Accessibility Nutrition Labels to claim on the App Store after the §15 matrix (VoiceOver, Larger Text, Sufficient Contrast, Reduced Motion proposed).
 - **Q25 Incident roles.** Who is on-call for §13.2 (operator), who is counsel of record, and who approves public notices?
+- **Q26 Local AI install (D-32; free-ai-providers §6).** Approve installing Ollama and the first model on the development Mac (`make local-ai-setup` asks before each download: about 0.2 GB for Ollama, 3.4 GB for `qwen3.5:4b`), and choose the model (`qwen3.5:4b` recommended; `qwen3.5:9b` or `qwen3-vl:8b-instruct` need about 2 GB more free disk first). No agent installs either without this answer.
+- **Q27 Hosted second opinion.** Use a hosted vendor on the development-only `attested` tier for your own papers (Groq with Zero Data Retention, Cloudflare Workers AI, or Alibaba Model Studio International with the PRC-parent caveats of D-32), or stay local only? Every other hosted endpoint stays samples-only.

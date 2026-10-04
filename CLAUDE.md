@@ -8,6 +8,7 @@ Monorepo. Two apps share one API contract:
 
 ## Toolchain on this Mac
 - Node 24 LTS is at `~/.local/node/bin` (added to `~/.zprofile`). In non-login shells run `export PATH="$HOME/.local/node/bin:$PATH"` first. No Homebrew.
+- No Ollama or LM Studio and no local model are installed (2026-10-04); installing them needs the developer's OK (hard rule 7).
 - No Xcode (Command Line Tools only): `npx expo run:ios` and the iOS simulator will NOT work here. Test with `npx expo start --web` / `npx expo export --platform web`, or Expo Go on a phone. Store builds go through EAS (`npx eas-cli@latest build`).
 - Type-check mobile with `cd apps/mobile && npx tsc --noEmit`; lint with `npx expo lint`; tests with `npx jest`.
 - API tests: `apps/api/.venv/bin/pytest apps/api`.
@@ -18,6 +19,7 @@ Monorepo. Two apps share one API contract:
 - `make test` — API tests, ruff, strict mypy, `tsc`, jest and expo lint (`make test-api`, `make lint-api`, `make test-mobile` run the parts).
 - `make export-web` — static web build into `apps/mobile/dist` (always `--clear`); `make host-rules` then writes the Netlify/Cloudflare `_redirects` + `404.html` (DEPLOYMENT §2.3).
 - `make sync` / `make sync-check` — `sync_to_mobile.py` (packs, languages, fixtures, fonts, resources → `apps/mobile`); `make types` / `make types-check` — `scripts/gen-types.sh` (`--check` writes nothing; regenerating is the contract owner's job, WP0).
+- `make local-ai-setup` / `scripts/use-local-ai.sh` / `make local-ai-check` — Ollama + a local model for testing with real papers (`docs/LOCAL_AI.md`). The first one downloads gigabytes: **only the developer runs it** (hard rule 7).
 - `scripts/ci.sh` (= `make ci`) — the full 15-step CI sequence, stopping at the first failure: pytest, ruff, mypy, openapi, fixtures, sync, yaml, xfail, privacy, eas-https, mobile-tsc, jest, lint, prebuild, web-export. `CI_FROM=<step> scripts/ci.sh` resumes from a step; `CI_ONLY=<step>` runs one.
 
 ## Hard rules for agents working in parallel
@@ -27,6 +29,12 @@ Monorepo. Two apps share one API contract:
 4. Never persist user documents/images server-side, never log document content, never let the model invent phone numbers or URLs (resources come only from the vetted YAML DB).
 5. Secrets only via `.env` (git-ignored). Commit `.env.example` instead.
 6. The whole app must run with ZERO API keys (`AI_PROVIDER=mock`). Every feature needs a mock-provider path.
+7. **Never install Ollama, LM Studio or any AI model, and never run `make local-ai-setup` / `scripts/setup-local-ai.sh` or `ollama pull`, without the developer's OK in chat** (multi-GB downloads on a ~9 GB-free disk; COMPLIANCE_PRIVACY Q26). Test the `openai_compat` provider against a fake OpenAI-compatible server (`httpx.MockTransport` or a tiny ASGI app), never a real model or endpoint.
+
+## AI providers (D-32; full table in `docs/ARCHITECTURE.md` §6.1)
+- `AI_PROVIDER=mock` (default, zero keys) · `gemini` (`GEMINI_KEYS`, `MODEL_PRO`/`MODEL_FAST`; real papers only on the `paid` tier) · `openai_compat` (any OpenAI-compatible `/chat/completions`; **test builds only — `ENV=production` refuses it**).
+- `openai_compat` env vars: `OPENAI_COMPAT_BASE_URL` (default `http://127.0.0.1:11434/v1`, Ollama), `OPENAI_COMPAT_API_KEY` (required for any non-loopback host), `OPENAI_COMPAT_MODEL_PRO` / `_FAST` (default `qwen3.5:4b`; the only model ids on this provider), `OPENAI_COMPAT_DATA_TIER` (`local` = loopback host only, real papers in dev/staging · `attested` = `ENV=development` only, vendor terms say no training · `unpaid` = default, samples only), `OPENAI_COMPAT_MODEL_LABEL` (required for `local`), `OPENAI_COMPAT_VENDOR_NAME` (required for `attested`/`unpaid`), `OPENAI_COMPAT_NO_TRAINING_ATTESTED` (required for `attested`), `OPENAI_COMPAT_JSON_MODE` (`auto|json_schema|json_object|prompt`), `OPENAI_COMPAT_REASONING` (`none|mapped|omit`), `OPENAI_COMPAT_TIMEOUT_S` (300 loopback / 90 hosted; `FAILOVER_DEADLINE_S` ≥ it + 10), `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` (6144), `OPENAI_COMPAT_MAX_IMAGES` (12), `OPENAI_COMPAT_CONCURRENCY` (1 loopback / 4 hosted). Preset for the local tier: `apps/api/.env.local-ai.example`.
+- The provider must never log prompts, images, model output or upstream error bodies. Chinese-hosted endpoints are for synthetic samples only (one documented exception in D-32). The Gemini free tier never receives a real paper.
 
 ## Machine facts (don't re-derive)
 - The system `python3` (python.org 3.13) has NO CA bundle for `urllib`/`ssl` (CERTIFICATE_VERIFY_FAILED). Use `curl` for downloads in scripts, or `httpx` inside the venv (bundles certifi). Noto static TTFs (9 families × Regular/Bold, OFL) are already in `apps/api/data/fonts/` and `apps/mobile/assets/fonts/` — do not re-download.
