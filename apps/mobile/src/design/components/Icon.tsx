@@ -2,6 +2,7 @@
 // react-native-svg (works on iOS, Android and web); no icon font, no emoji, no SF Symbols (D-27).
 // Icons of real objects are never mirrored in RTL; pass `mirror` for chevrons/arrows only.
 
+import { Platform } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { useDirection } from '@/i18n/direction';
@@ -211,9 +212,16 @@ function glyph(name: IconName, c: string) {
 export function Icon({ name, size = 24, color, mirror, accessibilityLabel }: IconProps) {
   const { isRTL } = useDirection();
   const flip = isRTL && (mirror ?? MIRRORABLE.has(name));
-  const a11y = accessibilityLabel
-    ? { accessible: true, accessibilityLabel, role: 'img' as const }
-    : { accessible: false, 'aria-hidden': true as const, importantForAccessibility: 'no-hide-descendants' as const };
+  // react-native-svg renders a DOM <svg> on web, so RN-only props (accessible, importantForAccessibility)
+  // would reach the DOM and React rejects them; web uses ARIA attributes instead.
+  const a11y =
+    Platform.OS === 'web'
+      ? accessibilityLabel
+        ? { role: 'img' as const, 'aria-label': accessibilityLabel }
+        : { 'aria-hidden': true as const }
+      : accessibilityLabel
+        ? { accessible: true, accessibilityLabel, role: 'img' as const }
+        : { accessible: false, 'aria-hidden': true as const, importantForAccessibility: 'no-hide-descendants' as const };
   return (
     <Svg
       width={size}

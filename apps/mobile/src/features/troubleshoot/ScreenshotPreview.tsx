@@ -15,6 +15,7 @@ import { useT } from '@/i18n/useT';
 
 import { screenshotPage } from './masks';
 import type { Screenshot } from './pick';
+import { ltrBox } from '@/design/ltr';
 
 export interface ScreenshotPreviewProps {
   shot: Screenshot;
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     overflow: 'hidden',
     // The screenshot is never mirrored in RTL (the boxes are in image coordinates).
-    direction: 'ltr',
+    ...ltrBox,
   },
   mask: {
     position: 'absolute',

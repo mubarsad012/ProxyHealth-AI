@@ -11,6 +11,7 @@ import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Bidi } from '@/design/components/Bidi';
 import { useTheme } from '@/design/theme';
 import { radius, space } from '@/design/tokens';
+import { ltrBox } from '../ltr';
 
 export interface CropProps {
   pageImageUri: string | null;
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: 1,
     // Never mirrored: the crop keeps the page's own orientation in RTL.
-    direction: 'ltr',
+    ...ltrBox,
   },
   highlight: {
     position: 'absolute',

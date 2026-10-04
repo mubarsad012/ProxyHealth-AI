@@ -31,6 +31,7 @@ import type { CapturedPage } from '@/store/session';
 import { paperLangProps, SourceText } from './cards/shared';
 import { pageImageFor } from './pageImages';
 import { blockLabel, initialSourcePage, type SourceMode, sourcePageModel, sourcePages } from './sourceModel';
+import { ltrBox } from '@/design/ltr';
 
 export interface SourceScreenProps {
   analysis: AnalysisResult;
@@ -468,7 +469,7 @@ const styles = StyleSheet.create({
   panes: { gap: space.lg, paddingBottom: space.xxxl },
   half: { flex: 1 },
   imagePane: { gap: space.sm },
-  pageImage: { width: '100%', borderWidth: 1, overflow: 'hidden', direction: 'ltr' },
+  pageImage: { width: '100%', borderWidth: 1, overflow: 'hidden', ...ltrBox },
   hit: { position: 'absolute', borderWidth: 2, borderRadius: radius.sm },
   list: { gap: space.sm },
   block: { borderWidth: 1, borderRadius: radius.md, padding: space.md, gap: space.xs },

@@ -22,6 +22,7 @@ import type { CapturedPage } from '@/store/session';
 
 import { PAGE_IMAGE_KEY } from './choices';
 import { hitTestMask, MASK_STEP, maskAround, maskFromDrag, moveMask, replaceMask, resizeFromCorner, resizeMask } from './masks';
+import { ltrBox } from '@/design/ltr';
 
 export interface MaskEditorProps {
   page: CapturedPage;
@@ -243,7 +244,7 @@ function RowButton({ label, onPress, danger, a11y }: { label: string; onPress():
 const styles = StyleSheet.create({
   body: { padding: space.screenGutter, gap: space.lg, maxWidth: 720, width: '100%', alignSelf: 'center' },
   // The page is never mirrored in RTL.
-  canvas: { width: '100%', borderWidth: 1, overflow: 'hidden', direction: 'ltr' },
+  canvas: { width: '100%', borderWidth: 1, overflow: 'hidden', ...ltrBox },
   mask: { position: 'absolute', backgroundColor: '#000000' },
   draft: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 2 },
   handle: { position: 'absolute', width: 24, height: 24, borderRadius: 12, borderWidth: 3 },

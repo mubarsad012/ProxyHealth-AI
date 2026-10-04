@@ -41,6 +41,7 @@ import { forgetWebFile } from './pick';
 import { readLaterBlockKey, useReadLater } from './readLater';
 import { ReviewOptions } from './ReviewOptions';
 import { samplePages } from './samples';
+import { ltrBox } from '@/design/ltr';
 
 /** Reorder copy is pending WP0 (CL line in DECISIONS §14); the controls appear once both keys
  *  exist so the UI never shows a raw key. Document order is kept in RTL too (PRODUCT_SPEC §5.2). */
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   grid: { flexWrap: 'wrap', gap: space.md },
   cell: { flexGrow: 1, flexBasis: 160, maxWidth: '100%' },
   card: { borderWidth: 1, borderRadius: radius.lg, padding: space.md, gap: space.sm },
-  imageWrap: { width: '100%', position: 'relative', direction: 'ltr' },
+  imageWrap: { width: '100%', position: 'relative', ...ltrBox },
   preparing: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   wash: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.4 },
   image: { width: '100%', borderRadius: radius.sm },
