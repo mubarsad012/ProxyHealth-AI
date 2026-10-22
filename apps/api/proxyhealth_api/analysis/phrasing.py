@@ -13,7 +13,9 @@ when nothing remains). Each replacement counts in ``verification.phrasing_rewrit
 copy never passes through here; quotes never do either. Plan steps also pass §8.4's checks:
 ``fit_professional_step`` (a DOJ-accredited representative only where one fits, no copied
 "Before that date,") and ``ensure_professional`` (a referral when the step names nobody, in
-English or the step's own language).
+English or the step's own language). On a paper scored ``possible`` or ``likely`` scam no
+referral or rewrite professional points back at the paper's own contact (TAXONOMY §6.4;
+``scam_refer_to_by_category``, ``scam_professional_by_category``).
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     ReferTo,
     RefusalKind,
+    ScamRisk,
     WarningCode,
 )
 from proxyhealth_api.settings import DATA_DIR
@@ -106,6 +109,10 @@ class PhrasingConfig:
     copied_step_openers: tuple[re.Pattern[str], ...] = ()
     # Dangling words ``summary_text.repair_title`` drops from a cut title, per language.
     title_connectors_by_language: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    # TAXONOMY §6.4: on a possible/likely scam these replace ``refer_to_by_category`` and
+    # ``professional_by_category`` where those point back at the paper's own contact.
+    scam_refer_to_by_category: Mapping[str, str] = field(default_factory=dict)
+    scam_professional_by_category: Mapping[str, str] = field(default_factory=dict)
 
 
 def _compile(p: str) -> re.Pattern[str]:
@@ -115,6 +122,16 @@ def _compile(p: str) -> re.Pattern[str]:
 def _fold(text: str) -> str:
     """NFKC + case folding (word lists are compared in this form)."""
     return unicodedata.normalize("NFKC", text).casefold()
+
+
+def _words(raw: Any, where: str) -> list[str]:
+    """A YAML word list; a bare ``on``/``yes``/``no`` that YAML read as a boolean (or any other
+    non-string) is an error, not a silent ``"true"``."""
+    items = list(raw or [])
+    bad = [w for w in items if not isinstance(w, str)]
+    if bad:
+        raise ValueError(f"phrasing.yaml {where}: quote these entries: {bad!r}")
+    return items
 
 
 def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
@@ -128,11 +145,15 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
     for tag, raw in (data.get("languages") or {}).items():
         if raw.get("attribution_regex"):
             attribution[str(tag)] = _compile(str(raw["attribution_regex"]))
-        pro_words[str(tag)] = tuple(_fold(str(w)) for w in raw.get("professional_words") or [])
+        pro_words[str(tag)] = tuple(
+            _fold(w) for w in _words(raw.get("professional_words"), f"{tag}.professional_words")
+        )
         rep_patterns[str(tag)] = tuple(
             _compile(str(p)) for p in raw.get("accredited_rep_patterns") or []
         )
-        connectors[str(tag)] = frozenset(_fold(str(w)) for w in raw.get("title_connectors") or [])
+        connectors[str(tag)] = frozenset(
+            _fold(w) for w in _words(raw.get("title_connectors"), f"{tag}.title_connectors")
+        )
         fams: list[Family] = []
         for f in raw.get("families") or []:
             words = f.get("medical_words")
@@ -153,7 +174,9 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
         professional_by_category=dict(data.get("professional_by_category") or {}),
         refer_to_by_category=dict(data.get("refer_to_by_category") or {}),
         hedge_key_by_family=dict(data.get("hedge_key_by_family") or {}),
-        professional_words=tuple(str(w).lower() for w in data.get("professional_words") or []),
+        professional_words=tuple(
+            w.lower() for w in _words(data.get("professional_words"), "professional_words")
+        ),
         languages=languages,
         reviewed_by=reviewed,
         attribution_by_language=attribution,
@@ -168,6 +191,8 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
         accredited_rep_by_language=rep_patterns,
         copied_step_openers=tuple(_compile(str(p)) for p in data.get("copied_step_openers") or []),
         title_connectors_by_language=connectors,
+        scam_refer_to_by_category=dict(data.get("scam_refer_to_by_category") or {}),
+        scam_professional_by_category=dict(data.get("scam_professional_by_category") or {}),
     )
 
 
@@ -259,26 +284,46 @@ def lint_sentence(
     return hits
 
 
+def _is_scam(scam_risk: ScamRisk) -> bool:
+    return scam_risk is not ScamRisk.none
+
+
 def professional_for(
     category: DocumentCategory | None,
     cfg: PhrasingConfig | None = None,
     document_type: DocumentType | None = None,
+    *,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> str:
     """PRODUCT_SPEC §7.2 professional words for the rewrite template (the document type's own
-    entry first: "a DOJ-accredited representative" only for immigration papers)."""
+    entry first: "a DOJ-accredited representative" only for immigration papers). On a possible or
+    likely scam a category whose professional is the paper's own sender ("the office that sent
+    this paper") gets ``scam_professional_by_category`` instead (TAXONOMY §6.4)."""
     c = cfg or load_config()
+    key = category.value if category else "other"
+    if _is_scam(scam_risk) and key in c.scam_professional_by_category:
+        return c.scam_professional_by_category[key]
     if document_type is not None and document_type.value in c.professional_by_document_type:
         return c.professional_by_document_type[document_type.value]
-    key = category.value if category else "other"
     return c.professional_by_category.get(key) or c.professional_by_category.get(
         "other", "a professional"
     )
 
 
-def refer_to_for(category: DocumentCategory | None, cfg: PhrasingConfig | None = None) -> ReferTo:
-    """TAXONOMY §8.5 default ``refer_to_professional`` by category."""
+def refer_to_for(
+    category: DocumentCategory | None,
+    cfg: PhrasingConfig | None = None,
+    *,
+    scam_risk: ScamRisk = ScamRisk.none,
+) -> ReferTo:
+    """TAXONOMY §8.5 default ``refer_to_professional`` by category. On a possible or likely scam
+    a referral back to the paper's own contact (``sender``, ``benefits_office``) gives way to
+    ``scam_refer_to_by_category`` (TAXONOMY §6.4: the reader checks with the real office)."""
     c = cfg or load_config()
-    value = c.refer_to_by_category.get(category.value if category else "other", "sender")
+    key = category.value if category else "other"
+    value = c.refer_to_by_category.get(key, "sender")
+    if _is_scam(scam_risk):
+        value = c.scam_refer_to_by_category.get(key, value)
     return ReferTo(value)
 
 
@@ -349,6 +394,7 @@ async def enforce(
     rewrite: Rewriter | None = None,
     cfg: PhrasingConfig | None = None,
     document_type: DocumentType | None = None,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> PhrasingResult:
     """Lint every sentence of one model-authored string; rewrite once, else hedge.
 
@@ -357,6 +403,7 @@ async def enforce(
     ``phrasing_lint_unavailable``. ``rewrite`` is optional: without it (or when it returns
     ``None``/a still-failing sentence) the fixed hedge is used directly. A replacement sentence
     already in the string (the rewrite template's referral, a repeated hedge) is not added again.
+    ``scam_risk`` keeps the template's professional off the paper's own sender (§6.4).
     """
     c = cfg or load_config()
     langs, unavailable = lint_languages(language, c)
@@ -376,7 +423,9 @@ async def enforce(
         result.families += [f for f in fams if f not in result.families]
         replacement: str | None = None
         if rewrite is not None:
-            candidate = await rewrite(sentence, professional_for(category, c, document_type))
+            candidate = await rewrite(
+                sentence, professional_for(category, c, document_type, scam_risk=scam_risk)
+            )
             if candidate:
                 candidate = candidate.strip()[:MAX_REWRITE_CHARS]
                 if candidate and not lint_sentence(
@@ -422,21 +471,23 @@ def optional_prose(
     cfg: PhrasingConfig | None = None,
 ) -> str | None:
     """Optional model prose (a glossary definition, a plan step that is not the professional
-    one) after the lint, with no rewrite: unchanged when clean, ``None`` (drop it) on any family
-    hit but ``dramatize``, whose clause is deleted instead. The rewrite template would put
-    "The paper says …" in front of a sentence the paper never printed."""
+    one and points at no demand) after the lint, with no rewrite: unchanged when clean; else each
+    failing sentence is dropped (a ``dramatize``-only hit just loses its clause) and the clean
+    sentences stay. ``None`` (drop the entry) when nothing is left. The rewrite template would
+    put "The paper says …" in front of a sentence the paper never printed."""
     c = cfg or load_config()
     hits = lint_text(text, category=category, language=language, cfg=c)
     if not hits:
         return text
-    if any(f != DRAMATIZE for _, fams in hits for f in fams):
-        return None
-    failing = {sentence for sentence, _ in hits}
-    kept = [
-        remove_dramatize(s, c) if s in failing else s for s in split_sentences(text)
-    ]
-    calm = " ".join(s for s in kept if s)
-    return calm or None
+    failing = dict(hits)
+    kept: list[str] = []
+    for sentence in split_sentences(text):
+        fams = failing.get(sentence)
+        if fams is None:
+            kept.append(sentence)
+        elif all(f == DRAMATIZE for f in fams) and (calm := remove_dramatize(sentence, c)):
+            kept.append(calm)
+    return " ".join(kept) or None
 
 
 def _is_latin(word: str) -> bool:
@@ -468,14 +519,16 @@ def ensure_professional(
     cfg: PhrasingConfig | None = None,
     *,
     language: str | None = None,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> str:
     """Append the category referral (``chat.refer.<ReferTo>``) to a professional step that names
     nobody ("a tax professional", "a free tax-help site" count as naming one); leave steps that
     already name a professional — in English or in ``language``, the step's own — or already
-    carry the referral unchanged."""
+    carry the referral unchanged. On a possible or likely scam the referral never points back at
+    the paper's own contact (``refer_to_for``)."""
     if names_professional(step_text, cfg, language):
         return step_text
-    referral = t(f"chat.refer.{refer_to_for(category, cfg).value}")
+    referral = t(f"chat.refer.{refer_to_for(category, cfg, scam_risk=scam_risk).value}")
     if normalize(referral) in normalize(step_text):
         return step_text
     base = step_text.rstrip()
@@ -487,8 +540,9 @@ def ensure_professional(
 def names_accredited_rep(
     text: str, cfg: PhrasingConfig | None = None, language: str | None = "en"
 ) -> bool:
-    """True when the text names a DOJ-accredited representative ("DOJ" in any language, plus
-    the English and the text language's own ``accredited_rep_patterns``)."""
+    """True when the text names a DOJ-accredited representative ("DOJ" next to an accreditation
+    word in any language — not the DOJ as an agency — plus the English and the text language's
+    own ``accredited_rep_patterns``)."""
     c = cfg or load_config()
     folded = _fold(text)
     patterns = [*c.accredited_rep_patterns, *c.accredited_rep_by_language.get("en", ())]
@@ -522,20 +576,22 @@ def fit_professional_step(
     t: Translator,
     language: str | None = "en",
     cfg: PhrasingConfig | None = None,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> tuple[str, bool]:
     """(step text, ``replaced``) — §8.4 checks on one model plan step (any kind).
 
     A step naming a DOJ-accredited representative on a paper where none fits (a medical bill, a
     lease, a tax or school notice) becomes the category's fixed ``chat.refer.<ReferTo>`` sentence
-    (``replaced``; reviewed copy, so no model text and no organisation or contact is added). A
-    step with no ``demand_id`` that opens with the prompt's own example "Before that date," loses
-    the opener; no date is put in its place.
+    (``replaced``; reviewed copy, so no model text and no organisation or contact is added) —
+    on a possible or likely scam never one that points back at the paper's own contact
+    (``refer_to_for``; TAXONOMY §6.4). A step with no ``demand_id`` that opens with the prompt's
+    own example "Before that date," loses the opener; no date is put in its place.
     """
     c = cfg or load_config()
     if names_accredited_rep(text, c, language) and not accredited_rep_fits(
         category, document_type, c
     ):
-        return t(f"chat.refer.{refer_to_for(category, c).value}"), True
+        return t(f"chat.refer.{refer_to_for(category, c, scam_risk=scam_risk).value}"), True
     if demand_id is None:
         for opener in c.copied_step_openers:
             m = opener.match(text)

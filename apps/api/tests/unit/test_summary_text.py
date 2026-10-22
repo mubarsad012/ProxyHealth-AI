@@ -56,6 +56,48 @@ def test_a_word_the_cap_split_is_dropped() -> None:
     assert st.repair_title(raw) == f"{kept}…"
 
 
+@pytest.mark.parametrize(
+    ("raw", "fixed"),
+    [
+        ("This letter says it is from the IRS, but real IRS letters never ask for gift car",
+         "This letter says it is from the IRS, but real IRS letters never ask for gift…"),
+        ("This looks like an official ICE notice, but it asks you to pay a fee by Zelle to",
+         "This looks like an official ICE notice, but it asks you to pay a fee by Zelle…"),
+        ("Your Medicaid ends on October 31, unless you send the renewal form back to the o",
+         "Your Medicaid ends on October 31, unless you send the renewal form back…"),
+        ("This is a letter from the Fairfax County office about your SNAP interview on Octo",
+         "This is a letter from the Fairfax County office about your SNAP interview…"),
+    ],
+)  # fmt: skip
+def test_a_cut_title_keeps_its_but_or_unless_clause(raw: str, fixed: str) -> None:
+    """Only words go, never the clause after a comma: that clause carries the "but" that says
+    the letter is fake, or the "unless" that says how to keep Medicaid."""
+    assert st.is_cut(raw)
+    assert st.repair_title(raw) == fixed
+
+
+def test_a_month_the_cap_cut_short_is_dropped_below_the_cap() -> None:
+    """At 78-79 characters the last word may be cut too ("Octo" when "ber" did not fit)."""
+    raw = "This notice from the county asks you to bring your papers to the office on Octo"
+    assert len(raw) == st.TITLE_CAP - 1 and st.is_cut(raw)
+    assert st.repair_title(raw) == (
+        "This notice from the county asks you to bring your papers to the office…"
+    )
+
+
+def test_another_languages_short_month_is_an_english_word() -> None:
+    """"out" is Portuguese for October; an English title keeps it. A Spanish title still loses
+    its own "ago" (agosto)."""
+    raw = "The landlord says your rent went up and you have until next Friday to move out"
+    assert st.is_cut(raw)
+    assert st.repair_title(raw) == f"{raw}…"
+    spanish = "Su arrendador le pide pagar la renta atrasada del mes pasado antes del 8 de ago"
+    assert st.is_cut(spanish)
+    assert st.repair_title(spanish, language="es") == (
+        "Su arrendador le pide pagar la renta atrasada del mes pasado antes…"
+    )
+
+
 def test_no_partial_date_or_amount_stays_in_a_cut_title() -> None:
     """"by October 2" (printed: October 28) matched the demo's own day; it never reaches the
     title card now."""
@@ -103,6 +145,26 @@ def test_a_body_that_continues_the_title_gets_it_back() -> None:
     assert st.join_continuation("Jury summons.", "you must answer.") == "you must answer."
     assert st.join_continuation("Jury summons", "you must answer.") == "you must answer."
     assert st.continues("Notice asking you", "to appear in court.")
+
+
+def test_a_body_never_inherits_a_partial_date_from_the_cut_title() -> None:
+    """The cut "by October 2" (printed: October 28) stays out of the body too; the body that
+    went on with the sentence only gets a capital letter."""
+    title = "This is a bill from Inova Health System. You need to pay $1,240.00 by October 2"
+    body = "or call Patient Accounts to set up a plan."
+    assert st.is_cut(title) and st.continues(title, body)
+    assert st.join_continuation(title, body) == "Or call Patient Accounts to set up a plan."
+    fields = st.tidy(title, body, body, target_language="en")
+    assert fields.title == "This is a bill from Inova Health System. You need to pay…"
+    assert "October" not in fields.body and fields.body == fields.body_en
+    assert find_mentions(fields.body, "en") == []
+
+
+def test_a_title_only_summary_keeps_its_body() -> None:
+    title = "This is a jury summons."
+    fields = st.tidy(title, title, title, target_language="en")
+    assert fields.body == fields.body_en == title
+    assert st.tidy(title, "", title, target_language="en").body == title
 
 
 TITLE = "This is a court notice telling you to go to an immigration hearing."

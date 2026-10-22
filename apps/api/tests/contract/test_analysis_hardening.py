@@ -14,7 +14,7 @@ import httpx
 from fastapi import FastAPI
 
 from proxyhealth_api.ai.provider import Task
-from proxyhealth_api.analysis import clerk, prose_dates
+from proxyhealth_api.analysis import clerk, phrasing, prose_dates
 from proxyhealth_api.analysis.i18n import english_translator
 from proxyhealth_api.contracts.analysis import GlossaryTerm
 from proxyhealth_api.contracts.enums import (
@@ -22,6 +22,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     PlanStepKind,
     RedFlagKind,
+    ScamRisk,
     SenderKind,
 )
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut, RedFlagOut
@@ -368,3 +369,55 @@ async def test_missing_pages_and_repeated_flags_are_settled_in_code(
     res = await analyze(client, demo_body(RFE))
     kinds = [f.kind for f in res.red_flags]
     assert RedFlagKind.missing_pages not in kinds and kinds.count(RedFlagKind.contradiction) == 1
+
+
+async def test_a_scam_papers_plan_never_points_back_to_the_sender(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """TAXONOMY §6.4: on a scam the plan never says "Ask the sender" or "The office that sent
+    this paper" — the swapped DOJ step and the appended referral name the lawyer referral."""
+    t = english_translator()
+    fid = "scam_gift_card_letter"
+    for category in (DocumentCategory.tax, DocumentCategory.benefits, DocumentCategory.other):
+        out = out_of(fid)
+        out.category = category
+        out.plan_steps[1].text = (
+            "Talk to a licensed lawyer or a DOJ-accredited representative before you pay anyone."
+        )
+        out.plan_steps.append(PlanStepOut(
+            id="s9", text="Get help before you do anything.", kind=PlanStepKind.professional,
+            resource_tags=[], span_ids=[], demand_id=None,
+        ))  # fmt: skip
+        install(app, settings, analyze_single=functools.partial(_recorded, out))
+        res = await analyze(client, demo_body(fid))
+        assert res.scam_risk is not ScamRisk.none
+        steps = {s.id: s.text for s in res.plan_steps}
+        shown = " ".join(steps.values())
+        assert t("chat.refer.sender") not in shown, category
+        assert t("chat.refer.benefits_office") not in shown, category
+        assert steps["s2"] == t("chat.refer.lawyer_or_accredited_rep")
+        assert steps["s9"].endswith(t("chat.refer.lawyer_or_accredited_rep"))
+
+
+async def test_a_step_tied_to_a_demand_is_hedged_not_dropped(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """The main action for a verified deadline stays in the plan (rewrite or hedge, as before);
+    a suggested step loses only its failing sentence; "without your ID" is good advice."""
+    fid = "irs_cp_notice"
+    out = out_of(fid)
+    out.plan_steps += [
+        PlanStepOut(id="s9", text="You must pay $312.45 by October 26, 2026.",
+                    kind=PlanStepKind.mail, resource_tags=[], span_ids=[], demand_id="d2"),
+        PlanStepOut(id="s10", text="Keep this notice. You must pay the fee first.",
+                    kind=PlanStepKind.gather, resource_tags=[], span_ids=[], demand_id=None),
+        PlanStepOut(id="s11", text="Bring this notice. Do not go to the appointment without it.",
+                    kind=PlanStepKind.bring, resource_tags=[], span_ids=[], demand_id=None),
+    ]  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(fid))
+    steps = {s.id: s for s in res.plan_steps}
+    assert steps["s9"].demand_id == "d2" and steps["s9"].text.strip()
+    assert phrasing.lint_text(steps["s9"].text, category=DocumentCategory.tax) == []
+    assert steps["s10"].text == "Keep this notice."
+    assert steps["s11"].text == "Bring this notice. Do not go to the appointment without it."

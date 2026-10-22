@@ -39,10 +39,13 @@ professional_by_document_type:
 # categories — unless the type's own professional above names none (w2_1099, itin). On any other
 # paper (a medical bill, a lease, a tax or school notice) the whole step becomes the category's
 # fixed `chat.refer.*` sentence. `accredited_rep_patterns` here apply in every language; each
-# language section may add its own.
+# language section may add its own. "DOJ" counts only next to an accreditation word ("DOJ-
+# accredited", "accredited by the DOJ", "acreditado por el DOJ"): a step that names the DOJ as an
+# agency ("The DOJ and the IRS never ask for gift cards.") names no representative.
 accredited_rep_categories: [immigration, court, civic, employment]
 accredited_rep_patterns:
-  - "\\bDOJ\\b"
+  - "\\bDOJ\\W{0,2}(accredit|rep\\b|representative)"
+  - "\\bac{1,2}redit\\w*(\\W+\\w+){0,3}?\\W+DOJ\\b"
 # The prompt's example opener copied onto a step that points at no demand ("Before that date,
 # talk to …"): the opener is removed and nothing is put in its place (no date is ever added).
 copied_step_openers:
@@ -58,6 +61,18 @@ refer_to_by_category:
   school: sender
   tax: sender
   other: sender
+# TAXONOMY §6.4: on a paper scored `possible` or `likely` scam nothing may send the reader back to
+# the paper's own contact (the scam card says "check with the real office"). For such a paper these
+# override the referral above ("Ask the sender …", "The office that sent this paper …") and the
+# rewrite template's professional ("the office that sent this paper"); the lawyer referral points
+# to Get help, which the scam score already reorders (scam_report first).
+scam_refer_to_by_category:
+  benefits: lawyer_or_accredited_rep
+  school: lawyer_or_accredited_rep
+  tax: lawyer_or_accredited_rep
+  other: lawyer_or_accredited_rep
+scam_professional_by_category:
+  benefits: "a licensed lawyer"
 hedge_key_by_family:
   eligibility: chat.refusal.eligibility
   outcome: chat.refusal.outcome
@@ -71,6 +86,7 @@ hedge_key_by_family:
   school_decision: chat.refusal.eligibility
   contact_like: chat.refusal.contact_request
   skip_duty: chat.refusal.filing_advice
+  skip_duty_conditional: chat.refusal.filing_advice
   dramatize: null
 # Words that mark a `professional` plan step as already naming a professional (§8.4). English is
 # always checked; a language section's own `professional_words` are checked on top (word starts
@@ -107,7 +123,7 @@ languages:
     reviewed_by: null
     accredited_rep_patterns:
       - "\\baccredited representative"
-    title_connectors: [and, or, to, the, a, an, of, for, by, about, so, your, with, from, in, on, at, that, asking, you, they, can]
+    title_connectors: [and, or, to, the, a, an, of, for, by, about, so, your, with, from, in, "on", at, that, asking, you, they, can]  # "on" quoted: bare, YAML reads it as true
     families:
       - id: eligibility
         domains: [all]
@@ -146,13 +162,23 @@ languages:
       # Telling the reader not to go to court, a hearing, an interview or an appointment ("If the
       # paper says it is a sample, do not pay or go to court."): never model advice, attributed or
       # not. Only the imperative is caught: "if you do not show up for court, …" (a consequence)
-      # and "Do not pay and do not call the number on this letter." are not.
+      # and "Do not pay and do not call the number on this letter." are not. Nor is a qualifier
+      # later in the sentence ("Do not go to court without your ID.", "… late."), which is good
+      # advice; a condition ("… if you have a fever") goes to `skip_duty_conditional` below.
       - id: skip_duty
         domains: [all]
         skip_when_attributed: false
         patterns:
-          - "(?<!\\byou )(?<!\\bthey )(?<!\\bwe )(?<!\\bi )\\b(do not|don't|never)\\s+(\\w+\\s+or\\s+)?(go|come|show up|appear|attend)\\b(\\W+\\w+){0,3}?\\W+(court|hearing|interview|appointment)s?\\b"
-          - "^(please\\s+)?(skip|ignore)\\s+(the\\s+|your\\s+|this\\s+)?(\\w+\\s+)?(court|hearing|interview|appointment)s?\\b"
+          - "(?<!\\byou )(?<!\\bthey )(?<!\\bwe )(?<!\\bi )\\b(do not|don't|never)\\s+(\\w+\\s+or\\s+)?(go|come|show up|appear|attend)\\b(\\W+\\w+){0,3}?\\W+(court|hearing|interview|appointment)s?\\b(?![^.;!?]*\\b(without|late|if|unless|when|while)\\b)"
+          - "^(please\\s+)?(skip|ignore)\\s+(the\\s+|your\\s+|this\\s+)?(\\w+\\s+)?(court|hearing|interview|appointment)s?\\b(?![^.;!?]*\\b(without|late|if|unless|when|while)\\b)"
+      # The same imperative with a condition after it ("Do not come to court if you have a fever;
+      # call the clerk.") is a jury summons' or a clinic's own printed instruction when attributed
+      # ("The court says …"), so attribution exempts it; unattributed it is model advice.
+      - id: skip_duty_conditional
+        domains: [all]
+        skip_when_attributed: true
+        patterns:
+          - "(?<!\\byou )(?<!\\bthey )(?<!\\bwe )(?<!\\bi )\\b(do not|don't|never)\\s+(\\w+\\s+or\\s+)?(go|come|show up|appear|attend)\\b(\\W+\\w+){0,3}?\\W+(court|hearing|interview|appointment)s?\\b(?![^.;!?]*\\b(without|late)\\b)(?=[^.;!?]*\\b(if|unless|when|while)\\b)"
       - id: dramatize
         domains: [all]
         skip_when_attributed: false

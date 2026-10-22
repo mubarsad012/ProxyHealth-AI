@@ -777,13 +777,14 @@ async def phrase(
     rewrite: phrasing.Rewriter | None,
     stats: PhrasingStats,
     document_type: DocumentType | None = None,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> str:
     """Lint one model-authored string; rewrite once, else hedge (fixed copy never comes here)."""
     if not text or not text.strip():
         return text
     res = await phrasing.enforce(
         text, t=t, category=category, language=language, rewrite=rewrite,
-        document_type=document_type,
+        document_type=document_type, scam_risk=scam_risk,
     )  # fmt: skip
     stats.rewrites += res.replacements
     for w in res.warnings:
@@ -1234,14 +1235,16 @@ async def finish_analysis(
         # prose too, not only the transcript and quotes.
         text = paper.mask(text)
         text = await phrase(scrubber.scrub(text), t=t, language=target, category=category,
-                            rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
+                            rewrite=rewrite, stats=stats, document_type=document_type,
+                            scam_risk=scam_out.scam_risk)  # fmt: skip
         return as_printed(
             prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
         )
 
     def optional(text: str) -> str | None:
         """§11.9: optional prose (a glossary definition, a step that is not the professional
-        one) failing the lint is dropped (``None``), never rewritten."""
+        one and points at no demand) loses each sentence failing the lint (``None`` when none
+        is left), never rewritten; a step tied to a verified demand keeps the rewrite/hedge."""
         kept = phrasing.optional_prose(text, category=category, language=target)
         stats.rewrites += int(kept != text)
         return kept
@@ -1250,7 +1253,8 @@ async def finish_analysis(
         d = d.model_copy(update={"text": paper.mask(d.text),
                                  "documents": [paper.mask(x) for x in d.documents]})  # fmt: skip
         text = await phrase(scrubber.scrub(d.text), t=t, language=target, category=category,
-                            rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
+                            rewrite=rewrite, stats=stats, document_type=document_type,
+                            scam_risk=scam_out.scam_risk)  # fmt: skip
         d = d.model_copy(update={"text": text})
         return d.model_copy(update={
             "text": as_printed(prose_dates.check_demand_text(
@@ -1267,7 +1271,7 @@ async def finish_analysis(
     out.summary_body_en = paper.mask(out.summary_body_en)
     body_en = await phrase(scrub_en.scrub(out.summary_body_en), t=en, language="en",
                            category=category, rewrite=rewrite_en, stats=stats,
-                           document_type=document_type)  # fmt: skip
+                           document_type=document_type, scam_risk=scam_out.scam_risk)  # fmt: skip
     summary = SummaryCard(
         title=await clean(out.summary_title), body=await clean(out.summary_body),
         body_en=as_printed(
@@ -1287,19 +1291,21 @@ async def finish_analysis(
     steps: list[PlanStep] = []
     for step in plan_steps_from(out.plan_steps, paper, demand_ids,
                                 drop_paper_contact_steps=scam_out.is_likely_scam):  # fmt: skip
-        if step.kind is not PlanStepKind.professional:
+        if step.kind is not PlanStepKind.professional and step.demand_id is None:
             if (kept := optional(step.text)) is None:
                 continue
             step = step.model_copy(update={"text": kept})
         text = await clean(step.text)
         # §8.4: a DOJ-accredited representative only where one fits; no copied "Before that date,"
+        # §6.4: on a possible/likely scam no referral sends the reader back to the paper's contact
         text, replaced = phrasing.fit_professional_step(
             text, category=category, document_type=document_type, demand_id=step.demand_id,
-            t=t, language=target,
+            t=t, language=target, scam_risk=scam_out.scam_risk,
         )  # fmt: skip
         stats.rewrites += int(replaced)
         if step.kind is PlanStepKind.professional:
-            text = phrasing.ensure_professional(text, category, t, language=target)
+            text = phrasing.ensure_professional(text, category, t, language=target,
+                                                scam_risk=scam_out.scam_risk)  # fmt: skip
         steps.append(step.model_copy(update={"text": text}))
     glossary = [
         g.model_copy(update={"term_as_written": paper.mask(g.term_as_written),

@@ -16,6 +16,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     ReferTo,
     RefusalKind,
+    ScamRisk,
     WarningCode,
 )
 from proxyhealth_api.settings import DATA_DIR
@@ -595,13 +596,14 @@ def test_skip_duty_leaves_consequences_and_scam_warnings_alone(sentence: str) ->
 
 
 def test_optional_prose_is_dropped_on_a_hit_never_rewritten() -> None:
-    """§11.9: a definition or a non-professional step that fails the lint is dropped; only a
-    dramatizing clause is deleted in place (the rest of the step is still useful)."""
+    """§11.9: a definition or a non-professional step that fails the lint loses the failing
+    sentence (all of it when nothing else is left); only a dramatizing clause is deleted in place
+    (the rest of the step is still useful)."""
     removal = "a decision by the judge that you must leave the country."
     assert ph.optional_prose(removal, category=C.court) is None
     waiver = "Find out if you can get a fee waiver so you do not have to pay for the hearing."
     assert ph.optional_prose(waiver, category=C.court) is None
-    assert ph.optional_prose("Balance due. You owe $312.45.", category=C.tax) is None
+    assert ph.optional_prose("Balance due. You owe $312.45.", category=C.tax) == "Balance due."
     clean = "Extra charges added when taxes are not paid on time."
     assert ph.optional_prose(clean, category=C.tax) == clean
     assert ph.optional_prose("Bring your ID! Arrive early.", category=C.court) == (
@@ -610,8 +612,142 @@ def test_optional_prose_is_dropped_on_a_hit_never_rewritten() -> None:
     assert ph.optional_prose("URGENT!", category=C.court) is None
 
 
+def test_optional_prose_keeps_the_clean_sentences_of_a_step() -> None:
+    """Only the failing sentence goes: the step that tells the reader to go to the hearing stays."""
+    hearing = "Go to your hearing on November 16, 2026."
+    assert ph.optional_prose(f"{hearing} You must pay the fee first.", category=C.immigration) == (
+        hearing
+    )
+    for step in (
+        f"{hearing} Do not go to court without this notice and your ID.",
+        "Bring this notice. Do not come to the interview without your passport.",
+    ):
+        assert ph.optional_prose(step, category=C.immigration) == step
+    assert ph.optional_prose(
+        "You must pay the fee. You must sign the form.", category=C.housing
+    ) is None
+
+
 def test_title_connectors_are_english_plus_the_title_language() -> None:
-    assert {"and", "asking", "you"} <= ph.title_connectors("en")
+    assert {"and", "asking", "you", "on"} <= ph.title_connectors("en")
+    assert "true" not in ph.title_connectors("en")
     es = ph.title_connectors("es-MX")
     assert {"and", "y", "de"} <= es and "و" not in es
     assert "از" in ph.title_connectors("prs")
+
+
+def test_every_yaml_word_list_entry_is_a_string() -> None:
+    """A bare ``on`` is YAML for ``true``: word lists must be quoted, and parsing says so."""
+    data = yaml.safe_load(ph.PHRASING_YAML.read_text(encoding="utf-8"))
+    for tag, section in data["languages"].items():
+        for key in ("professional_words", "title_connectors"):
+            assert all(isinstance(w, str) for w in section.get(key) or []), (tag, key)
+    assert all(isinstance(w, str) for w in data["professional_words"])
+    data["languages"]["en"]["title_connectors"].append(True)
+    with pytest.raises(ValueError, match="en.title_connectors"):
+        ph.parse_config(data)
+
+
+# --- Scam papers: no referral back to the paper's own contact (TAXONOMY §6.4) ------------------
+
+SENDER_REFERRALS = ("chat.refer.sender", "chat.refer.benefits_office")
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+@pytest.mark.parametrize("category", list(C))
+def test_no_category_refers_a_scam_reader_to_the_sender(
+    category: DocumentCategory, risk: ScamRisk
+) -> None:
+    assert ph.refer_to_for(category, scam_risk=risk) not in (
+        ReferTo.sender, ReferTo.benefits_office
+    )
+    assert "sent this paper" not in ph.professional_for(category, scam_risk=risk)
+
+
+def test_without_a_scam_score_the_referrals_are_unchanged() -> None:
+    assert ph.refer_to_for(C.tax) is ReferTo.sender
+    assert ph.refer_to_for(C.benefits, scam_risk=ScamRisk.none) is ReferTo.benefits_office
+    assert ph.professional_for(C.benefits) == "the office that sent this paper"
+    assert ph.refer_to_for(C.medical, scam_risk=ScamRisk.likely) is ReferTo.clinician
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+@pytest.mark.parametrize("category", [C.tax, C.other, C.school, C.benefits])
+def test_a_doj_step_on_a_scam_paper_never_points_to_the_sender(
+    category: DocumentCategory, risk: ScamRisk
+) -> None:
+    """irs_cp_notice replay (scam likely, tax): the swap gave "Ask the sender. Their contact is on
+    the paper." — the scammer. The lawyer referral (Get help) takes its place."""
+    t = en_t()
+    step = "Talk to a licensed lawyer or a DOJ-accredited representative before you pay anyone."
+    text, replaced = ph.fit_professional_step(
+        step, category=category, document_type=None, demand_id=None, t=t, scam_risk=risk
+    )
+    assert replaced and text == t("chat.refer.lawyer_or_accredited_rep")
+    assert all(t(k) not in text for k in SENDER_REFERRALS)
+    bare = ph.ensure_professional("Get help before you do anything.", category, t, scam_risk=risk)
+    assert bare.endswith(t("chat.refer.lawyer_or_accredited_rep"))
+    assert all(t(k) not in bare for k in SENDER_REFERRALS)
+
+
+def test_a_step_naming_the_doj_as_an_agency_is_not_a_representative() -> None:
+    t = en_t()
+    warning = "Do not pay. The DOJ and the IRS never ask for gift cards."
+    assert not ph.names_accredited_rep(warning)
+    assert ph.fit_professional_step(
+        warning, category=C.tax, document_type=None, demand_id=None, t=t,
+        scam_risk=ScamRisk.likely,
+    ) == (warning, False)  # fmt: skip
+    for named in (
+        "a DOJ-accredited representative", "a DOJ accredited rep",
+        "a representative accredited by the DOJ", "un representante acreditado por el DOJ",
+    ):
+        assert ph.names_accredited_rep(named, language="es"), named
+
+
+@pytest.mark.asyncio
+async def test_the_rewrite_template_never_names_the_sender_on_a_scam() -> None:
+    asked: list[str] = []
+
+    async def rewrite(sentence: str, professional: str) -> str | None:
+        asked.append(professional)
+        return None
+
+    for risk in (ScamRisk.none, ScamRisk.possible):
+        await ph.enforce(
+            "You must pay the fee.", t=en_t(), category=C.benefits, rewrite=rewrite,
+            scam_risk=risk,
+        )  # fmt: skip
+    assert asked == ["the office that sent this paper", "a licensed lawyer"]
+
+
+# --- skip_duty: qualifiers and printed conditions ----------------------------------------------
+
+SKIP_FAMILIES = {"skip_duty", "skip_duty_conditional"}
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Do not go to court without your ID.",
+        "Do not go to the court hearing without this notice.",
+        "Do not come to the interview without your passport.",
+        "Never go to court late.",
+        "The court says do not come to court if you have a fever; call the clerk.",
+        "The letter says do not come to the appointment if you are sick.",
+    ],
+)
+def test_skip_duty_spares_qualifiers_and_attributed_conditions(sentence: str) -> None:
+    assert not SKIP_FAMILIES & set(ph.lint_sentence(sentence, category=C.civic)), sentence
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Do not go to the hearing if you are sick.",
+        "Don't come to court unless the clerk calls you.",
+    ],
+)
+def test_an_unattributed_condition_to_skip_is_still_caught(sentence: str) -> None:
+    assert "skip_duty_conditional" in ph.lint_sentence(sentence, category=C.civic), sentence
+    assert ph.hedge_key(["skip_duty_conditional"]) == "chat.refusal.filing_advice"
