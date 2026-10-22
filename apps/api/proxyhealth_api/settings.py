@@ -29,7 +29,9 @@ production`` refuses it; ``OPENAI_COMPAT_DATA_TIER=local`` needs a loopback base
 ``OPENAI_COMPAT_NO_TRAINING_ATTESTED=1`` and a host off ``ATTESTED_HOST_DENYLIST``; ``unpaid``
 (the default) needs ``OPENAI_COMPAT_VENDOR_NAME`` and behaves like Gemini ``unpaid`` (samples only).
 ``FAILOVER_DEADLINE_S`` must be at least ``OPENAI_COMPAT_TIMEOUT_S + 10``; left unset, it is raised
-to that value. The Gemini model-id rules never apply to ``OPENAI_COMPAT_MODEL_*``.
+to that value. The Gemini model-id rules never apply to ``OPENAI_COMPAT_MODEL_*``. Unset (or
+blank) ``OPENAI_COMPAT_TIMEOUT_S`` / ``_CONCURRENCY`` / ``_MAX_OUTPUT_TOKENS`` / ``_MAX_IMAGES``
+take a loopback or hosted default: 300/90 s, 1/4 calls, 4096/6144 tokens, 2/12 pages.
 
 The EEA/Switzerland/UK rule (D-03: every key ``billing:true``) is documentation only — the
 server does not geolocate users; see ``.env.example``.
@@ -112,6 +114,15 @@ OPENAI_COMPAT_LOOPBACK_TIMEOUT_S = 300
 OPENAI_COMPAT_HOSTED_TIMEOUT_S = 90
 OPENAI_COMPAT_LOOPBACK_CONCURRENCY = 1
 OPENAI_COMPAT_HOSTED_CONCURRENCY = 4
+# LOCAL_AI.md §5: a 4B model on this Mac reads a page in ≈ 34 s, then writes ≈ 19 tokens/s, so a
+# runaway reply must stop at the output cap (finish_reason ``length`` → the incomplete path) well
+# before the 300 s timeout: 4096 tokens end at ≈ 250 s; 6144 would need ≈ 355 s.
+OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS = 4096
+OPENAI_COMPAT_HOSTED_MAX_OUTPUT_TOKENS = 6144
+# ≈ 70 s per extra page on loopback and ≈ 3,000 context tokens per page: 3 pages outlast the 300 s
+# timeout and more than 4 overflow a 16384 context. Hosted endpoints keep the D-21 page count.
+OPENAI_COMPAT_LOOPBACK_MAX_IMAGES = 2
+OPENAI_COMPAT_HOSTED_MAX_IMAGES = 12
 
 OpenAICompatTier = Literal["local", "attested", "unpaid"]
 OpenAICompatJsonMode = Literal["auto", "json_schema", "json_object", "prompt"]
@@ -201,8 +212,9 @@ class Settings(BaseSettings):
     # omit: never send the field (endpoints that reject it).
     openai_compat_reasoning: Literal["none", "mapped", "omit"] = "none"
     openai_compat_timeout_s: int | None = Field(default=None, ge=1)  # 300 loopback / 90 hosted
-    openai_compat_max_output_tokens: int = Field(default=6144, ge=256)
-    openai_compat_max_images: int = Field(default=12, ge=1)
+    # 4096 loopback / 6144 hosted
+    openai_compat_max_output_tokens: int | None = Field(default=None, ge=256)
+    openai_compat_max_images: int | None = Field(default=None, ge=1)  # 2 loopback / 12 hosted
     openai_compat_concurrency: int | None = Field(default=None, ge=1)  # 1 loopback / 4 hosted
     translate_full_max_pages: int = Field(default=4, ge=0)
     rpd_soft_cap_pro: int = Field(default=0, ge=0)
@@ -276,7 +288,10 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_COMPAT_MODEL_PRO/_FAST must not be empty")
         return value
 
-    @field_validator("openai_compat_timeout_s", "openai_compat_concurrency", mode="before")
+    @field_validator(
+        "openai_compat_timeout_s", "openai_compat_concurrency", "openai_compat_max_output_tokens",
+        "openai_compat_max_images", mode="before",
+    )  # fmt: skip
     @classmethod
     def _blank_is_default(cls, value: object) -> object:
         """``OPENAI_COMPAT_TIMEOUT_S=`` (blank) means "use the loopback/hosted default"."""
@@ -504,6 +519,26 @@ class Settings(BaseSettings):
         if self.openai_compat_is_loopback:
             return OPENAI_COMPAT_LOOPBACK_CONCURRENCY
         return OPENAI_COMPAT_HOSTED_CONCURRENCY
+
+    @property
+    def openai_compat_output_cap(self) -> int:
+        """``OPENAI_COMPAT_MAX_OUTPUT_TOKENS``, else 4096 on a loopback host and 6144 otherwise
+        (the loopback cap is reached before the loopback timeout; LOCAL_AI.md §5)."""
+        if self.openai_compat_max_output_tokens is not None:
+            return self.openai_compat_max_output_tokens
+        if self.openai_compat_is_loopback:
+            return OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS
+        return OPENAI_COMPAT_HOSTED_MAX_OUTPUT_TOKENS
+
+    @property
+    def openai_compat_image_cap(self) -> int:
+        """``OPENAI_COMPAT_MAX_IMAGES``, else 2 pages per call on a loopback host and 12 otherwise
+        (``/v1/config`` lowers ``limits.max_pages`` / ``max_pdf_pages`` to it)."""
+        if self.openai_compat_max_images is not None:
+            return self.openai_compat_max_images
+        if self.openai_compat_is_loopback:
+            return OPENAI_COMPAT_LOOPBACK_MAX_IMAGES
+        return OPENAI_COMPAT_HOSTED_MAX_IMAGES
 
     @property
     def active_model_pro(self) -> str:

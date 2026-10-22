@@ -1,6 +1,7 @@
 """``AI_PROVIDER=openai_compat`` settings and boot rules (free-ai-providers §4.2, §4.5, §4.6, §5.2):
 loopback-only ``local``, production refusal, ``attested`` requirements and host denylist, the
-``unpaid`` gate, deadline/timeout defaults, active model ids and the client time limits."""
+``unpaid`` gate, deadline/timeout/output-cap/page-cap defaults, active model ids and the client
+time limits."""
 
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from proxyhealth_api.contracts.enums import DataUseTier, Provider, ThinkingLevel
 from proxyhealth_api.main import create_app
 from proxyhealth_api.settings import (
     ATTESTED_HOST_DENYLIST,
+    OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS,
+    OPENAI_COMPAT_LOOPBACK_TIMEOUT_S,
     Settings,
     host_is_denylisted,
     is_loopback_host,
@@ -253,6 +256,58 @@ def test_blank_timeout_and_concurrency_mean_the_default(
     monkeypatch.setenv("OPENAI_COMPAT_CONCURRENCY", " ")
     s = Settings(_env_file=None, var_dir=tmp_path)
     assert s.openai_compat_timeout_s is None and s.openai_compat_concurrency is None
+
+
+def hosted_unpaid(tmp_path: Path, **overrides: object) -> Settings:
+    return compat(
+        tmp_path, openai_compat_data_tier="unpaid", openai_compat_vendor_name="Groq",
+        openai_compat_base_url="https://api.groq.com/openai/v1", openai_compat_api_key=KEY,
+        **overrides,
+    )  # fmt: skip
+
+
+def test_output_cap_defaults_4096_on_loopback_6144_hosted(tmp_path: Path) -> None:
+    assert compat(tmp_path).openai_compat_output_cap == OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS
+    assert OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS == 4096
+    assert hosted_unpaid(tmp_path).openai_compat_output_cap == 6144
+
+
+def test_explicit_output_cap_wins_and_blank_means_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert compat(tmp_path, openai_compat_max_output_tokens=3000).openai_compat_output_cap == 3000
+    assert hosted_unpaid(
+        tmp_path, openai_compat_max_output_tokens=8192
+    ).openai_compat_output_cap == 8192  # fmt: skip
+    assert "openai_compat_max_output_tokens" in refused(
+        tmp_path, openai_compat_max_output_tokens=100
+    )  # still ≥ 256
+    monkeypatch.setenv("OPENAI_COMPAT_MAX_OUTPUT_TOKENS", "")
+    monkeypatch.setenv("OPENAI_COMPAT_MAX_IMAGES", " ")
+    s = Settings(_env_file=None, var_dir=tmp_path)
+    assert s.openai_compat_max_output_tokens is None and s.openai_compat_max_images is None
+
+
+def test_image_cap_defaults_2_loopback_12_hosted_explicit_wins(tmp_path: Path) -> None:
+    assert compat(tmp_path).openai_compat_image_cap == 2
+    assert hosted_unpaid(tmp_path).openai_compat_image_cap == 12
+    assert compat(tmp_path, openai_compat_max_images=3).openai_compat_image_cap == 3
+    assert hosted_unpaid(tmp_path, openai_compat_max_images=2).openai_compat_image_cap == 2
+
+
+# LOCAL_AI.md §5, measured on the 2026-10-22 sweep (qwen3.5:4b, fanless M4, one page): every
+# analyze call read the page in ≈ 34 s, then wrote ≈ 19.2 tokens/s.
+MEASURED_PREFILL_S = 34.0
+MEASURED_TOK_S = 19.2
+
+
+def test_loopback_cap_fits_loopback_timeout_at_measured_rate() -> None:
+    """A runaway reply must hit the output cap (→ incomplete → two_call) with room to spare
+    before the call times out, so the two loopback defaults cannot drift apart."""
+    ends_at = MEASURED_PREFILL_S + OPENAI_COMPAT_LOOPBACK_MAX_OUTPUT_TOKENS / MEASURED_TOK_S
+    assert ends_at <= OPENAI_COMPAT_LOOPBACK_TIMEOUT_S - 30
+    hosted_cap_at_local_speed = MEASURED_PREFILL_S + 6144 / MEASURED_TOK_S
+    assert hosted_cap_at_local_speed > OPENAI_COMPAT_LOOPBACK_TIMEOUT_S  # why loopback differs
 
 
 def test_client_timeouts_cover_the_server_budget_on_openai_compat(tmp_path: Path) -> None:

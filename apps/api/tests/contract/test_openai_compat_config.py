@@ -114,6 +114,14 @@ async def test_config_on_the_local_tier(tmp_path: Path) -> None:
         assert (health.keys_configured, health.keys_healthy, health.status) == (1, 1, "ok")
 
 
+async def test_local_tier_limits_default_to_two_pages(tmp_path: Path) -> None:
+    # LOCAL_AI.md §5: a third page outlasts the 300 s call on this hardware, so the app refuses it
+    # up front (err.too_many_pages) instead of waiting five minutes for a timeout.
+    async with serving(compat(tmp_path)) as (_app, client):
+        cfg = ServerConfig.model_validate((await client.get("/v1/config")).json())
+        assert (cfg.limits.max_pages, cfg.limits.max_pdf_pages) == (2, 2)
+
+
 @pytest.mark.parametrize(("tier", "allowed"), [("attested", True), ("unpaid", False)])
 async def test_config_on_the_hosted_tiers(tmp_path: Path, tier: str, allowed: bool) -> None:
     async with serving(compat(tmp_path, tier)) as (_app, client):
@@ -122,6 +130,8 @@ async def test_config_on_the_hosted_tiers(tmp_path: Path, tier: str, allowed: bo
         assert cfg.data_use_tier == tier and r.headers["X-Data-Use-Tier"] == tier
         assert cfg.ai_vendor_name == "Groq"
         assert cfg.features.real_documents_allowed is allowed and cfg.features.chat is allowed
+        pages = 12 if tier == "attested" else 2  # this ``unpaid`` keeps the loopback base URL
+        assert (cfg.limits.max_pages, cfg.limits.max_pdf_pages) == (pages, pages)
 
 
 async def test_config_defaults_for_mock_and_gemini(
@@ -188,3 +198,20 @@ async def test_local_tier_when_ollama_is_down_is_a_content_free_503(tmp_path: Pa
         assert r.status_code == 503 and r.headers["Retry-After"] == "30"
         assert r.json()["error"]["code"] == "provider_not_configured"
         assert r.json()["error"]["message"] == "Local AI server is not running."
+
+
+async def test_local_analyze_timeout_envelope(tmp_path: Path) -> None:
+    def too_slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out")
+
+    async with running(compat(tmp_path)) as (app, client):
+        app.state.provider._client = httpx.AsyncClient(transport=httpx.MockTransport(too_slow))
+        r = await client.post("/v1/analyze", json=demo_body(SAMPLE))
+        assert r.status_code == 503
+        error = r.json()["error"]
+        assert (error["code"], error["user_message_key"]) == (
+            "upstream_unavailable", "err.ai_too_slow",
+        )  # fmt: skip
+        assert error["details"] == {"reason": "ai_timeout", "timeout_s": 300}
+        # API_CONTRACT §0.1: every 503 carries Retry-After; the copy itself names no wait.
+        assert error["retry_after_seconds"] == 30 and r.headers["Retry-After"] == "30"

@@ -42,9 +42,10 @@ async def config(
     resources: Annotated[ResourceRepo, Depends(get_resources)],
     rules: Annotated[RulesRepo, Depends(get_rules)],
 ) -> ServerConfig:
-    # openai_compat sends at most OPENAI_COMPAT_MAX_IMAGES pages per call (free-ai-providers §4.8).
+    # openai_compat sends at most OPENAI_COMPAT_MAX_IMAGES pages per call (free-ai-providers §4.8;
+    # 2 on loopback, LOCAL_AI.md §5), so the app refuses a third page before any upload.
     image_cap = (
-        settings.openai_compat_max_images
+        settings.openai_compat_image_cap
         if settings.ai_provider == "openai_compat"
         else max(settings.max_pages, settings.max_pdf_pages)
     )

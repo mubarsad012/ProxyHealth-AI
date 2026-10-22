@@ -41,6 +41,7 @@ from proxyhealth_api.ai.failover import AIService, GenerateOutcome, SchemaFallba
 from proxyhealth_api.ai.provider import Part, Task
 from proxyhealth_api.analysis import (
     clerk,
+    compat_runtime,
     contacts_filter,
     deadline_rules,
     disclaimers,
@@ -303,6 +304,8 @@ class RewriteBudget:
 
     remaining: int = MAX_REWRITE_CALLS
     calls: int = 0
+    # openai_compat: one rewrite per (base language, sentence, professional) per request.
+    memo: dict[compat_runtime.MemoKey, str | None] = field(default_factory=dict)
 
 
 def make_rewriter(
@@ -338,6 +341,8 @@ def make_rewriter(
         parsed = outcome.result.parsed
         return parsed.sentence if isinstance(parsed, RewriteOut) else None
 
+    if deps.settings.ai_provider == "openai_compat":  # ≈ 5 s per local call (LOCAL_AI.md §5)
+        return compat_runtime.memoised(rewrite, budget.memo, language=language)
     return rewrite
 
 
@@ -640,6 +645,9 @@ async def read_paper(
                     "The AI service could not read this paper in one step.",
                     details={"reason": str(exc)[:40]},
                 ) from exc  # fmt: skip
+            compat_runtime.check_fallback_budget(
+                deps.ai, deadline_at, request_id=deps.request_id, reason=str(exc)
+            )
             log_event(
                 request_id=deps.request_id, route="analysis.mode_fallback",
                 analysis_mode=AnalysisMode.two_call.value, error_code="schema_fallback",
@@ -1154,6 +1162,10 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         today=ctx.today, t=t, unverified=checked.unverified,
     )  # fmt: skip
     code_flags.extend(urg.red_flags)
+    # openai_compat: a paper already in the reader's language is its own translation.
+    out = compat_runtime.same_language_pages(
+        deps.settings, out, paper, detected=detected, target=req.target_language
+    )
 
     return await finish_analysis(
         rc, out, outcome, reading.mode, paper=paper, quality=quality, warnings=warnings,

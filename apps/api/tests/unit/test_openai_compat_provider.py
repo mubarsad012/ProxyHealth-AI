@@ -28,6 +28,7 @@ from proxyhealth_api.ai.openai_compat import (
     strip_to_json,
 )
 from proxyhealth_api.ai.provider import Part, StructuredResult, Task
+from proxyhealth_api.ai.routing import route
 from proxyhealth_api.contracts.enums import DataUseTier, ErrorCode, ModelTier, ThinkingLevel
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, RewriteOut, TaggingModelOut
 from proxyhealth_api.errors import ApiError
@@ -190,7 +191,7 @@ async def test_request_shape_text_before_images_and_no_sampling_beyond_temperatu
     assert req.method == "POST" and str(req.url) == "http://127.0.0.1:11434/v1/chat/completions"
     assert "authorization" not in req.headers  # no key configured → no header
     assert body["model"] == "qwen3.5:4b" and body["stream"] is False
-    assert body["temperature"] == 0 and body["max_tokens"] == 6144  # OPENAI_COMPAT cap
+    assert body["temperature"] == 0 and body["max_tokens"] == 4096  # loopback OPENAI_COMPAT cap
     assert body["reasoning_effort"] == "none"
     assert not {"top_p", "top_k", "n", "seed", "think", "num_ctx"} & set(body)
     system, user = body["messages"]
@@ -240,6 +241,23 @@ async def test_thinking_flag(
     server = FakeServer(ok())
     await call(provider(compat(tmp_path, openai_compat_reasoning=mode), server), thinking=thinking)
     assert server.bodies[0].get("reasoning_effort") == expected
+
+
+@pytest.mark.parametrize(
+    ("task", "expected"), [(Task.analyze_single, 4096), (Task.phrasing_rewrite, 256)]
+)
+async def test_analyze_max_tokens_capped_at_4096_on_loopback(
+    tmp_path: Path, task: Task, expected: int
+) -> None:
+    settings = compat(tmp_path)
+    cap = route(task, pages=1, is_pdf=False, degraded=False, settings=settings).max_output_tokens
+    server = FakeServer(ok())
+    await call(provider(settings, server), task=task, max_output_tokens=cap)
+    assert server.bodies[0]["max_tokens"] == expected
+    hosted_server = FakeServer(ok())
+    await call(provider(hosted(tmp_path, "api.groq.com"), hosted_server),
+               task=Task.analyze_single, max_output_tokens=16384)  # fmt: skip
+    assert hosted_server.bodies[0]["max_tokens"] == 6144
 
 
 def test_httpx_timeouts_follow_section_4_6(tmp_path: Path) -> None:
@@ -491,6 +509,81 @@ async def test_unprocessable_maps_to_400(tmp_path: Path) -> None:
     assert info.value.status_code == 400
 
 
+# ---------------------------------------------------------------- timeouts and a busy slot
+
+
+async def test_read_timeout_is_content_free_503_ai_too_slow(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    server = FakeServer(httpx.ReadTimeout(f"read timed out {MARKER}"))
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(ApiError) as info:
+            await call(provider(compat(tmp_path), server), task=Task.analyze_single,
+                       parts=[Part.of_text(f"paper {MARKER}")])  # fmt: skip
+    err = info.value
+    assert (err.status, err.code, err.user_message_key) == (
+        503, ErrorCode.upstream_unavailable, "err.ai_too_slow",
+    )  # fmt: skip
+    assert err.retry_after is None  # a retry at temperature 0 takes as long again
+    assert err.details == {"reason": "ai_timeout", "timeout_s": 300}
+    assert MARKER not in err.message and MARKER not in caplog.text
+
+
+async def test_timeouts_on_other_tasks_keep_the_generic_copy(tmp_path: Path) -> None:
+    server = FakeServer(httpx.ReadTimeout("slow"))
+    with pytest.raises(ApiError) as info:
+        await call(provider(compat(tmp_path), server), task=Task.chat)
+    assert info.value.user_message_key == "err.upstream_unavailable"
+    assert info.value.details is not None and info.value.details["reason"] == "ai_timeout"
+
+
+async def test_semaphore_wait_timeout_is_ai_busy(tmp_path: Path) -> None:
+    server = FakeServer(ok())
+    p = provider(compat(tmp_path), server)
+    p._timeout_s = 0.05  # the whole call budget, queue wait included
+    await p._semaphore.acquire()  # another paper holds the one loopback slot
+    try:
+        with pytest.raises(ApiError) as info:
+            await call(p, task=Task.analyze_single)
+    finally:
+        p._semaphore.release()
+    err = info.value
+    assert (err.status, err.user_message_key, err.retry_after) == (503, "err.ai_busy", 60)
+    assert err.details is not None and err.details["reason"] == "ai_busy"
+    assert not server.bodies
+
+
+async def test_timeout_after_a_long_queue_wait_is_ai_busy(tmp_path: Path) -> None:
+    now = [0.0]
+    p = provider(compat(tmp_path), FakeServer(httpx.ReadTimeout("slow")), clock=lambda: now[0])
+    await p._semaphore.acquire()
+    pending = asyncio.ensure_future(call(p, task=Task.analyze_single))
+    await asyncio.sleep(0)  # queued behind the other call
+    now[0] = 200.0  # the other paper held the slot for 200 s of this call's 300 s
+    p._semaphore.release()
+    with pytest.raises(ApiError) as info:
+        await pending
+    assert info.value.user_message_key == "err.ai_busy"
+    assert info.value.details == {"reason": "ai_busy", "waited_s": 200}
+
+
+async def test_trickling_endpoint_cannot_outlast_the_call_budget(tmp_path: Path) -> None:
+    async def trickle() -> Any:
+        while True:
+            await asyncio.sleep(0.2)
+            yield b" "
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=trickle())
+
+    p = provider(compat(tmp_path, openai_compat_timeout_s=1), FakeServer(handler))
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(ApiError) as info:
+        await call(p, task=Task.analyze_single)
+    assert asyncio.get_running_loop().time() - started < 1.8
+    assert info.value.user_message_key == "err.ai_too_slow"
+
+
 # ------------------------------------------------------- failover + one synthetic slot (§4.7)
 
 
@@ -632,7 +725,7 @@ async def test_pdf_is_rasterised_to_png_pages_in_order_and_never_sent_as_pdf(
 ) -> None:
     server = FakeServer(ok())
     parts = [Part.of_text("read"), Part.of_bytes(pdf(3), "application/pdf")]
-    await call(provider(compat(tmp_path), server), parts=parts)
+    await call(provider(compat(tmp_path, openai_compat_max_images=3), server), parts=parts)
     urls = image_urls(server.bodies[0])
     assert len(urls) == 3 and all(u.startswith("data:image/png;base64,") for u in urls)
     assert max(decoded_size(urls[0])) == 1600
@@ -658,6 +751,20 @@ async def test_images_over_the_cap_are_too_many_pages(tmp_path: Path) -> None:
         await call(p, parts=[Part.of_bytes(png(), "image/png") for _ in range(3)])
     assert (info.value.status, info.value.code) == (400, ErrorCode.too_many_pages)
     assert not server.bodies
+
+
+async def test_a_third_page_on_loopback_is_too_many_pages_by_default(tmp_path: Path) -> None:
+    server = FakeServer(ok())
+    with pytest.raises(ApiError) as info:
+        await call(provider(compat(tmp_path), server),
+                   parts=[Part.of_bytes(png(), "image/png") for _ in range(3)])  # fmt: skip
+    assert (info.value.status, info.value.code) == (400, ErrorCode.too_many_pages)
+    assert info.value.details == {"max_pages": 2, "pages": 3}
+    assert not server.bodies
+    hosted_server = FakeServer(ok())
+    await call(provider(hosted(tmp_path, "openrouter.ai"), hosted_server),
+               parts=[Part.of_bytes(png(), "image/png") for _ in range(3)])  # fmt: skip
+    assert len(image_urls(hosted_server.bodies[0])) == 3
 
 
 async def test_small_pages_pass_through_and_large_ones_are_downscaled(tmp_path: Path) -> None:

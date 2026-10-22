@@ -4,6 +4,7 @@ the openai_compat provider's client is pointed at an ``httpx.MockTransport``."""
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -134,6 +135,72 @@ def test_provider_check_fails_when_the_model_is_unusable(
     fake_provider(check, monkeypatch, down)
     assert check.main([]) == 1
     assert "FAILED (503 provider_not_configured)" in capsys.readouterr().out
+
+
+# (output tokens, latency ms) of the 16 analyze calls of the 2026-10-22 local sweep
+# (qwen3.5:4b on a fanless M4, one page each): ≈ 34 s page read, then ≈ 19 tokens/s.
+SWEEP_ANALYZE_CALLS = [
+    (636, 62728), (2671, 171317), (2406, 164870), (2371, 163815), (2429, 162998),
+    (1945, 109096), (2856, 192231), (1894, 128296), (2197, 205374), (1307, 111031),
+    (3011, 148760), (1994, 112422), (2455, 182361), (2468, 145739), (2885, 196603),
+    (1353, 98937),
+]  # fmt: skip
+
+
+def sweep_runs(check: ModuleType) -> list[Any]:
+    calls = [
+        check.Call(task="analyze_single", json_mode="json_schema", repaired=False, parsed=True,
+                   incomplete=False, blocked=False, input_tokens=4981, output_tokens=tokens,
+                   latency_ms=ms)
+        for tokens, ms in SWEEP_ANALYZE_CALLS
+    ]  # fmt: skip
+    return [check.PaperRun(paper=f"p{i}", ok=True, calls=[c]) for i, c in enumerate(calls)]
+
+
+def test_speed_warning_when_cap_outlasts_timeout(
+    check: ModuleType, tmp_path: Path
+) -> None:
+    runs = sweep_runs(check)
+    speed = check.measure_speed(runs)
+    assert speed is not None and speed.calls == 16
+    assert 30 < speed.page_read_s < 40 and 17 < 1 / speed.s_per_token < 22
+    old_cap = make_settings(
+        tmp_path, ai_provider="openai_compat", openai_compat_data_tier="local",
+        openai_compat_model_label="Qwen", openai_compat_max_output_tokens=6144,
+    )  # fmt: skip
+    warning = check.speed_warning(old_cap, speed)
+    assert warning is not None and "OPENAI_COMPAT_MAX_OUTPUT_TOKENS=6144" in warning
+    suggested = int(warning.split("set OPENAI_COMPAT_MAX_OUTPUT_TOKENS=")[1].split(" ")[0])
+    assert 4300 < suggested < 4800
+    # Content-free: setting names and numbers only.
+    assert set(re.findall(r"[A-Z][A-Z_]{5,}", warning)) == {
+        "OPENAI_COMPAT_TIMEOUT_S", "OPENAI_COMPAT_MAX_OUTPUT_TOKENS", "FAILOVER_DEADLINE_S",
+        "LOCAL_AI",
+    }  # fmt: skip
+    default = make_settings(tmp_path, ai_provider="openai_compat",
+                            openai_compat_data_tier="local", openai_compat_model_label="Qwen")
+    assert default.openai_compat_output_cap == 4096
+    assert check.speed_warning(default, speed) is None  # 4096 ends at ≈ 250 s of 300
+    hosted = make_settings(
+        tmp_path, ai_provider="openai_compat", openai_compat_vendor_name="Groq",
+        openai_compat_base_url="https://api.groq.com/openai/v1", openai_compat_api_key="sk-t",
+    )  # fmt: skip
+    assert check.speed_warning(hosted, speed) is None
+    assert check.speed_warning(make_settings(tmp_path), speed) is None  # mock
+    one = check.measure_speed(runs[:1])  # one call: the page read is taken as 35 s
+    assert one is not None and one.page_read_s == check.DEFAULT_PAGE_READ_S
+
+
+def test_provider_check_prints_the_measured_speed(
+    check: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    local_env(monkeypatch)
+    fake_provider(check, monkeypatch, FakeModel())
+    assert check.main(["--json"]) == 0
+    raw = capsys.readouterr().out
+    report = json.loads(raw[raw.index("{\n"):])
+    assert (report["max_output_tokens"], report["max_images"]) == (4096, 2)
+    assert "speed" in report and "speed_warning" in report
 
 
 # ----------------------------------------------------------------- spike_schema + eval_golden

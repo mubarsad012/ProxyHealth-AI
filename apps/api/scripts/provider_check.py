@@ -5,7 +5,10 @@ pipeline (``run_analysis``) with the provider configured in ``apps/api/.env`` �
 ``AI_PROVIDER=openai_compat`` against a local Ollama/LM Studio — and prints, per paper: whether
 the output passed schema validation (and in which analysis mode), verified and rejected facts,
 latency, and which structured-output mode the endpoint accepted (``json_schema``,
-``json_object`` or ``prompt``; ``+repair`` when the one repair retry was needed).
+``json_object`` or ``prompt``; ``+repair`` when the one repair retry was needed). On a loopback
+``openai_compat`` endpoint it also fits this machine's speed (page read in seconds, then tokens
+per second) and warns when a runaway reply would hit ``OPENAI_COMPAT_TIMEOUT_S`` before
+``OPENAI_COMPAT_MAX_OUTPUT_TOKENS`` (LOCAL_AI.md §5), naming a cap that fits.
 
     apps/api/.venv/bin/python apps/api/scripts/provider_check.py [--fixture ID ...] [--lang TAG]
         [--image PATH] [--json]
@@ -61,6 +64,12 @@ REAL_PAPER_TIERS = frozenset({DataUseTier.local, DataUseTier.attested})
 # was probably cut short.
 OLLAMA_DEFAULT_CONTEXT = 4096
 CONTEXT_WARN_FROM = 3900
+# LOCAL_AI.md §5: latency ≈ page read + output tokens / decode speed, fitted on the page-reading
+# calls. With one call the page read is taken as DEFAULT_PAGE_READ_S (≈ 34 s measured on an M4).
+SPEED_TASKS = frozenset({"analyze_single", "transcribe"})
+DEFAULT_PAGE_READ_S = 35.0
+TIMEOUT_SLACK_S = 10  # the cap must be reached at least this long before the timeout
+CAP_MARGIN_S = 30  # the suggested cap ends this long before the timeout
 
 
 @dataclass
@@ -177,6 +186,65 @@ def context_warning(settings: Settings, runs: Sequence[PaperRun]) -> str | None:
     )
 
 
+@dataclass(frozen=True)
+class Speed:
+    """This machine's measured speed: ``latency_s ≈ page_read_s + tokens * s_per_token``."""
+
+    page_read_s: float
+    s_per_token: float
+    calls: int
+
+    def report(self) -> dict[str, float | int]:
+        return {
+            "page_read_s": round(self.page_read_s, 1),
+            "decode_tok_s": round(1 / self.s_per_token, 1),
+            "calls": self.calls,
+        }
+
+
+def measure_speed(runs: Sequence[PaperRun]) -> Speed | None:
+    """Least-squares fit over the repair-free page-reading calls; ``None`` when nothing usable
+    was measured."""
+    points = [
+        (float(c.output_tokens), c.latency_ms / 1000)
+        for r in runs for c in r.calls
+        if c.task in SPEED_TASKS and c.output_tokens > 0 and not c.repaired
+    ]  # fmt: skip
+    if not points:
+        return None
+    xs = [x for x, _ in points]
+    if len(set(xs)) >= 2:
+        mx, my = sum(xs) / len(xs), sum(y for _, y in points) / len(points)
+        slope = sum((x - mx) * (y - my) for x, y in points) / sum((x - mx) ** 2 for x in xs)
+        intercept = my - slope * mx
+    else:
+        intercept = DEFAULT_PAGE_READ_S
+        slope = sum((y - intercept) / x for x, y in points) / len(points)
+    if slope <= 0:
+        return None
+    return Speed(max(intercept, 0.0), slope, len(points))
+
+
+def speed_warning(settings: Settings, speed: Speed | None) -> str | None:
+    """Loopback ``openai_compat`` only: the output cap must be reached before the timeout, so a
+    runaway reply ends as ``incomplete`` (→ the two-call fallback), not as a 503 that a retry at
+    temperature 0 repeats. Numbers and setting names only."""
+    if settings.ai_provider != "openai_compat" or not settings.openai_compat_is_loopback:
+        return None
+    if speed is None:
+        return None
+    cap, timeout = settings.openai_compat_output_cap, settings.openai_compat_timeout
+    if speed.page_read_s + cap * speed.s_per_token <= timeout - TIMEOUT_SLACK_S:
+        return None
+    safe = int((timeout - speed.page_read_s - CAP_MARGIN_S) / speed.s_per_token)
+    return (
+        f"a runaway reply would hit OPENAI_COMPAT_TIMEOUT_S={timeout} before "
+        f"OPENAI_COMPAT_MAX_OUTPUT_TOKENS={cap} at this speed; set "
+        f"OPENAI_COMPAT_MAX_OUTPUT_TOKENS={max(safe, 256)} or lower, or raise "
+        "OPENAI_COMPAT_TIMEOUT_S and FAILOVER_DEADLINE_S (LOCAL_AI.md §5)."
+    )
+
+
 def header(settings: Settings) -> dict[str, Any]:
     head: dict[str, Any] = {
         "provider": settings.provider.value,
@@ -190,11 +258,16 @@ def header(settings: Settings) -> dict[str, Any]:
             "json_mode_setting": settings.openai_compat_json_mode,
             "reasoning": settings.openai_compat_reasoning,
             "timeout_s": settings.openai_compat_timeout,
+            "max_output_tokens": settings.openai_compat_output_cap,
+            "max_images": settings.openai_compat_image_cap,
         }
     return head
 
 
-def print_text(head: dict[str, Any], runs: Sequence[PaperRun], warning: str | None) -> None:
+def print_text(
+    head: dict[str, Any], runs: Sequence[PaperRun], warnings: Sequence[str],
+    speed: Speed | None = None,
+) -> None:  # fmt: skip
     print(" ".join(f"{k}={v}" for k, v in head.items()))
     for r in runs:
         status = "ok" if r.ok else f"FAILED ({r.error})"
@@ -210,7 +283,12 @@ def print_text(head: dict[str, Any], runs: Sequence[PaperRun], warning: str | No
                 f"  {c.task:<18} json={mode:<20} {state:<8} incomplete={c.incomplete} "
                 f"tok={c.input_tokens}/{c.output_tokens} {c.latency_ms}ms"
             )
-    if warning:
+    if speed is not None:
+        print(
+            f"speed: page read ~{speed.page_read_s:.0f} s, then ~{1 / speed.s_per_token:.1f} "
+            f"tokens/s ({speed.calls} call(s))"
+        )
+    for warning in warnings:
         print(f"WARNING: {warning}")
 
 
@@ -258,11 +336,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         runs = [asyncio.run(run_paper(settings, store, name, req)) for name, req in papers]
         head = header(settings)
         warning = context_warning(settings, runs)
+        speed = measure_speed(runs) if settings.ai_provider == "openai_compat" else None
+        slow = speed_warning(settings, speed)
     if args.json:
-        report = {**head, "papers": [asdict(r) for r in runs], "warning": warning}
+        report = {
+            **head, "papers": [asdict(r) for r in runs], "warning": warning,
+            "speed": speed.report() if speed else None, "speed_warning": slow,
+        }  # fmt: skip
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
-        print_text(head, runs, warning)
+        print_text(head, runs, [w for w in (warning, slow) if w], speed)
     return 0 if all(r.ok for r in runs) else 1
 
 
