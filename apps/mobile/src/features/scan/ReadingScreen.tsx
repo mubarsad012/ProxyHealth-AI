@@ -13,7 +13,7 @@ import { Screen } from '@/design/components/Screen';
 import { ErrorState } from '@/design/components/States';
 import { AppText } from '@/design/components/Text';
 import { space } from '@/design/tokens';
-import { useAnalyze } from '@/features/analysis/useAnalyze';
+import { isSlowTier, useAnalyze } from '@/features/analysis/useAnalyze';
 import { ConsentScreen, TABS_HREF } from '@/features/onboarding/ConsentScreen';
 import { useConsentDecision } from '@/features/onboarding/consentState';
 import { useT } from '@/i18n/useT';
@@ -58,6 +58,8 @@ export function ReadingScreen() {
   const [retriedAfterConsent, setRetriedAfterConsent] = useState(false);
   const pages = useSession((s) => s.pages);
   const isSample = useSession((s) => Boolean(s.demoSampleId));
+  // A local test model takes minutes per page: say so instead of "usually under a minute".
+  const slowTier = useSession((s) => isSlowTier(s.serverConfig?.client_timeouts));
   const { start, status, result } = run;
 
   useEffect(() => {
@@ -125,7 +127,7 @@ export function ReadingScreen() {
     <Screen testID="reading-screen" footer={<BigButton label={t('btn.cancel')} icon="close" variant="secondary" size={56} onPress={cancel} />}>
       <ProgressSteps steps={steps} active={run.step} live />
       <AppText>{t('reading.trust_line')}</AppText>
-      <AppText color="textMuted">{t('reading.eta')}</AppText>
+      <AppText color="textMuted">{t(slowTier ? 'reading.eta_slow' : 'reading.eta')}</AppText>
       {run.tipKey ? (
         <AppText role="status" color="textMuted">
           {t(run.tipKey)}

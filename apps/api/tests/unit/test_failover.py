@@ -27,7 +27,9 @@ from proxyhealth_api.ai.failover import (
     status_of,
 )
 from proxyhealth_api.ai.keypool import KeyPool
+from proxyhealth_api.ai.openai_compat import synthetic_slot
 from proxyhealth_api.ai.provider import Part, StructuredResult, Task, Usage
+from proxyhealth_api.ai.slow_errors import too_slow_error
 from proxyhealth_api.contracts.enums import (
     ErrorCode,
     ModelQuality,
@@ -681,6 +683,91 @@ async def test_no_slots_configured_is_429_key_exhausted(tmp_path: Path) -> None:
             task=Task.chat, parts=[Part.of_text("x")], system="s", schema=RewriteOut, request_id="r"
         )
     assert info.value.status == 429 and info.value.key_exhausted and provider.calls == []
+
+
+# ------------------------------------------- openai_compat: "too slow", not "try again later"
+
+
+def compat_harness(tmp_path: Path, script: Script, *, hosted: bool = False) -> Harness:
+    tier: dict[str, Any] = (
+        {"openai_compat_data_tier": "unpaid", "openai_compat_vendor_name": "Groq",
+         "openai_compat_api_key": "sk-test-0001",
+         "openai_compat_base_url": "https://api.groq.com/openai/v1"}
+        if hosted else {"openai_compat_data_tier": "local", "openai_compat_model_label": "Qwen"}
+    )  # fmt: skip
+    settings = Settings(
+        _env_file=None, ai_provider="openai_compat", var_dir=tmp_path / "var", **tier
+    )  # fmt: skip
+    clock = FakeClock()
+    keypool = KeyPool(
+        [synthetic_slot(settings)], settings.var_dir, clock, data_use_tier=settings.data_use_tier
+    )
+    provider = FakeProvider(script)
+    provider.name = Provider.openai_compat
+    service = AIService(provider, keypool, settings, clock=clock)
+    return Harness(service, provider, keypool, clock, settings)
+
+
+async def test_openai_compat_deadline_refusal_is_ai_too_slow(tmp_path: Path) -> None:
+    # Two-call mode: transcribe used the request's budget, so explain is never sent.
+    h = compat_harness(tmp_path, [ok()])
+    deadline = h.service.request_deadline()
+    assert h.service.remaining_s(deadline) == 310.0
+    h.clock.advance(311)
+    assert h.service.remaining_s(deadline) == -1.0
+    with pytest.raises(ApiError) as info:
+        await call(h, Task.explain, deadline_at=deadline)
+    err = info.value
+    assert (err.status, err.code, err.user_message_key) == (
+        503, ErrorCode.upstream_unavailable, "err.ai_too_slow",
+    )  # fmt: skip
+    assert err.retry_after is None and not err.key_exhausted
+    assert err.details == {"reason": "deadline", "timeout_s": 310}
+    assert h.provider.calls == []
+    with pytest.raises(ApiError) as chat_info:
+        await call(h, Task.chat, deadline_at=deadline)
+    assert chat_info.value.user_message_key == "err.upstream_unavailable"  # not a paper
+
+
+async def test_hosted_openai_compat_deadline_refusal_keeps_the_generic_copy(
+    tmp_path: Path,
+) -> None:
+    # A hosted endpoint's slowness is often a passing overload: "try again" is the right copy.
+    h = compat_harness(tmp_path, [ok()], hosted=True)
+    deadline = h.service.request_deadline()
+    h.clock.advance(h.settings.failover_deadline_s + 1)
+    with pytest.raises(ApiError) as info:
+        await call(h, Task.explain, deadline_at=deadline)
+    err = info.value
+    assert (err.status, err.code, err.user_message_key) == (
+        503, ErrorCode.upstream_unavailable, "err.upstream_unavailable",
+    )  # fmt: skip
+    assert err.details is not None and err.details["reason"] == "deadline"
+    assert h.provider.calls == []
+
+
+async def test_openai_compat_timeout_error_passes_through_unchanged(tmp_path: Path) -> None:
+    slow = too_slow_error(Task.analyze_single, 300, reason="ai_timeout", local=True)
+    h = compat_harness(tmp_path, [slow])
+    with pytest.raises(ApiError) as info:
+        await call(h, Task.analyze_single)
+    assert info.value is slow and len(h.provider.calls) == 1
+    assert h.keypool.summary().healthy == 1  # the slot is not benched
+
+
+async def test_gemini_timeout_still_upstream_unavailable_default_key(tmp_path: Path) -> None:
+    h = build(tmp_path, [TimeoutError(), TimeoutError()], slots=2)
+    with pytest.raises(ApiError) as info:
+        await call(h, Task.analyze_single)
+    err = info.value
+    assert (err.status, err.code, err.retry_after) == (503, ErrorCode.upstream_unavailable, 30)
+    assert err.user_message_key == "err.upstream_unavailable"
+    h2 = build(tmp_path / "b", [ok()], deadline_s=100)
+    deadline = h2.service.request_deadline()
+    h2.clock.advance(100)
+    with pytest.raises(ApiError) as late:
+        await call(h2, Task.explain, deadline_at=deadline)
+    assert late.value.user_message_key == "err.upstream_unavailable"
 
 
 # ------------------------------------------------------------------- helper functions

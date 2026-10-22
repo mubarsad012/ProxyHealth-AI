@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from proxyhealth_api.ai.keypool import KeyPool, Slot
 from proxyhealth_api.ai.provider import AIProvider, Part, StructuredResult, Task
 from proxyhealth_api.ai.routing import DEGRADABLE_TASKS, RouteConfig, route
+from proxyhealth_api.ai.slow_errors import too_slow_error
 from proxyhealth_api.contracts.enums import (
     ErrorCode,
     ModelQuality,
@@ -181,6 +182,10 @@ class AIService:
         §9.4) takes this once and passes it as ``deadline_at`` so they share one budget."""
         return self._clock() + timedelta(seconds=self.settings.failover_deadline_s)
 
+    def remaining_s(self, deadline_at: datetime) -> float:
+        """Seconds left until ``deadline_at`` on this service's clock (negative once passed)."""
+        return (deadline_at - self._clock()).total_seconds()
+
     async def generate(
         self,
         *,
@@ -241,7 +246,15 @@ class AIService:
                         task, res, dcfg, fast_slot.index, attempts, ModelQuality.degraded,
                         [WarningCode.degraded_model],
                     )  # fmt: skip
-        raise self._exhausted_error(cfg.tier, failures, timed_out=self._clock() >= deadline)
+        timed_out = self._clock() >= deadline
+        if timed_out and not failures and self.provider.name is Provider.openai_compat:
+            # The request's budget went on earlier calls (a slow local model), so this one never
+            # started: that is "too slow", not a transient upstream hiccup (free-ai-providers §4.7).
+            raise too_slow_error(
+                task, self.settings.failover_deadline_s, reason="deadline",
+                local=self.settings.openai_compat_is_loopback,
+            )  # fmt: skip
+        raise self._exhausted_error(cfg.tier, failures, timed_out=timed_out)
 
     # ------------------------------------------------------------------- one slot
 

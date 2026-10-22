@@ -6,6 +6,7 @@ one user message with every text ``Part`` first and every page after it as a bas
 ``image_url`` (D-04 order); PDFs are rasterised in memory (§4.8) and never sent as PDF; images
 are capped at a 1,600 px long edge. ``temperature: 0`` (Ollama's structured-output advice, a
 provider-specific exception to D-04), ``max_tokens`` capped by ``OPENAI_COMPAT_MAX_OUTPUT_TOKENS``
+(4096 on loopback, so a runaway reply ends with ``length`` before the timeout; LOCAL_AI.md §5)
 and ``reasoning_effort: "none"`` unless ``OPENAI_COMPAT_REASONING`` says otherwise (§4.5). The
 OpenAI-compatible endpoint of Ollama cannot set the context length per request (§3.3): set
 ``OLLAMA_CONTEXT_LENGTH`` on the Ollama side.
@@ -18,7 +19,10 @@ Structured output (§4.4): ``json_schema`` (strict, flattened), ``json_object`` 
 Errors (§4.7) are raised as ``OpenAICompatError(status_code, message, response)`` so
 ``failover.status_of``/``message_of``/``parse_retry_after`` work unchanged; ``message`` holds the
 upstream ``error.message``/``code`` cut to 300 characters, is used in memory only and is never
-logged; ``response`` is a body-less stand-in that carries only ``Retry-After``.
+logged; ``response`` is a body-less stand-in that carries only ``Retry-After``. A call that runs
+out of its ``OPENAI_COMPAT_TIMEOUT_S`` budget (a read timeout, or the whole post outlasting it) is
+``503 upstream_unavailable`` with ``err.ai_too_slow`` for the paper-reading tasks (at temperature
+0 a retry repeats it), or ``err.ai_busy`` when the call spent its budget queued behind another.
 
 Privacy (§4.9): nothing from a request or response is logged or written anywhere; the key is only
 ever placed in the ``Authorization`` header.
@@ -43,6 +47,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 
 from proxyhealth_api.ai.keypool import KeyPool
 from proxyhealth_api.ai.provider import Part, StructuredResult, Task, Usage
+from proxyhealth_api.ai.slow_errors import busy_error, too_slow_error
 from proxyhealth_api.analysis import pdf_pages
 from proxyhealth_api.analysis.redaction import MAX_PIXELS
 from proxyhealth_api.analysis.redaction import _encode as encode_image
@@ -66,6 +71,11 @@ WRITE_TIMEOUT_S = 30.0
 POOL_TIMEOUT_S = 5.0
 LOCAL_DOWN_RETRY_AFTER_S = 30
 MODEL_MISSING_RETRY_AFTER_S = 60
+# A call that spent at least this share of its budget waiting for the semaphore and then ran out
+# of time lost its budget to another request holding the one loopback slot: "busy", not "too
+# slow on this paper" (§4.7). A shorter wait (a third is 100 s of 300 s; a loopback paper reads
+# in ≈ 65–200 s) did not cause the timeout, so the paper itself is reported as too slow.
+QUEUE_BUSY_SHARE = 1 / 3
 
 # §4.4 capability table: host pattern → (mode with images, mode for text-only tasks). Patterns use
 # the ``ATTESTED_HOST_DENYLIST`` syntax. Anything else (loopback Ollama/LM Studio included) gets
@@ -476,15 +486,22 @@ class OpenAICompatProvider:
             async with asyncio.timeout(self._timeout_s):
                 await self._semaphore.acquire()
         except TimeoutError:
-            raise TimeoutError("the AI server is busy") from None
+            raise busy_error(self._clock() - started) from None
+        waited = self._clock() - started
         try:
             urls = await asyncio.to_thread(
-                page_image_urls, parts, max_images=self._settings.openai_compat_max_images
+                page_image_urls, parts, max_images=self._settings.openai_compat_image_cap
             )
             return await self._generate(
                 tier=tier, parts=parts, urls=urls, system=system, schema=schema,
                 thinking=thinking, max_output_tokens=max_output_tokens, deadline=deadline,
             )  # fmt: skip
+        except (httpx.ReadTimeout, TimeoutError):
+            if waited >= self._timeout_s * QUEUE_BUSY_SHARE:
+                raise busy_error(waited) from None
+            raise too_slow_error(
+                task, self._timeout_s, reason="ai_timeout", local=self._loopback
+            ) from None
         finally:
             self._semaphore.release()
             self.last_latency_ms = int((self._clock() - started) * 1000)
@@ -503,7 +520,7 @@ class OpenAICompatProvider:
         messages = build_messages(
             system, parts, urls, mode=mode, schema=schema, detail_high=detail_high
         )
-        max_tokens = min(max_output_tokens, self._settings.openai_compat_max_output_tokens)
+        max_tokens = min(max_output_tokens, self._settings.openai_compat_output_cap)
         effort = reasoning_effort(self._settings, thinking)
         if deadline is None:
             deadline = self._clock() + self._timeout_s
@@ -588,9 +605,12 @@ class OpenAICompatProvider:
     async def _post(self, body: dict[str, Any], deadline: float) -> httpx.Response:
         read_s = max(self._remaining(deadline), 1.0)
         try:
-            return await self._client.post(
-                self._endpoint, json=body, timeout=self._httpx_timeout(read_s)
-            )
+            # httpx's read timeout bounds each read, not the response: an endpoint that trickles
+            # bytes could outlast the budget, so the whole post is bounded as well (CL-092(a)).
+            async with asyncio.timeout(read_s):
+                return await self._client.post(
+                    self._endpoint, json=body, timeout=self._httpx_timeout(read_s)
+                )
         except httpx.ConnectError:
             if self._loopback:  # §4.7: Ollama/LM Studio is not running
                 raise ApiError(

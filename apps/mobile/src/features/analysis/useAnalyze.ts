@@ -1,14 +1,16 @@
 // `useAnalyze` (ARCHITECTURE §3 features/analysis; PRODUCT_SPEC S6). Honest progress: the three
-// steps advance on timers (0 / 6 / 18 s) and never claim completion early; tips at 20 s and 60 s;
-// at least 1.5 s on screen even when the mock answers in 300 ms; Cancel aborts the request.
+// steps advance on timers (0 / 6 / 18 s) and never claim completion early; tips at 20 s and 60 s,
+// plus one at 3 minutes on a slow test tier (a local model takes minutes, LOCAL_AI.md §5); at
+// least 1.5 s on screen even when the mock answers in 300 ms; Cancel aborts the request.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
+import { timeoutFor } from '@/api/client';
 import { useApi } from '@/api/config';
 import type { ApiError } from '@/api/errors';
 import { toApiError } from '@/api/errors';
-import type { AnalysisResult } from '@/api/types';
+import type { AnalysisResult, ClientTimeouts } from '@/api/types';
 import { rememberMemberFor, useScanChoices } from '@/features/scan/choices';
 import { t, useI18n } from '@/i18n/store';
 import { newId } from '@/lib/ids';
@@ -26,7 +28,7 @@ export interface AnalyzeState {
   status: AnalyzeStatus;
   /** 0..2 = step in progress; 3 = finished. */
   step: number;
-  tipKey: 'reading.tip_long' | 'reading.tip_still' | null;
+  tipKey: 'reading.tip_long' | 'reading.tip_still' | 'reading.tip_slow' | null;
   error: ApiError | null;
   result: AnalysisResult | null;
   offlineSample: boolean;
@@ -35,7 +37,16 @@ export interface AnalyzeState {
 export const STEP_TIMES_MS = [0, 6_000, 18_000] as const;
 export const TIP_LONG_MS = 20_000;
 export const TIP_STILL_MS = 60_000;
+export const TIP_SLOW_MS = 180_000;
 export const MIN_ON_SCREEN_MS = 1_500;
+/** The server's analyze budget (`/v1/config` `client_timeouts`) from which a tier counts as slow:
+ *  a local model announces ≈ 10 minutes, Gemini 2 and a hosted test endpoint ≈ 3.5. */
+export const SLOW_ANALYZE_MS = 300_000;
+
+/** True when the server says one analysis may take minutes (the local test tier). */
+export function isSlowTier(limits: Partial<ClientTimeouts> | null | undefined): boolean {
+  return timeoutFor('analyze', limits) >= SLOW_ANALYZE_MS;
+}
 
 const initial: AnalyzeState = { status: 'idle', step: 0, tipKey: null, error: null, result: null, offlineSample: false };
 
@@ -100,6 +111,9 @@ export function useAnalyze(): AnalyzeState & { start(): void; cancel(): void; re
     });
     timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_long' })), TIP_LONG_MS));
     timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_still' })), TIP_STILL_MS));
+    if (isSlowTier(useSession.getState().serverConfig?.client_timeouts)) {
+      timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_slow' })), TIP_SLOW_MS));
+    }
 
     const session = useSession.getState();
     const ctx = currentRequestContext();

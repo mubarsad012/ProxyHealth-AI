@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 
 from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.analysis.pipeline import PipelineDeps, run_analysis
@@ -26,6 +26,7 @@ from proxyhealth_api.packs.cache import PackCache
 from proxyhealth_api.ratelimit import rate_limit_dependency
 from proxyhealth_api.resources.loader import ResourceRepo
 from proxyhealth_api.resources.rules_repo import RulesRepo
+from proxyhealth_api.routers._cancel import run_until_disconnect
 from proxyhealth_api.settings import Settings
 
 router = APIRouter(
@@ -66,6 +67,8 @@ def build_deps(
     responses=error_responses(400, 403, 413, 415, 422, 428, 429, 502, 503),
 )
 async def analyze(
-    req: AnalyzeRequest, deps: Annotated[PipelineDeps, Depends(build_deps)]
-) -> AnalysisResult:
-    return await run_analysis(req, deps)
+    req: AnalyzeRequest, request: Request, deps: Annotated[PipelineDeps, Depends(build_deps)]
+) -> AnalysisResult | Response:
+    return await run_until_disconnect(
+        request, run_analysis(req, deps), deps.settings, request_id=deps.request_id
+    )
