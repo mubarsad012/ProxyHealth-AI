@@ -7,13 +7,15 @@ field through the contact filter, code-only notario flags, and the translated cl
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 import httpx
 from fastapi import FastAPI
 
 from proxyhealth_api.ai.provider import Task
-from proxyhealth_api.analysis import prose_dates
+from proxyhealth_api.analysis import clerk, phrasing, prose_dates
+from proxyhealth_api.analysis.i18n import english_translator
 from proxyhealth_api.contracts.analysis import GlossaryTerm
 from proxyhealth_api.contracts.enums import (
     Confidence,
@@ -21,6 +23,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     PlanStepKind,
     RedFlagKind,
+    ScamRisk,
     SenderKind,
 )
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut, RedFlagOut
@@ -252,7 +255,9 @@ async def test_a_real_upload_keeps_every_flag_that_has_evidence(
     kinds = [f.kind for f in res.red_flags]
     assert "impersonation" in kinds and "scam_payment_method" not in kinds
     assert res.scam_risk == "possible" and res.verification.facts_rejected >= 1
-    assert any("sample" in s.text for s in res.plan_steps)
+    # The footer filter keeps the step on a real upload; the skip_duty phrasing family (CQ-9 c)
+    # then drops it, because it tells the reader not to go to court.
+    assert "s9" not in {s.id for s in res.plan_steps}
 
 
 async def test_an_irs_payment_line_keeps_a_real_cp14_an_irs_notice(
@@ -423,3 +428,247 @@ async def test_a_type_correction_never_lowers_scam_risk(
     assert res.scam_risk == "likely" and res.is_likely_scam
     assert res.document_type == DocumentType.other_notice
     assert res.document_type_confidence == "medium" and res.category == DocumentCategory.other
+
+
+# --- Local-model sweep (qwen3.5:4b, 2026-10): prose shape faults mended in code -----------------
+
+
+async def test_failing_definitions_and_steps_are_dropped_not_rewritten(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """§11.9: "The paper says …" on a definition or a suggested step would put words in the
+    paper's mouth ("The paper says a judge made a decision that you must leave the country")."""
+    out = out_of(NTA)
+    out.glossary.append(GlossaryTerm(
+        term_as_written="order of removal",
+        explanation="a decision by the judge that you must leave the country.",
+    ))  # fmt: skip
+    kept = GlossaryTerm(term_as_written="Notice to Appear", explanation="A paper from a court.")
+    out.glossary.append(kept)
+    for i, text in enumerate([
+        "Find out if you can get a fee waiver so you do not have to pay for the hearing.",
+        "If the paper says it is a sample, do not pay or go to court.",
+    ]):  # fmt: skip
+        out.plan_steps.append(PlanStepOut(
+            id=f"s{9 + i}", text=text, kind=PlanStepKind.ask, resource_tags=[], span_ids=[],
+            demand_id=None,
+        ))  # fmt: skip
+    provider = install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(NTA))
+    assert "order of removal" not in {g.term_as_written for g in res.glossary}
+    assert kept in res.glossary
+    assert not {"s9", "s10"} & {s.id for s in res.plan_steps}
+    assert Task.phrasing_rewrite not in provider.tasks()
+    # s10 quotes the SAMPLE footer, so on this demo paper the banner filter (package B) drops it
+    # before the phrasing lint runs: only the definition and s9 count as drops here.
+    assert res.verification.phrasing_rewrites == 2
+
+
+async def test_plan_steps_name_the_professional_that_fits_the_paper(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """§8.4: no DOJ-accredited representative on a hospital bill; no copied "Before that date,"."""
+    t = english_translator()
+    bill = out_of("inova_final_notice")
+    bill.plan_steps[-1].text = (
+        "Before October 28, 2026, talk to a licensed lawyer or a DOJ-accredited representative "
+        "about the bill."
+    )
+    install(app, settings, analyze_single=lambda kw: bill)
+    res = await analyze(client, demo_body("inova_final_notice"))
+    assert res.plan_steps[-1].text == t("chat.refer.clinician")
+    assert "DOJ" not in " ".join(s.text for s in res.plan_steps)
+
+    jury = out_of("jury_summons")
+    jury.plan_steps[-1].text = "Before that date, talk to a licensed lawyer about jury duty."
+    install(app, settings, analyze_single=lambda kw: jury)
+    res = await analyze(client, demo_body("jury_summons"))
+    assert res.plan_steps[-1].text == "Talk to a licensed lawyer about jury duty."
+
+
+async def test_a_cut_title_and_its_continued_body_are_mended(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = out_of("jury_summons")
+    court = "This is a summons from the Circuit Court of Sample County, Virginia"
+    out.summary_title = f"{court}, asking you"
+    out.summary_body = "to appear for jury service and to return a questionnaire."
+    out.summary_body_en = out.summary_title
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("jury_summons"))
+    assert res.summary.title == f"{court}…"
+    assert res.summary.body == res.summary.body_en == (
+        f"{out.summary_title} to appear for jury service and to return a questionnaire."
+    )
+
+
+def _recorded(out: AnalysisModelOut, kw: dict[str, Any]) -> AnalysisModelOut:
+    return out
+
+
+async def test_an_english_reader_gets_one_english_body(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """For an English target ``body`` and ``body_en`` are the same text (AI_PROMPTS §4)."""
+    base = out_of(NTA)
+    title, body = base.summary_title, base.summary_body
+    cases = [
+        (body, title, body),  # body_en only repeats the title
+        (body, f"{title}. {body}", body),  # body_en opens with the title
+        ("Este papel es de la corte de inmigración y le pide ir a una audiencia.", body, body),
+    ]
+    for model_body, model_body_en, shown in cases:
+        out = base.model_copy(update={"summary_body": model_body,
+                                      "summary_body_en": model_body_en}, deep=True)  # fmt: skip
+        install(app, settings, analyze_single=functools.partial(_recorded, out))
+        res = await analyze(client, demo_body(NTA))
+        assert res.summary.body == res.summary.body_en == shown, (model_body, model_body_en)
+
+
+async def test_an_unreadable_papers_summary_gets_the_same_repairs(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    fid = "blurry_unreadable_page"
+    out = out_of(fid)
+    body = f"{out.summary_body} SSN 123-45-6789."
+    out.summary_body, out.summary_body_en = body, f"{out.summary_title}. {out.summary_body}"
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(fid))
+    assert not res.quality.readable
+    assert res.summary.body == res.summary.body_en == body.replace("123-45-6789", "***-**-6789")
+
+
+async def test_a_non_english_readers_bodies_are_left_as_written(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = out_of(NTA, "es")
+    english = out_of(NTA).summary_body_en
+    out.summary_body_en = f"{out.summary_title}. {english}"
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(NTA, target_language="es"))
+    assert res.summary.body_en == out.summary_body_en and res.summary.body == out.summary_body
+
+
+async def test_hide_id_numbers_reaches_model_prose(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """D-19: the masks reach steps, the clerk line, the translation and the summary too."""
+    fid = "uscis_i797c_receipt_i765"
+    out = out_of(fid)
+    out.plan_steps[0].text = "Write down the receipt number IOE0912345678 and A 123-456-789."
+    out.clerk_need_en = "keeping the receipt notice IOE0912345678 for A 123-456-789"
+    out.translated_pages[0].text += "\nA-Number: A 123-456-789"
+    out.summary_body_en = out.summary_body = f"{out.summary_body} Your receipt is IOE0912345678."
+    out.glossary.append(GlossaryTerm(term_as_written="IOE0912345678", explanation="A number."))
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(fid, hide_id_numbers=True))
+    dump = res.model_dump_json()
+    assert "0912345678" not in dump and "123-456-789" not in dump
+    assert "IOE••••••5678" in res.plan_steps[0].text and "A•••••6789" in res.plan_steps[0].text
+    assert "IOE••••••5678" in res.clerk_message.english
+    assert res.clerk_message.need_line_source == "ai"
+    assert "A•••••6789" in res.translated_text[0].text
+    assert "IOE••••••5678" in res.summary.body and "IOE••••••5678" in res.summary.body_en
+
+    shown = await analyze(client, demo_body(fid))  # receipt numbers stay visible when off
+    assert "IOE0912345678" in shown.plan_steps[0].text
+
+
+async def test_ssns_in_model_prose_are_always_masked(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = medicaid_out()
+    out.translated_pages[0].text += "\nSSN 123-45-6789"
+    out.summary_body = out.summary_body_en = f"{out.summary_body} Your SSN is 123-45-6789."
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body())
+    assert "123-45-6789" not in res.model_dump_json()
+    assert "***-**-6789" in res.translated_text[0].text and "***-**-6789" in res.summary.body
+
+
+async def test_the_clerk_line_drops_the_copied_prefix_and_the_prompts_example(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = out_of(RFE)
+    out.clerk_need_en = "I need help with: sending the papers before October 13, 2026"
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(RFE))
+    assert "I need help with: sending the papers before October 13, 2026." in (
+        res.clerk_message.english
+    )
+    assert res.clerk_message.english.count("I need help with") == 1
+
+    out.clerk_need_en = f"I need help with: {clerk.PROMPT_EXAMPLE_NEED}"  # October 14: unprinted
+    res = await analyze(client, demo_body(RFE))
+    assert res.clerk_message.need_line_source == "template"
+    assert "October 14" not in res.clerk_message.english
+
+
+async def test_missing_pages_and_repeated_flags_are_settled_in_code(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = out_of(RFE)
+    quoted = out.blocks[0]
+    out.red_flags = [
+        RedFlagOut(kind=RedFlagKind.missing_pages, text="Pages may be missing.",
+                   source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1),
+        *[RedFlagOut(kind=RedFlagKind.contradiction, text="Two dates disagree.",
+                     source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1)
+          for _ in range(2)],
+    ]  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(RFE))
+    kinds = [f.kind for f in res.red_flags]
+    assert RedFlagKind.missing_pages not in kinds and kinds.count(RedFlagKind.contradiction) == 1
+
+
+async def test_a_scam_papers_plan_never_points_back_to_the_sender(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """TAXONOMY §6.4: on a scam the plan never says "Ask the sender" or "The office that sent
+    this paper" — the swapped DOJ step and the appended referral name the lawyer referral."""
+    t = english_translator()
+    fid = "scam_gift_card_letter"
+    for category in (DocumentCategory.tax, DocumentCategory.benefits, DocumentCategory.other):
+        out = out_of(fid)
+        out.category = category
+        out.plan_steps[1].text = (
+            "Talk to a licensed lawyer or a DOJ-accredited representative before you pay anyone."
+        )
+        out.plan_steps.append(PlanStepOut(
+            id="s9", text="Get help before you do anything.", kind=PlanStepKind.professional,
+            resource_tags=[], span_ids=[], demand_id=None,
+        ))  # fmt: skip
+        install(app, settings, analyze_single=functools.partial(_recorded, out))
+        res = await analyze(client, demo_body(fid))
+        assert res.scam_risk is not ScamRisk.none
+        steps = {s.id: s.text for s in res.plan_steps}
+        shown = " ".join(steps.values())
+        assert t("chat.refer.sender") not in shown, category
+        assert t("chat.refer.benefits_office") not in shown, category
+        assert steps["s2"] == t("chat.refer.lawyer_or_accredited_rep")
+        assert steps["s9"].endswith(t("chat.refer.lawyer_or_accredited_rep"))
+
+
+async def test_a_step_tied_to_a_demand_is_hedged_not_dropped(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """The main action for a verified deadline stays in the plan (rewrite or hedge, as before);
+    a suggested step loses only its failing sentence; "without your ID" is good advice."""
+    fid = "irs_cp_notice"
+    out = out_of(fid)
+    out.plan_steps += [
+        PlanStepOut(id="s9", text="You must pay $312.45 by October 26, 2026.",
+                    kind=PlanStepKind.mail, resource_tags=[], span_ids=[], demand_id="d2"),
+        PlanStepOut(id="s10", text="Keep this notice. You must pay the fee first.",
+                    kind=PlanStepKind.gather, resource_tags=[], span_ids=[], demand_id=None),
+        PlanStepOut(id="s11", text="Bring this notice. Do not go to the appointment without it.",
+                    kind=PlanStepKind.bring, resource_tags=[], span_ids=[], demand_id=None),
+    ]  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(fid))
+    steps = {s.id: s for s in res.plan_steps}
+    assert steps["s9"].demand_id == "d2" and steps["s9"].text.strip()
+    assert phrasing.lint_text(steps["s9"].text, category=DocumentCategory.tax) == []
+    assert steps["s10"].text == "Keep this notice."
+    assert steps["s11"].text == "Bring this notice. Do not go to the appointment without it."
