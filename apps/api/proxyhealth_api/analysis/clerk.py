@@ -2,9 +2,11 @@
 
 ``clerk_message.english`` is the fixed template "Hello. I speak {Language}. I am here about:
 {document}. I need help with: {need}. Please speak slowly or write it down. Thank you." Only the
-need line may come from the model (``clerk_need_en``): it must survive the contact filter and the
-phrasing lint and fit in 200 characters (cut at the last word boundary); otherwise the fixed
-per-type line from ``data/rules/clerk_needs.yaml`` is used (``need_line_source="template"``).
+need line may come from the model (``clerk_need_en``): a copied "I need help with:" is removed,
+and the line must survive the contact filter and the phrasing lint, name no date the paper does
+not print (AI_PROMPTS §11.4), not be the prompt's own example, and fit in 200 characters (cut at
+the last word boundary); otherwise the fixed per-type line from ``data/rules/clerk_needs.yaml``
+is used (``need_line_source="template"``).
 ``sender_as_written`` is model output too (D-10): when a ``scrubber`` would replace anything in it
 (an organisation or contact not on the paper nor in the resource DB), the "from …" part is left
 out of the card, so both ``english`` and ``translated`` read "a Medicaid letter" rather than
@@ -27,6 +29,8 @@ from typing import Literal, Protocol
 from proxyhealth_api.analysis.contacts_filter import ContactScrubber, has_contact
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.phrasing import lint_sentence
+from proxyhealth_api.analysis.prose_dates import AllowedDates, find_mentions
+from proxyhealth_api.analysis.verify import normalize
 from proxyhealth_api.contracts.analysis import ClerkMessage
 from proxyhealth_api.contracts.enums import DocumentType, SenderKind, WarningCode
 
@@ -46,6 +50,10 @@ GENERIC_TEMPLATE = (
     "Hello. I speak {language}. I need help with: {need}. Please speak slowly or write it down. "
     "Thank you."
 )
+PROMPT_EXAMPLE_NEED = "returning the address form with a utility bill before October 14, 2026"
+"""analyze.md Step 6's example need line (a test keeps it verbatim in the prompt): a model line
+equal to it was copied from the instructions, not read from the paper."""
+_TEMPLATE_PREFIX_RE = re.compile(r"^\s*i\s+need\s+help\s+with\s*[:\-–—]?\s*", re.IGNORECASE)
 
 PLAIN_DOCUMENT: Mapping[DocumentType, str] = {
     DT.uscis_receipt: "a USCIS receipt notice", DT.uscis_rfe: "a USCIS request for evidence",
@@ -136,18 +144,40 @@ def _clean_need(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().rstrip(".").strip()
 
 
+def _strip_template_prefix(text: str) -> str:
+    """The need without a copied "I need help with:" (the template already says it)."""
+    return _TEMPLATE_PREFIX_RE.sub("", text, count=1)
+
+
+def is_prompt_example(text: str) -> bool:
+    """True when the need line is analyze.md Step 6's own example, copied word for word."""
+    return normalize(text).casefold() == normalize(PROMPT_EXAMPLE_NEED).casefold()
+
+
 def choose_need_line(
     clerk_need_en: str | None,
     template_line: str,
     *,
     scrubber: ContactScrubber | None = None,
     hedged: bool = False,
+    allowed: AllowedDates | None = None,
 ) -> tuple[str, NeedSource]:
-    """(need line, ``"ai"``/``"template"``) per D-18: contact filter, phrasing lint, 200 chars."""
+    """(need line, ``"ai"``/``"template"``) per D-18: contact filter, phrasing lint, 200 chars.
+
+    A copied "I need help with:" is removed first. The template line is used when the model
+    line names a date the paper does not print (``allowed``: the result's ``prose_dates`` set,
+    AI_PROMPTS §11.4 — the card goes to a third party, so an unprinted date there is a made-up
+    fact) or is the prompt's own example."""
     fallback = _clean_need(template_line)
     if hedged or not clerk_need_en or not clerk_need_en.strip():
         return fallback, "template"
-    candidate = _clean_need(clerk_need_en)
+    candidate = _clean_need(_strip_template_prefix(_clean_need(clerk_need_en)))
+    if not candidate or is_prompt_example(candidate):
+        return fallback, "template"
+    if allowed is not None and any(
+        not allowed.allows(m) for m in find_mentions(candidate, "en")
+    ):
+        return fallback, "template"
     if scrubber is not None and (
         scrubber.would_change(candidate) or scrubber.marker in candidate
     ):
@@ -198,15 +228,17 @@ async def build_clerk_message(
     first_resource_hhs_funded: bool = False,
     translate: ClerkTranslate | None = None,
     t: Translator | None = None,
+    allowed: AllowedDates | None = None,
 ) -> ClerkOutcome:
     """Compose the clerk card. ``template_line`` = ``template_need_line(rules, type, t)``;
     ``hedged`` = the phrasing step replaced ``clerk_need_en``; ``translate`` = the optional
     ``clerk_translate`` call (its output is contact-scrubbed with ``scrubber``). The sender is
     dropped from the card when ``scrubber`` would replace any part of it (``checked_sender``).
     ``t`` = ``t_server`` for the target language: when the translation fails, ``translated`` is
-    ``clerk.generic_card`` in that language with the English need line (AI_PROMPTS §5.5.4)."""
+    ``clerk.generic_card`` in that language with the English need line (AI_PROMPTS §5.5.4).
+    ``allowed`` = the dates prose may name (``choose_need_line``)."""
     need, source = choose_need_line(
-        clerk_need_en, template_line, scrubber=scrubber, hedged=hedged
+        clerk_need_en, template_line, scrubber=scrubber, hedged=hedged, allowed=allowed
     )
     english = TEMPLATE.format(
         language=language_name_en.strip() or "English",
@@ -255,6 +287,7 @@ __all__ = [
     "INTERPRETER_KEY",
     "MAX_NEED_CHARS",
     "PLAIN_DOCUMENT",
+    "PROMPT_EXAMPLE_NEED",
     "TEMPLATE",
     "ClerkOutcome",
     "ClerkRules",
@@ -265,6 +298,7 @@ __all__ = [
     "cut_at_word",
     "document_phrase",
     "generic_card",
+    "is_prompt_example",
     "template_need_line",
     "wants_interpreter_line",
 ]

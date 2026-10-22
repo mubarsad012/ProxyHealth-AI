@@ -52,6 +52,7 @@ from proxyhealth_api.analysis import (
     prose_dates,
     redaction,
     scam,
+    summary_text,
     tagging,
     transcript,
     uploads,
@@ -992,6 +993,9 @@ def unreadable_result(
 ) -> AnalysisResult:
     """§11.1: ``legibility == poor`` → a ``200`` that says "try again"; §11.2–§11.10 skipped."""
     out = reading.out
+    # The summary still gets its shape repairs (summary_text) and the D-19 masks.
+    fixes = summary_text.tidy_update(out, rc.req.target_language)
+    out = out.model_copy(update={k: paper.mask(v) for k, v in fixes.items()})
     detected = language_tag(out.detected_language)
     scrubber = contacts_filter.make_scrubber(paper.full_text, rc.deps.resources.names(), rc.t)
     en = english(rc.deps)
@@ -1097,6 +1101,11 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     if checked.page_edge_crop:
         warnings.append(WarningCode.page_edge_crop)
     summary_ids = verify.verify_summary_span_ids(out.summary_span_ids, paper)
+    # Missing pages are decided from the printed "page N of M", not by the model; a repeated
+    # model flag (same kind and quote) is dropped before it can score twice.
+    flags_checked.flags = transcript.settle_page_flags(
+        flags_checked.flags, paper, pages_received=upload.pages_received
+    )
 
     # §11.3 contact scrubber (target-language marker; English marker for ``body_en``).
     names = deps.resources.names()
@@ -1221,13 +1230,25 @@ async def finish_analysis(
         return prose_dates.as_printed(text, printed, language)
 
     async def clean(text: str) -> str:
+        # D-19 masks (SSNs; A-numbers and receipt numbers with "Hide ID numbers") reach model
+        # prose too, not only the transcript and quotes.
+        text = paper.mask(text)
         text = await phrase(scrubber.scrub(text), t=t, language=target, category=category,
                             rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
         return as_printed(
             prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
         )
 
+    def optional(text: str) -> str | None:
+        """§11.9: optional prose (a glossary definition, a step that is not the professional
+        one) failing the lint is dropped (``None``), never rewritten."""
+        kept = phrasing.optional_prose(text, category=category, language=target)
+        stats.rewrites += int(kept != text)
+        return kept
+
     async def clean_demand(d: Demand) -> Demand:
+        d = d.model_copy(update={"text": paper.mask(d.text),
+                                 "documents": [paper.mask(x) for x in d.documents]})  # fmt: skip
         text = await phrase(scrubber.scrub(d.text), t=t, language=target, category=category,
                             rewrite=rewrite, stats=stats, document_type=document_type)  # fmt: skip
         d = d.model_copy(update={"text": text})
@@ -1240,6 +1261,10 @@ async def finish_analysis(
             "ambiguity_note": await clean(d.ambiguity_note) if d.ambiguity_note else None,
         })  # fmt: skip
 
+    # A title cut at the schema cap, a body continuing it, one English body for an English
+    # reader (summary_text) — before the scrubber, the lint and the date check below.
+    out = out.model_copy(update=summary_text.tidy_update(out, target))
+    out.summary_body_en = paper.mask(out.summary_body_en)
     body_en = await phrase(scrub_en.scrub(out.summary_body_en), t=en, language="en",
                            category=category, rewrite=rewrite_en, stats=stats,
                            document_type=document_type)  # fmt: skip
@@ -1262,15 +1287,27 @@ async def finish_analysis(
     steps: list[PlanStep] = []
     for step in plan_steps_from(out.plan_steps, paper, demand_ids,
                                 drop_paper_contact_steps=scam_out.is_likely_scam):  # fmt: skip
+        if step.kind is not PlanStepKind.professional:
+            if (kept := optional(step.text)) is None:
+                continue
+            step = step.model_copy(update={"text": kept})
         text = await clean(step.text)
+        # §8.4: a DOJ-accredited representative only where one fits; no copied "Before that date,"
+        text, replaced = phrasing.fit_professional_step(
+            text, category=category, document_type=document_type, demand_id=step.demand_id,
+            t=t, language=target,
+        )  # fmt: skip
+        stats.rewrites += int(replaced)
         if step.kind is PlanStepKind.professional:
-            text = phrasing.ensure_professional(text, category, t)
+            text = phrasing.ensure_professional(text, category, t, language=target)
         steps.append(step.model_copy(update={"text": text}))
     glossary = [
-        g.model_copy(update={"explanation": await clean(g.explanation)})
+        g.model_copy(update={"term_as_written": paper.mask(g.term_as_written),
+                             "explanation": await clean(kept)})  # fmt: skip
         for g in out.glossary
         # A term the paper does not print (an invented URL, phone or name) is no glossary entry.
         if scrubber.scrub(g.term_as_written) == g.term_as_written
+        and (kept := optional(g.explanation)) is not None
     ]  # fmt: skip
     questions = [q for q in [await clean(q) for q in out.questions_to_ask] if q.strip()]
     # The sender line and the translation are model output too (D-10): an invented name or
@@ -1284,7 +1321,7 @@ async def finish_analysis(
         p.model_copy(update={
             "text": as_printed(scrubber.scrub_kinds(p.text, contacts_filter.CONTACT_KINDS))
         })
-        for p in out.translated_pages
+        for p in (q.model_copy(update={"text": paper.mask(q.text)}) for q in out.translated_pages)
     ]  # fmt: skip
 
     # §11.10 tags, resources, clerk card, fixed notices.
@@ -1308,7 +1345,7 @@ async def finish_analysis(
     clerk_out = await clerk.build_clerk_message(
         language_name_en=rc.lang.name_en, document_type=document_type,
         sender_as_written=out.sender_as_written, sender_kind=out.sender_kind,
-        clerk_need_en=out.clerk_need_en,
+        clerk_need_en=paper.mask(out.clerk_need_en), allowed=allowed,
         template_line=clerk.template_need_line(deps.rules, document_type, en),
         target_language=target, scrubber=scrubber,
         first_resource_hhs_funded=bool(preview)

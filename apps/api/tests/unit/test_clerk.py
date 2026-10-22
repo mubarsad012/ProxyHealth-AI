@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
+from proxyhealth_api.ai import prompt_loader
 from proxyhealth_api.analysis import clerk as ck
 from proxyhealth_api.analysis.contacts_filter import has_contact, make_scrubber
 from proxyhealth_api.analysis.phrasing import lint_sentence
+from proxyhealth_api.analysis.prose_dates import AllowedDates
 from proxyhealth_api.contracts.enums import DocumentType, SenderKind, WarningCode
 from proxyhealth_api.resources.rules_repo import RulesRepo, load_clerk_needs
 from proxyhealth_api.settings import DATA_DIR
@@ -204,3 +208,63 @@ def test_clerk_checks_do_not_count_text_they_drop() -> None:
     need = "Call 703-555-0199 about my letter"
     assert ck.choose_need_line(need, "template", scrubber=scrubber) == ("template", "template")
     assert scrubber.total == 0 and scrubber.warnings() == []
+
+
+# --- Local-model sweep (qwen3.5:4b, 2026-10): the copied prefix, dates, the prompt's example ---
+
+RFE_DATES = AllowedDates(frozenset({date(2026, 7, 18), date(2026, 10, 13)}))
+
+
+@pytest.mark.parametrize(
+    "need",
+    [
+        "I need help with: paying $1,450.00 before October 8, 2026",
+        "I need help with paying $1,450.00 before October 8, 2026.",
+        "i need help with - paying $1,450.00 before October 8, 2026",
+        "  I NEED HELP WITH:  paying $1,450.00 before October 8, 2026",
+    ],
+)
+def test_a_copied_template_prefix_is_removed(need: str) -> None:
+    line = ck.choose_need_line(need, "template")
+    assert line == ("paying $1,450.00 before October 8, 2026", "ai")
+
+
+def test_a_need_line_that_is_only_the_prefix_falls_back() -> None:
+    assert ck.choose_need_line("I need help with:", "a lease.") == ("a lease", "template")
+
+
+def test_a_need_line_with_an_unprinted_date_falls_back_to_the_template() -> None:
+    """AI_PROMPTS §11.4 on the clerk card: October 14 is not printed on the RFE."""
+    need = "returning the evidence before October 14, 2026"
+    assert ck.choose_need_line(need, "template", allowed=RFE_DATES) == ("template", "template")
+    printed = "sending the evidence before October 13, 2026"
+    assert ck.choose_need_line(printed, "template", allowed=RFE_DATES) == (printed, "ai")
+    # without the paper's dates (a unit caller) no date check runs
+    assert ck.choose_need_line(need, "template") == (need, "ai")
+
+
+def test_the_prompts_own_example_is_never_a_need_line() -> None:
+    example = f"I need help with: {ck.PROMPT_EXAMPLE_NEED}"
+    assert ck.is_prompt_example(ck.PROMPT_EXAMPLE_NEED.upper())
+    assert ck.choose_need_line(example, "template") == ("template", "template")
+    allowed = AllowedDates(frozenset({date(2026, 10, 14)}))  # even where October 14 is printed
+    assert ck.choose_need_line(example, "template", allowed=allowed) == ("template", "template")
+
+
+def test_the_prompt_example_is_still_in_the_prompt() -> None:
+    """Keeps ``PROMPT_EXAMPLE_NEED`` in step with analyze.md Step 6."""
+    assert ck.PROMPT_EXAMPLE_NEED in prompt_loader.load("analyze.md")
+
+
+@pytest.mark.asyncio
+async def test_the_card_never_says_i_need_help_with_twice(rules: RulesRepo) -> None:
+    out = await ck.build_clerk_message(
+        language_name_en="English", document_type=DT.pay_or_quit, sender_as_written=None,
+        sender_kind=SK.landlord,
+        clerk_need_en="I need help with: paying the rent before October 8, 2026",
+        template_line=ck.template_need_line(rules, DT.pay_or_quit, en_t()),
+        target_language="en", allowed=AllowedDates(frozenset({date(2026, 10, 8)})),
+    )  # fmt: skip
+    assert "I need help with: I need help with" not in out.message.english
+    assert "I need help with: paying the rent before October 8, 2026." in out.message.english
+    assert out.message.need_line_source == "ai"

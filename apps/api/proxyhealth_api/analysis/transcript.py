@@ -3,18 +3,21 @@
 Pure functions over the model's ``blocks``: block ids are made well-formed and unique (with a
 mapping so later ``span_ids`` still resolve), ``bbox`` is clamped, SSN-like patterns are masked
 everywhere, A-numbers/receipt numbers are masked only when ``hide_id_numbers`` is on, and
-``Quality`` + its warnings are computed. Nothing here logs or stores text.
+``Quality`` + its warnings are computed. Missing pages are a structural fact decided here, not by
+the model: a printed "Page 1 of 3" with fewer pages received (or a skipped page number) is the
+only evidence (``missing_pages``, ``settle_page_flags``). Nothing here logs or stores text.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from proxyhealth_api.contracts.analysis import Quality
+from proxyhealth_api.contracts.analysis import Quality, RedFlag
 from proxyhealth_api.contracts.common import PageText, TextBlock
-from proxyhealth_api.contracts.enums import Legibility, WarningCode
+from proxyhealth_api.contracts.enums import Legibility, RedFlagKind, WarningCode
 
 BLOCK_ID_RE = re.compile(r"^p\d+b\d+$")
 
@@ -223,8 +226,87 @@ def compute_quality(
     )
 
 
+# --- missing pages (AI_PROMPTS §4 ``red_flags`` row; DOCUMENT_TAXONOMY §3 "Page 1 of N") --------
+
+MAX_PRINTED_PAGES = 99
+# "Page 1 of 3", "Page 1/3", "Pg. 2 of 3", "Página 2 de 2", "صفحة 1 من 3", "صفحه ۱ از ۳" — on
+# one line (a table's "Page" header over a "08/17/2026" row is no marker), never a date.
+_SP = r"[ \t ]*"
+_PAGE_OF_RE = re.compile(
+    rf"(?:(?<![^\W\d_])(?:page|pg\.?|p[aá]g(?:ina)?\.?)|صفحة|صفحه){_SP}(\d{{1,3}}){_SP}"
+    rf"(?:of|de|/|من|از){_SP}(\d{{1,3}})(?!\d|/\d)",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class MissingPages:
+    """Code evidence that pages are missing: the printed marker and what was received."""
+
+    quote: str
+    block_id: str
+    page: int
+    printed_total: int
+    pages_received: int
+
+
+def missing_pages(transcript: Transcript, pages_received: int) -> MissingPages | None:
+    """The printed "page N of M" marker proving a gap, or ``None``.
+
+    A gap is a printed total above the pages received, or — when every received page prints its
+    own marker — a page number that never appears ("1 of 3", "3 of 3", "3 of 3"). Text such as
+    "see the back" or "there are no missing pages" is no evidence either way.
+    """
+    marks: list[tuple[TextBlock, str, int, int]] = []
+    for b in transcript.blocks:
+        for m in _PAGE_OF_RE.finditer(b.text):
+            number, total = int(m.group(1)), int(m.group(2))
+            if 1 <= number <= total <= MAX_PRINTED_PAGES:
+                marks.append((b, m.group(0), number, total))
+    if not marks:
+        return None
+    total = max(mark[3] for mark in marks)
+    block, quote = next((b, q) for b, q, _, m in marks if m == total)
+    marked_pages = {b.page for b, _, _, _ in marks}
+    numbers = {n for _, _, n, m in marks if m == total}
+    every_page_marked = marked_pages >= set(range(1, pages_received + 1))
+    if total > pages_received or (every_page_marked and numbers != set(range(1, total + 1))):
+        return MissingPages(quote, block.id, block.page, total, pages_received)
+    return None
+
+
+def _quote_key(quote: str | None) -> str:
+    return " ".join(unicodedata.normalize("NFKC", quote or "").split()).casefold()
+
+
+def settle_page_flags(
+    flags: Sequence[RedFlag], transcript: Transcript, *, pages_received: int
+) -> list[RedFlag]:
+    """Verified model flags once code has decided ``missing_pages``.
+
+    A flag repeating an earlier one (same kind, same quote) is dropped. ``missing_pages`` flags
+    stay only when ``missing_pages`` finds a printed gap, and then only one: the first citing the
+    marker's block, else the first. (A code flag with fixed text needs a base-pack key first.)
+    """
+    out: list[RedFlag] = []
+    seen: set[tuple[RedFlagKind, str]] = set()
+    for f in flags:
+        key = (f.kind, _quote_key(f.source_quote))
+        if key not in seen:
+            seen.add(key)
+            out.append(f)
+    found = missing_pages(transcript, pages_received)
+    page_flags = [f for f in out if f.kind is RedFlagKind.missing_pages]
+    keep = None
+    if found is not None and page_flags:
+        keep = next((f for f in page_flags if found.block_id in f.span_ids), page_flags[0])
+    return [f for f in out if f.kind is not RedFlagKind.missing_pages or f is keep]
+
+
 __all__ = [
     "BLOCK_ID_RE",
+    "MAX_PRINTED_PAGES",
+    "MissingPages",
     "Transcript",
     "assemble_transcript",
     "clamp_bbox",
@@ -232,4 +314,6 @@ __all__ = [
     "mask_id_numbers",
     "mask_sensitive",
     "mask_ssn",
+    "missing_pages",
+    "settle_page_flags",
 ]

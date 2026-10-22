@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from proxyhealth_api.analysis import transcript as tr
-from proxyhealth_api.contracts.enums import Legibility, WarningCode
+from proxyhealth_api.contracts.analysis import RedFlag
+from proxyhealth_api.contracts.enums import Legibility, RedFlagKind, Severity, WarningCode
 from tests.unit._fixtures_wp2 import block
 
 
@@ -113,3 +114,66 @@ def test_compute_quality() -> None:
     assert not q2.readable and q2.reason == "blurry" and w2 == [WarningCode.low_quality_image]
     q3, w3 = tr.compute_quality(Legibility.partial, None, t, pages_received=2)
     assert q3.readable and WarningCode.low_quality_image in w3
+
+
+# --- missing pages are decided in code (AI_PROMPTS §4 ``red_flags`` row) ------------------------
+
+
+def _paper(*texts: tuple[str, int], received: int) -> tr.Transcript:
+    blocks = [block(f"p{page}b{i}", text, page=page) for i, (text, page) in enumerate(texts, 1)]
+    return tr.assemble_transcript(blocks, pages_received=received)
+
+
+def _flag(kind: RedFlagKind, quote: str | None, span_ids: list[str]) -> RedFlag:
+    return RedFlag(
+        kind=kind, text="model text", source_quote=quote, span_ids=span_ids, page=1,
+        severity=Severity.medium, fixed_copy_key=None, verified=True,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("texts", "received", "gap"),
+    [
+        ([("Notice of hearing", 1), ("Page 1 of 3", 1)], 1, True),
+        ([("Page 1 of 1", 1)], 1, False),
+        ([("Página 1 de 2", 1), ("Página 2 de 2", 2)], 2, False),
+        ([("صفحة 1 من 2", 1)], 1, True),
+        ([("صفحه ۱ از ۲", 1), ("صفحه ۲ از ۲", 2)], 2, False),
+        ([("Page 1/2", 1), ("Page 1/2", 2)], 2, True),  # the same page sent twice; 2 is missing
+        ([("Page 1 of 2", 1), ("More notes", 2)], 2, False),  # page 2 prints no marker
+        ([("Received Date\tPriority Date\tPage\n08/17/2026 | 08/17/2026 | 1 of 1", 1)], 1, False),
+        ([("Please see the additional information on the back.", 1)], 1, False),
+        ([("This is a single page notice. There are no missing pages.", 1)], 1, False),
+    ],
+)
+def test_missing_pages_needs_a_printed_page_marker(
+    texts: list[tuple[str, int]], received: int, gap: bool
+) -> None:
+    found = tr.missing_pages(_paper(*texts, received=received), received)
+    assert (found is not None) is gap
+    if found is not None:
+        assert found.quote in " ".join(t for t, _ in texts) and found.block_id.startswith("p")
+
+
+def test_the_gap_evidence_names_the_marker() -> None:
+    found = tr.missing_pages(_paper(("Notice", 1), ("Page 1 of 3", 1), received=1), 1)
+    assert found == tr.MissingPages("Page 1 of 3", "p1b2", 1, 3, 1)
+
+
+def test_a_model_missing_pages_flag_shows_only_with_a_printed_gap() -> None:
+    footer = "SAMPLE — synthetic document made for demonstration. Not a real letter."
+    misused = [_flag(RedFlagKind.missing_pages, footer, ["p1b2"])]
+    whole = _paper(("Notice", 1), (footer, 1), received=1)
+    assert tr.settle_page_flags(misused, whole, pages_received=1) == []
+    short = _paper(("Page 1 of 2", 1), (footer, 1), received=1)
+    first = _flag(RedFlagKind.missing_pages, footer, ["p1b2"])
+    marker = _flag(RedFlagKind.missing_pages, "Page 1 of 2", ["p1b1"])
+    assert tr.settle_page_flags([first, marker], short, pages_received=1) == [marker]
+
+
+def test_repeated_model_flags_are_kept_once() -> None:
+    paper = _paper(("Pay with gift cards only.", 1), received=1)
+    pay = _flag(RedFlagKind.scam_payment_method, "Pay with gift cards only.", ["p1b1"])
+    again = _flag(RedFlagKind.scam_payment_method, " pay with  gift cards only. ", ["p1b1"])
+    other = _flag(RedFlagKind.urgency_pressure, "Pay with gift cards only.", ["p1b1"])
+    assert tr.settle_page_flags([pay, again, other], paper, pages_received=1) == [pay, other]
