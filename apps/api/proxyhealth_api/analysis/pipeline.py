@@ -1062,7 +1062,8 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         hints=hints, deadline_at=deadline_at,
     )  # fmt: skip
     paper = transcript.assemble_transcript(
-        reading.out.blocks, pages_received=upload.pages_received, page_sizes=upload.page_sizes,
+        prompt.drop_example_echoes(reading.out.blocks, deps.ai.provider.name),  # §5.8.2 guard
+        pages_received=upload.pages_received, page_sizes=upload.page_sizes,
         hide_id_numbers=req.hide_id_numbers,
     )  # fmt: skip
     quality, warnings = transcript.compute_quality(

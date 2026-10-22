@@ -1,7 +1,7 @@
 Extra detail for the instructions above. It changes none of their rules.
 
 Worked example of one demand. Block p2b4 prints: Return the signed form by March 3, 2031.
-- `kind`: deadline. `role`: response_due.
+- `kind`: deadline. `role`: response_due, because this paper asks for something back by that date. Choose each demand's own `role` from the list: a court or hearing date is hearing_date, a date to pay is payment_due, an appointment is appointment.
 - `source_quote`: Return the signed form by March 3, 2031. These are the printed words themselves, one line or sentence copied from the paper.
 - `value_verbatim`: March 3, 2031. Only the date, amount, phone number or short phrase inside `source_quote`, never the whole sentence.
 - `date_text`: March 3, 2031.

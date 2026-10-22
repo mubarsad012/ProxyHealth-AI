@@ -2,9 +2,10 @@
 
 The sample note reaches the model only for a known sample paper (any provider), and the
 ``openai_compat`` addendum only on that provider's ``analyze_single`` / ``explain`` system
-prompts. A fixture-backed stand-in provider (and, once, the real ``OpenAICompatProvider`` against
-an ``httpx.MockTransport`` server) keeps each call's prompts in test memory; nothing leaves the
-process and no prompt text is logged.
+prompts; on that provider a block that echoes the addendum's worked example never reaches the
+transcript (§5.8.2 echo guard). A fixture-backed stand-in provider (and, once, the real
+``OpenAICompatProvider`` against an ``httpx.MockTransport`` server) keeps each call's prompts in
+test memory; nothing leaves the process and no prompt text is logged.
 """
 
 from __future__ import annotations
@@ -25,7 +26,9 @@ from proxyhealth_api.ai.openai_compat import OpenAICompatProvider
 from proxyhealth_api.ai.provider import Part, StructuredResult, Task
 from proxyhealth_api.analysis.pipeline import analysis_vars, run_analysis
 from proxyhealth_api.contracts.analysis import AnalyzeRequest
+from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import Provider
+from proxyhealth_api.contracts.model_out import AnalysisModelOut
 from proxyhealth_api.demo.fixtures import Fixture, FixtureKind
 from proxyhealth_api.settings import Settings
 from tests.conftest import make_settings
@@ -186,3 +189,56 @@ async def test_openai_compat_request_carries_the_addendum_and_the_note(tmp_path:
     assert system_message["content"].endswith("\n\n" + prompt.render("compat_analyze.md"))
     texts = [p["text"] for p in user_message["content"] if p["type"] == "text"]
     assert texts[0].endswith("\n\n" + NOTE)
+
+
+# ---------------------------------------------------------------- §5.8.2 echo guard
+
+EXAMPLE = "Return the signed form by March 3, 2031."
+
+
+class EchoingStandIn(CapturingStandIn):
+    """Answers ``analyze_single`` like a small model that copied the addendum's worked example:
+    the Medicaid reading plus the example as block ``p2b4`` (page 2 of a one-page upload) and a
+    demand quoting it."""
+
+    async def generate_structured(self, **kwargs: Any) -> StructuredResult:
+        result = await super().generate_structured(**kwargs)
+        if kwargs["task"] is not Task.analyze_single:
+            return result
+        assert isinstance(result.parsed, AnalysisModelOut)
+        out = result.parsed
+        block = TextBlock(
+            id="p2b4", page=2, text=EXAMPLE, bbox=None, is_handwriting=False, is_unclear=False
+        )
+        demand = out.demands[0].model_copy(update={
+            "id": "d_echo", "text": EXAMPLE, "value_verbatim": "March 3, 2031",
+            "source_quote": EXAMPLE, "span_ids": ["p2b4"], "page": 2,
+            "date_text": "March 3, 2031", "anchor_span_id": None,
+        })  # fmt: skip
+        echoed = out.model_copy(
+            update={"blocks": [*out.blocks, block], "demands": [*out.demands, demand]}
+        )
+        return dataclasses.replace(result, parsed=echoed)
+
+
+@pytest.mark.parametrize("name", [Provider.openai_compat, Provider.gemini, Provider.mock])
+async def test_echoed_worked_example_never_verifies_on_openai_compat(
+    name: Provider, tmp_path: Path
+) -> None:
+    deps, _ = build_deps(fixture(MEDICAID), tmp_path)
+    settings = make_settings(tmp_path, analysis_mode="single")
+    provider = EchoingStandIn(name, settings)
+    deps = dataclasses.replace(deps, settings=settings, ai=AIService(provider, None, settings))
+    result = await run_analysis(request(sample=False), deps)
+    printed = [b.text for page in result.original_text for b in page.blocks]
+    verified = [d.value_verbatim for d in result.demands]
+    if name is Provider.openai_compat:
+        # The echo is not printed text: no phantom page, no block, no verified deadline.
+        assert len(result.original_text) == 1
+        assert EXAMPLE not in printed and "March 3, 2031" not in verified
+        assert [d.value_verbatim for d in result.unverified] == ["March 3, 2031"]
+        assert result.verification.facts_rejected >= 1
+        assert "October 14, 2026" in verified  # the real deadline still verifies
+    else:
+        # Gemini and mock are never shown the example, so their blocks pass through untouched.
+        assert len(result.original_text) == 2 and EXAMPLE in printed
