@@ -309,3 +309,54 @@ def test_off_type_role_never_lowers_or_drives_otherwise() -> None:
     both = run(DT.medical_bill, CAT.medical, dated(5, "response_due"), est)
     assert both.urgency.headline_key == u.KEY_MEDIUM_ESTIMATED
     assert both.urgency.driving_demand_id == "d2"
+
+
+# --- carried dates (deadline_rules.resolve_carried) never lower the banner -----------------------
+
+
+def carried(
+    days: int, role: str, *, kind: DemandKind = DemandKind.document_requested
+) -> Demand:
+    """A printed date carried by a non-date kind ("Send the signed form by …")."""
+    return dated(days, role, demand_id="d9", value="the carried date").model_copy(
+        update={"kind": kind}
+    )
+
+
+def test_far_carried_date_never_hides_a_nearer_estimate() -> None:
+    """insurance_denial: an appeal estimate 7 days out and a release form "by December 31" 98 days
+    out — the carried date would be ``info`` and pre-empt the estimate; the estimate stands."""
+    est = dated(7, "response_due", kind=DateKind.estimated, demand_id="d2")
+    out = run(DT.insurance_denial, CAT.medical, est, carried(98, "response_due"))
+    assert out.urgency.level is UrgencyLevel.medium
+    assert out.urgency.headline_key == u.KEY_MEDIUM_ESTIMATED
+    assert out.urgency.driving_demand_id == "d2"
+
+
+def test_far_carried_date_never_hides_an_unverified_date() -> None:
+    out = u.compute_urgency(
+        DT.insurance_denial, CAT.medical, [carried(60, "response_due")], emergency=False,
+        today=TODAY, unverified=[_unverified(None, "response_due")],
+    )  # fmt: skip
+    assert out.urgency.level is UrgencyLevel.medium
+    assert out.urgency.headline_key == u.KEY_UNVERIFIED_DATE
+
+
+def test_far_carried_date_never_hides_a_past_date() -> None:
+    late = carried(90, "payment_due", kind=DemandKind.amount)
+    out = run(DT.medical_bill, CAT.medical, dated(-5, "payment_due"), late)
+    assert out.urgency.level is UrgencyLevel.high and out.urgency.past_date
+    assert out.urgency.headline_key == "urgency.critical.date_passed"
+    assert [f.kind for f in out.red_flags] == [RedFlagKind.expired_date]
+
+
+@pytest.mark.parametrize(("days", "level"), [(9, UrgencyLevel.high), (20, UrgencyLevel.medium)])
+def test_carried_date_drives_when_not_lower(days: int, level: UrgencyLevel) -> None:
+    """jury_summons: "return it by October 23, 2026" on a document request still drives; at an
+    equal level the printed carried date beats an estimate (a printed date beats a computed one)."""
+    est = dated(25, "response_due", kind=DateKind.estimated, demand_id="d2")
+    out = run(DT.jury_summons, CAT.court, carried(days, "response_due"), est)
+    assert out.urgency.level is level and out.urgency.driving_demand_id == "d9"
+    alone = run(DT.insurance_denial, CAT.medical, carried(98, "response_due"))
+    assert alone.urgency.headline_key == "urgency.info.date_later"
+    assert alone.urgency.driving_demand_id == "d9"

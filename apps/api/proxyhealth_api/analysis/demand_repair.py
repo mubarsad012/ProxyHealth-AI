@@ -14,8 +14,9 @@ rejected exactly as before.
 * **R1** — ``source_quote`` holds only block ids (or nothing): the model's ``value_verbatim``
   becomes the quote ("verbatim means character-for-character as printed", §4.1) and the quoted
   ids join ``span_ids`` (at most 3).
-* **R3** — (with R1) a value cut at its schema cap: the one printed sentence of the cited blocks
-  that holds the value's whole-word prefix (≥ 40 characters, exact) becomes the quote.
+* **R3** — (with R1) a value at its schema cap that is not on the cited blocks as printed (D-09's
+  own token-boundary value test, so a value cut mid-word counts): the one printed sentence of the
+  cited blocks that holds the value's whole-word prefix (≥ 40 characters, exact) becomes the quote.
 * **R2** — (with R1) the value is narrowed to the first of the model's own typed fields that sits
   inside the quote (``date_text`` / ``amount_text`` / ``relative_rule_text`` by kind, the single
   ``documents`` item), else to the one printed date (dated kinds) or phone/URL/e-mail
@@ -25,12 +26,18 @@ rejected exactly as before.
   so a ``[multiple_documents]`` page stays out) whose text holds the quote **exactly** and passes
   ``verify_span`` becomes the span; ties → nearest the first cited block, then the earliest.
 * **R5** — when the repaired quote is only the value ("(703) 555-0190"), the one printed sentence
-  (≤ 300 characters) of the anchored blocks holding it on token boundaries becomes the quote.
+  (≤ 300 characters) of the anchored blocks holding it on token boundaries becomes the quote,
+  unless that line holds form blanks (``___``: signature lines, not a sentence).
 
 A repaired demand has ``confidence`` capped at ``medium`` and its ``verification_note`` ends in
 ``" (repaired: R1, R2)"`` (fixed codes, no content). Demands only: red flags are never repaired —
 the dropped model flags of the sweep all quote the SAMPLE footer (§11.2). Pure functions; the SSN
 and ID masks (§11.1) apply before any comparison; nothing is logged.
+
+Cost: the R0 check is the very ``verify_span`` call ``verify.demand_from_out`` makes (same masked
+fields, same confidence), so a demand the repair leaves alone is searched once —
+``RepairedDemands.verify`` hands that result on instead of searching the page again; a
+*repaired* demand is always verified afresh there.
 """
 
 from __future__ import annotations
@@ -65,6 +72,7 @@ _CONTACT_KINDS = frozenset({"phone", "url", "email"})
 _ID_TAG_RE = re.compile(r"\[?\s*(p\d+b\d+)(?:\|[a-z,]*)?\s*\]?", re.IGNORECASE)
 _ID_GLUE_RE = re.compile(r"(?:[\s,;/&]|\band\b)*", re.IGNORECASE)
 _LAST_TOKEN_RE = re.compile(r"\s+\S*$")
+_FORM_BLANK_RE = re.compile(r"_{3,}")
 
 
 def _max_length(name: str) -> int:
@@ -82,11 +90,15 @@ QUOTE_CAP = _max_length("source_quote")
 
 @dataclass(frozen=True)
 class Repair:
-    """One demand after repair: ``demand`` is the input object itself when ``codes`` is empty."""
+    """One demand after repair: ``demand`` is the input object itself when ``codes`` is empty.
+
+    ``check`` is then the R0 ``verify_span`` result for that object — exactly the call
+    ``verify.demand_from_out`` would make — and ``None`` for a repaired demand."""
 
     demand: DemandOut
     codes: tuple[str, ...] = ()
     original_span_ids: list[str] = field(default_factory=list)
+    check: verify.SpanVerification | None = None
 
 
 def quote_ids(quote: str) -> list[str] | None:
@@ -187,7 +199,7 @@ def _sentence_for_value(t: Transcript, ids: Sequence[str], quote: str, value: st
         return None
     hits = {
         s for s in _printed_sentences(t.blocks_for(ids))
-        if verify.contains_token(vkey, verify.match_key(s))
+        if verify.contains_token(vkey, verify.match_key(s)) and not _FORM_BLANK_RE.search(s)
     }  # fmt: skip
     if len(hits) != 1:
         return None
@@ -198,11 +210,16 @@ def _sentence_for_value(t: Transcript, ids: Sequence[str], quote: str, value: st
 def repair_demand(d: DemandOut, t: Transcript) -> Repair:
     """R0–R5 for one model demand (module docstring); all-or-nothing."""
     quote, value = t.mask(d.source_quote), t.mask(d.value_verbatim)
-    original = Repair(d, (), list(d.span_ids))
-    if verify.verify_span(t, d.span_ids, quote, value_verbatim=value).verified:
+    # The same call ``verify.demand_from_out`` makes, so its result can be handed on (``check``).
+    first = verify.verify_span(
+        t, d.span_ids, quote, value_verbatim=value, model_confidence=d.confidence
+    )
+    original = Repair(d, (), list(d.span_ids), first)
+    if first.verified:
         return original  # R0
     codes: list[str] = []
     ids = list(d.span_ids)
+    check = first  # ids, quote and value unchanged unless R1 applies
     cited = quote_ids(quote)
     if cited is not None:
         if not value.strip() or quote_ids(value) is not None:
@@ -211,7 +228,10 @@ def repair_demand(d: DemandOut, t: Transcript) -> Repair:
         quote = value
         codes.append(R1_ID_QUOTE)
         capped = len(d.value_verbatim) >= VALUE_CAP
-        if capped and not verify.find_quote(quote, t.text_of(ids)).found:
+        # Not on the page as printed (verify_span's own value test; no fuzzy search needed here).
+        if capped and not verify.contains_token(
+            verify.match_key(value), verify.match_key(t.text_of(ids))
+        ):
             cut = whole_word_prefix(value)
             sentence = _complete_cut_value(t, ids, cut)
             if sentence is not None:
@@ -221,7 +241,7 @@ def repair_demand(d: DemandOut, t: Transcript) -> Repair:
         if narrowed is not None and narrowed != value:
             value = narrowed
             codes.append(R2_NARROWED)
-    check = verify.verify_span(t, ids, quote, value_verbatim=value)
+        check = verify.verify_span(t, ids, quote, value_verbatim=value)
     if not check.verified and check.note in _REANCHOR_NOTES:
         run = _reanchor(t, d, ids, quote, value)
         if run is not None:
@@ -264,8 +284,10 @@ class RepairedDemands:
 
     def verify(self, transcript: Transcript) -> VerifiedDemands:
         """``verify.verify_demands`` over ``demands``; each verified repaired demand's note then
-        ends in ``" (repaired: …)"``."""
-        checked = verify.verify_demands(self.demands, transcript)
+        ends in ``" (repaired: …)"``. A demand the repair left alone reuses its R0 check (the
+        identical ``verify_span`` call); a repaired one is verified afresh."""
+        checks = [None if r.codes else r.check for r in self.repairs]
+        checked = verify.verify_demands(self.demands, transcript, checks=checks)
         by_id = self._by_final_id(checked)
         checked.verified = [annotate(d, by_id[d.id].codes) for d in checked.verified]
         return checked

@@ -363,18 +363,23 @@ def parse_amount(amount_text: str | None, currency: str | None) -> AmountInfo | 
     return AmountInfo(amount_minor=whole * 100 + cents, currency=code)
 
 
-def demand_from_out(d: DemandOut, transcript: Transcript) -> Demand:
+def demand_from_out(
+    d: DemandOut, transcript: Transcript, *, check: SpanVerification | None = None
+) -> Demand:
     """Convert a model ``DemandOut`` into a contract ``Demand`` with D-09 verification applied.
 
     ``date`` is left ``None`` (``deadline_rules.py`` fills it), ``reminder_eligible`` is False
     until a stated date is resolved, ``amount`` is parsed from ``amount_text`` (``_amount_of``).
     ``source_quote`` and ``value_verbatim`` get the transcript's SSN/ID masks first (§11.1), so
-    they match the masked blocks and never carry the full number.
+    they match the masked blocks and never carry the full number. ``check`` is a ``verify_span``
+    result the caller already holds for exactly this call (``d.span_ids``, the masked quote and
+    value, ``d.confidence``) — ``demand_repair``'s R0 check — so the page is not searched twice.
     """
     quote, value = transcript.mask(d.source_quote), transcript.mask(d.value_verbatim)
-    check = verify_span(
-        transcript, d.span_ids, quote, value_verbatim=value, model_confidence=d.confidence
-    )
+    if check is None:
+        check = verify_span(
+            transcript, d.span_ids, quote, value_verbatim=value, model_confidence=d.confidence
+        )
     page = check.page if check.page is not None else d.page
     return Demand(
         id=d.id, kind=d.kind, text=d.text, value_verbatim=value,
@@ -411,12 +416,20 @@ class VerifiedDemands:
     for ``deadline_rules.apply_deadline_rules``)."""
 
 
-def verify_demands(demands: Iterable[DemandOut], transcript: Transcript) -> VerifiedDemands:
-    """Verify every demand; duplicates of an ``id`` are renamed ``<id>_2``, ``<id>_3`` …"""
+def verify_demands(
+    demands: Iterable[DemandOut],
+    transcript: Transcript,
+    *,
+    checks: Sequence[SpanVerification | None] = (),
+) -> VerifiedDemands:
+    """Verify every demand; duplicates of an ``id`` are renamed ``<id>_2``, ``<id>_3`` …
+
+    ``checks[i]``, when given, is the caller's ``verify_span`` result for ``demands[i]`` exactly
+    as ``demand_from_out`` would compute it (``demand_from_out``'s ``check``)."""
     out = VerifiedDemands()
     seen: set[str] = set()
-    for d in demands:
-        demand = demand_from_out(d, transcript)
+    for i, d in enumerate(demands):
+        demand = demand_from_out(d, transcript, check=checks[i] if i < len(checks) else None)
         if demand.id in seen:
             n = 2
             while f"{demand.id}_{n}" in seen:

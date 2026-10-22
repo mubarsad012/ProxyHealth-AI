@@ -727,32 +727,54 @@ def resolve_carried(
     return dated
 
 
+def _block_prints_only(
+    transcript: Transcript, span_id: str, value_iso: str, ctx: DeadlineContext | None
+) -> bool:
+    """True when the block ``span_id`` prints no date other than ``value_iso`` (an unknown id
+    prints nothing; an ambiguous numeric or year-less date counts as another date)."""
+    parsed = parse_dates(
+        transcript.text_of([span_id]),
+        default_order=ctx.default_order if ctx else None,
+        language=ctx.language if ctx else None,
+        order_cue=ctx.order_cue if ctx else None,
+    )
+    if parsed.ambiguous_numeric or parsed.extra_mentions:
+        return False
+    return all(d.isoformat() == value_iso for d in parsed.dates)
+
+
 def _anchor_for(
     source: DemandOut | None,
     rule: DeadlineRule,
     stated: Sequence[Demand],
     transcript: Transcript | None,
     span_aliases: Mapping[str, Sequence[str]] | None = None,
+    ctx: DeadlineContext | None = None,
 ) -> Demand | None:
     """D-11 (b): the verified *stated* demand whose span holds ``anchor_span_id`` and whose role
-    is the rule's ``anchor_role``. No other demand may stand in. ``span_aliases`` (final demand
-    id → the model's own ``span_ids``) lets a demand re-anchored by ``demand_repair`` (R4) still
-    answer to the id the model cited for it."""
+    is the rule's ``anchor_role``. No other demand may stand in.
+
+    ``span_aliases`` (final demand id → the model's own ``span_ids``) lets a demand re-anchored by
+    ``demand_repair`` (R4) still answer to the id the model cited for it, as a fallback only: a
+    demand whose real span holds the id always wins (whatever the list order), and an alias is
+    refused when the named block prints a date of its own that differs from the candidate's — that
+    printed date is the anchor the rule counts from, and no verified demand quotes it."""
     if source is None or not source.anchor_span_id:
         return None
     resolve = transcript.resolve if transcript else (lambda span_id: span_id)
     anchor_id = resolve(source.anchor_span_id)
-    aliases = span_aliases or {}
-    for cand in stated:
-        cited = [*cand.span_ids, *(resolve(a) for a in aliases.get(cand.id, ()))]
-        if (
-            cand.verified
-            and cand.date is not None
-            and cand.date.kind is DateKind.stated
-            and cand.date.value_iso
-            and cand.role == rule.anchor_role
-            and anchor_id in cited
-        ):
+    fits = [
+        cand for cand in stated
+        if cand.verified and cand.date is not None and cand.date.kind is DateKind.stated
+        and cand.date.value_iso and cand.role == rule.anchor_role
+    ]  # fmt: skip
+    direct = next((cand for cand in fits if anchor_id in cand.span_ids), None)
+    if direct is not None or not span_aliases or transcript is None:
+        return direct
+    for cand in fits:
+        cited = {resolve(a) for a in span_aliases.get(cand.id, ())}
+        iso = cand.date.value_iso if cand.date else None
+        if anchor_id in cited and iso and _block_prints_only(transcript, anchor_id, iso, ctx):
             return cand
     return None
 
@@ -772,7 +794,7 @@ def resolve_relative(
     if demand.kind is DemandKind.relative_deadline and source is not None:
         phrase = source.relative_rule_text
         for cand in matching_rules(phrase, ctx.document_type, ctx.rules, ctx.today, ctx.category):
-            anchor = _anchor_for(source, cand, stated, transcript, span_aliases)
+            anchor = _anchor_for(source, cand, stated, transcript, span_aliases, ctx)
             if anchor is not None:
                 rule = cand
                 break

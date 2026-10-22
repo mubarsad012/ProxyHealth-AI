@@ -748,3 +748,85 @@ def test_anchor_resolves_after_reanchor(rules: list[DeadlineRule]) -> None:
     out = dr.apply_deadline_rules(checked.verified, checked.sources, ctx, t, span_aliases=aliases)
     assert out[1].date is not None and out[1].date.kind is DateKind.estimated
     assert out[1].date.anchor_demand_id == "d1" and out[1].date.value_iso == "2026-10-17"
+
+
+def _appeal_paper(*extra: tuple[str, str]) -> Transcript:
+    return assemble_transcript(
+        [
+            block("p1b1", "Blue Ridge Sample Health Plan"),
+            block("p1b2", "Date of this notice: April 20, 2026"),
+            block("p1b3", "You must ask for an internal appeal within 180 days of the date of "
+                          "this notice."),
+            *(block(i, text) for i, text in extra),
+        ],
+        pages_received=1,
+    )  # fmt: skip
+
+
+def _appeal_demands(*anchors: DemandOut, anchor_span_id: str = "p1b2") -> list[DemandOut]:
+    window = "within 180 days of the date of this notice"
+    appeal = demand_out(
+        "d3", kind=DemandKind.relative_deadline, value_verbatim=window,
+        source_quote=f"You must ask for an internal appeal {window}.", span_ids=["p1b3"],
+        relative_rule_text=window, anchor_span_id=anchor_span_id, role="response_due",
+    )  # fmt: skip
+    return [*anchors, appeal]
+
+
+def _mailed(span: str = "p1b2") -> DemandOut:
+    """"Date mailed" quoted exactly but cited to ``span`` (R4 moves it to p1b4)."""
+    return demand_out(
+        "d1", value_verbatim="April 27, 2026", source_quote="Date mailed: April 27, 2026",
+        span_ids=[span], date_text="April 27, 2026", role="notice_date",
+    )  # fmt: skip
+
+
+def _estimate_with_aliases(
+    rules: list[DeadlineRule], t: Transcript, demands: list[DemandOut]
+) -> Demand:
+    repaired = repair_demands(demands, t)
+    checked = repaired.verify(t)
+    ctx = _ctx(rules, DocumentType.insurance_denial, date(2026, 5, 1))
+    out = dr.apply_deadline_rules(
+        checked.verified, checked.sources, ctx, t, span_aliases=repaired.span_aliases(checked)
+    )
+    return out[-1]
+
+
+def test_direct_anchor_wins_over_reanchored_alias(rules: list[DeadlineRule]) -> None:
+    """D-11 (b): the demand whose own span holds ``anchor_span_id`` is the anchor, whatever the
+    list order; a demand R4 moved *away* from that block (listed first here) never stands in, so
+    the estimate never counts from the later "Date mailed"."""
+    t = _appeal_paper(("p1b4", "Date mailed: April 27, 2026"))
+    notice = demand_out(
+        "d2", value_verbatim="April 20, 2026", source_quote="Date of this notice: April 20, 2026",
+        span_ids=["p1b2"], date_text="April 20, 2026", role="notice_date",
+    )  # fmt: skip
+    appeal = _estimate_with_aliases(rules, t, _appeal_demands(_mailed(), notice))
+    assert appeal.date is not None and appeal.date.kind is DateKind.estimated
+    assert appeal.date.anchor_demand_id == "d2" and appeal.date.value_iso == "2026-10-17"
+
+
+def test_alias_refused_when_named_block_prints_another_date(rules: list[DeadlineRule]) -> None:
+    """No demand quotes p1b2's own date (April 20): the re-anchored "Date mailed" (April 27) may
+    not stand in for it, so the appeal stays unresolved rather than a week too late."""
+    t = _appeal_paper(("p1b4", "Date mailed: April 27, 2026"))
+    appeal = _estimate_with_aliases(rules, t, _appeal_demands(_mailed()))
+    assert appeal.date is not None and appeal.date.kind is DateKind.unresolved
+
+
+def test_alias_kept_when_named_block_prints_the_same_date(rules: list[DeadlineRule]) -> None:
+    t = assemble_transcript(
+        [
+            block("p1b1", "Issued April 27, 2026"),
+            block("p1b2", "Blue Ridge Sample Health Plan"),
+            block("p1b3", "You must ask for an internal appeal within 180 days of the date of "
+                          "this notice."),
+            block("p1b4", "Date mailed: April 27, 2026"),
+        ],
+        pages_received=1,
+    )  # fmt: skip
+    demands = _appeal_demands(_mailed("p1b1"), anchor_span_id="p1b1")
+    appeal = _estimate_with_aliases(rules, t, demands)
+    assert appeal.date is not None and appeal.date.kind is DateKind.estimated
+    assert appeal.date.anchor_demand_id == "d1" and appeal.date.value_iso == "2026-10-24"
