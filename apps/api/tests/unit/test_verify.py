@@ -6,7 +6,7 @@ from proxyhealth_api.analysis import verify as v
 from proxyhealth_api.analysis.transcript import Transcript, assemble_transcript
 from proxyhealth_api.contracts.analysis import AmountInfo
 from proxyhealth_api.contracts.common import TextBlock
-from proxyhealth_api.contracts.enums import Confidence, RedFlagKind
+from proxyhealth_api.contracts.enums import Confidence, DemandKind, RedFlagKind
 from tests.unit._fixtures_wp2 import block, demand_out, red_flag_out
 
 LINE = "Please return the signed form to our office by October 14, 2026."
@@ -193,6 +193,28 @@ def test_parse_amount() -> None:
     assert v.parse_amount("$1,000,000", "USD") == AmountInfo(amount_minor=100000000, currency="USD")
     assert v.parse_amount("no number", "USD") is None
     assert v.parse_amount(None, "USD") is None
+
+
+def test_amount_text_not_in_quote_is_not_parsed() -> None:
+    """D-09: a figure the paper does not print never becomes ``Demand.amount`` (the va_pay_or_quit
+    mutation: ``amount_text`` "$2,450.00" against a printed "$1,450.00")."""
+    rent = "You owe rent of $1,450.00 for September 2026."
+    t = _t(block("p1b1", rent))
+    invented = demand_out(
+        "d1", kind=DemandKind.amount, value_verbatim="$1,450.00", source_quote=rent,
+        span_ids=["p1b1"], amount_text="$2,450.00", currency="USD",
+    )  # fmt: skip
+    out = v.demand_from_out(invented, t)
+    assert out.verified and out.amount == AmountInfo(amount_minor=145000, currency="USD")
+    # Another kind has no printed value to fall back on: no amount at all.
+    action = invented.model_copy(update={"kind": DemandKind.action, "value_verbatim": rent})
+    assert v.demand_from_out(action, t).amount is None
+    # A value with more than one number is not guessed from either.
+    sentence = invented.model_copy(update={"value_verbatim": rent})
+    assert v.demand_from_out(sentence, t).amount is None
+    # Printed in the quote: parsed as before.
+    printed = invented.model_copy(update={"amount_text": "$1,450.00"})
+    assert v.demand_from_out(printed, t).amount == AmountInfo(amount_minor=145000, currency="USD")
 
 
 def test_summary_span_ids_drop_unknown() -> None:

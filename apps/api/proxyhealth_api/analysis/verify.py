@@ -8,7 +8,8 @@ a printed number in half fails with ``"numbers differ from page"``. Failures are
 hidden: a demand moves to ``unverified[]`` with ``verified=False``, ``confidence=low`` and a
 short ``verification_note``; a model red flag whose quote fails is dropped. Confidence is forced
 ``low`` when a referenced block is unclear/handwriting or touches a 3 % page edge (possible crop).
-Pure functions; nothing logged.
+``amount_text`` becomes ``Demand.amount`` only when it sits in the quote. Pure functions; nothing
+logged.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from difflib import SequenceMatcher
 from proxyhealth_api.analysis.transcript import Transcript
 from proxyhealth_api.contracts.analysis import AmountInfo, Demand, RedFlag
 from proxyhealth_api.contracts.common import TextBlock
-from proxyhealth_api.contracts.enums import Confidence, RedFlagKind, Severity
+from proxyhealth_api.contracts.enums import Confidence, DemandKind, RedFlagKind, Severity
 from proxyhealth_api.contracts.model_out import DemandOut, RedFlagOut
 
 VERIFIER_VERSION = "2026-09-27"
@@ -366,9 +367,9 @@ def demand_from_out(d: DemandOut, transcript: Transcript) -> Demand:
     """Convert a model ``DemandOut`` into a contract ``Demand`` with D-09 verification applied.
 
     ``date`` is left ``None`` (``deadline_rules.py`` fills it), ``reminder_eligible`` is False
-    until a stated date is resolved, ``amount`` is parsed from ``amount_text``. ``source_quote``
-    and ``value_verbatim`` get the transcript's SSN/ID masks first (§11.1), so they match the
-    masked blocks and never carry the full number.
+    until a stated date is resolved, ``amount`` is parsed from ``amount_text`` (``_amount_of``).
+    ``source_quote`` and ``value_verbatim`` get the transcript's SSN/ID masks first (§11.1), so
+    they match the masked blocks and never carry the full number.
     """
     quote, value = transcript.mask(d.source_quote), transcript.mask(d.value_verbatim)
     check = verify_span(
@@ -379,9 +380,21 @@ def demand_from_out(d: DemandOut, transcript: Transcript) -> Demand:
         id=d.id, kind=d.kind, text=d.text, value_verbatim=value,
         source_quote=quote, span_ids=check.span_ids or list(d.span_ids), page=page,
         confidence=check.confidence, verified=check.verified, verification_note=check.note,
-        date=None, amount=parse_amount(d.amount_text, d.currency), documents=list(d.documents),
+        date=None, amount=_amount_of(d, transcript, quote, value), documents=list(d.documents),
         role=d.role, reminder_eligible=False, ambiguity_note=d.ambiguity_note,
     )  # fmt: skip
+
+
+def _amount_of(d: DemandOut, transcript: Transcript, quote: str, value: str) -> AmountInfo | None:
+    """``amount_text`` parsed only when it sits in the quote (D-09: a figure the paper does not
+    print never becomes ``Demand.amount``); else, for an ``amount`` demand whose value holds one
+    number, the value itself (it was checked against the quote); else ``None``."""
+    if d.amount_text and check_value(transcript.mask(d.amount_text), quote) is None:
+        return parse_amount(d.amount_text, d.currency)
+    numbers = _AMOUNT_RE.findall(unicodedata.normalize("NFKC", value))
+    if d.kind is DemandKind.amount and len(numbers) == 1:
+        return parse_amount(value, d.currency)
+    return None
 
 
 @dataclass

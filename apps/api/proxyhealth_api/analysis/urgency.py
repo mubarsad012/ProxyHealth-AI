@@ -14,6 +14,9 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
    and ``date_iso`` are both the ISO day (``date == date_iso`` marks the estimate: the client
    writes it out in the reader's language, as on the demand row, whose readable server line is
    ``DateInfo.localized_line`` — ``deadline_rules.estimate_text``);
+   5b. still nothing, but a verified future stated date ≤ 30 days carries a driving role of
+   another type (``ANY_DRIVING`` minus the type's roles) → ``medium`` ``date_soon`` (the model
+   chose an off-type role; capped like an estimate; not for types without driving roles);
 6. floors: ``nta``, ``hearing_notice``, ``eviction_summons``, ``uscis_noid``, ``utility_shutoff``,
    ``pay_or_quit`` never below ``high``;
 7. no verified date drives it but ``unverified[]`` holds a dated demand (a quote that did not
@@ -258,6 +261,30 @@ def _pick(cands: Sequence[_Candidate], level_of: dict[int, UrgencyLevel]) -> _Ca
     )
 
 
+def _off_type_urgency(
+    demands: Sequence[Demand], roles: frozenset[str], today: date, verify: str | None
+) -> Urgency | None:
+    """Step 5b: a verified printed date whose role drives *some* type (``ANY_DRIVING``) but not
+    this one — "Please pay by …" labelled ``response_due`` on a ``medical_bill`` — counts like an
+    estimate: future dates only, capped at ``medium``, and only when that cap is reached (≤ 30
+    days), so it never lowers the step-7 result. ``None`` otherwise."""
+    cands = [
+        c for c in _candidates(demands, ANY_DRIVING - roles, DateKind.stated, today)
+        if c.days_until >= 0
+    ]  # fmt: skip
+    levels = {
+        id(c): min(threshold_level(c.days_until, critical_allowed=False), UrgencyLevel.medium,
+                   key=level_rank)
+        for c in cands
+    }  # fmt: skip
+    medium = [c for c in cands if levels[id(c)] is UrgencyLevel.medium]
+    if not medium:
+        return None
+    cand = _pick(medium, levels)
+    params = {"date": cand.demand.value_verbatim, "date_iso": cand.when.isoformat()}
+    return _urgency(UrgencyLevel.medium, KEY_MEDIUM_SOON, cand=cand, params=params, verify=verify)
+
+
 def compute_urgency(
     document_type: DocumentType,
     category: DocumentCategory,
@@ -329,6 +356,8 @@ def compute_urgency(
                 levels[id(cand)], KEY_MEDIUM_ESTIMATED, cand=cand,
                 params={"date": iso, "date_iso": iso}, verify=verify,
             )  # fmt: skip
+    if result is None and roles:
+        result = _off_type_urgency(demands, roles, today, verify)
     if result is None and any(
         d.kind in DATED_KINDS and d.role not in NEVER_DRIVING for d in unverified
     ):

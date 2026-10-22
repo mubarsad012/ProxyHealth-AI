@@ -260,3 +260,52 @@ def test_unverified_never_beats_a_verified_date_and_anchor_roles_do_not_count() 
         unverified=[_unverified(None, "notice_date")],
     )  # fmt: skip
     assert notice_only.urgency.headline_key == u.KEY_INFO_NO_DATE, "something was on the page"
+
+
+# --- step 5b: a verified date with another type's driving role (AI_PROMPTS §11.5) ---------------
+
+
+def test_off_type_driving_role_caps_at_medium() -> None:
+    """inova_final_notice: "Please pay by October 28, 2026" labelled ``response_due`` on a
+    ``medical_bill`` (which drives on ``payment_due`` only) — medium, not "no date"."""
+    out = run(DT.medical_bill, CAT.medical, dated(26, "response_due", value="October 20, 2026"))
+    urg = out.urgency
+    assert urg.level is UrgencyLevel.medium and urg.headline_key == "urgency.medium.date_soon"
+    assert urg.headline_params == {
+        "date": "October 20, 2026", "date_iso": (TODAY + timedelta(days=26)).isoformat()
+    }  # fmt: skip
+    assert urg.driving_demand_id == "d1" and urg.days_until == 26 and not urg.past_date
+
+
+@pytest.mark.parametrize("days", [0, 3, 10])
+def test_off_type_role_never_critical_or_high(days: int) -> None:
+    out = run(DT.medical_bill, CAT.medical, dated(days, "hearing_date"))
+    assert out.urgency.level is UrgencyLevel.medium
+
+
+def test_in_type_role_unchanged() -> None:
+    out = run(DT.medical_bill, CAT.medical, dated(10, "payment_due"))
+    assert out.urgency.level is UrgencyLevel.high
+    assert out.urgency.headline_key == "urgency.high.date_soon"
+
+
+def test_off_type_role_never_lowers_or_drives_otherwise() -> None:
+    # Beyond 30 days it would be ``info``: the step-7 "unverified date" banner keeps medium.
+    far = u.compute_urgency(
+        DT.medical_bill, CAT.medical, [dated(45, "response_due")], emergency=False,
+        today=TODAY, unverified=[_unverified(None, "payment_due")],
+    )  # fmt: skip
+    assert far.urgency.level is UrgencyLevel.medium
+    assert far.urgency.headline_key == u.KEY_UNVERIFIED_DATE
+    # Past off-type dates, anchor roles and types without driving roles never drive.
+    past = run(DT.medical_bill, CAT.medical, dated(-3, "response_due"))
+    assert past.urgency.level is UrgencyLevel.info and not past.red_flags
+    anchor = run(DT.medical_bill, CAT.medical, dated(5, "notice_date"))
+    assert anchor.urgency.level is UrgencyLevel.info
+    no_roles = run(DT.w2_1099, CAT.employment, dated(5, "response_due"))
+    assert no_roles.urgency.level is UrgencyLevel.info
+    # An in-type estimate still wins over an off-type stated date.
+    est = dated(20, "payment_due", kind=DateKind.estimated, demand_id="d2")
+    both = run(DT.medical_bill, CAT.medical, dated(5, "response_due"), est)
+    assert both.urgency.headline_key == u.KEY_MEDIUM_ESTIMATED
+    assert both.urgency.driving_demand_id == "d2"

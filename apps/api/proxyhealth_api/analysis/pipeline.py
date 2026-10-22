@@ -58,6 +58,7 @@ from proxyhealth_api.analysis import (
     urgency,
     verify,
 )
+from proxyhealth_api.analysis.demand_repair import repair_demands
 from proxyhealth_api.analysis.i18n import Translator, translator_from
 from proxyhealth_api.contracts.analysis import (
     AnalysisResult,
@@ -1085,7 +1086,8 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     detected = language_tag(out.detected_language)
 
     # §11.2 span verification.
-    checked = verify.verify_demands(out.demands, paper)
+    repaired = repair_demands(out.demands, paper)  # demands only: red flags are never repaired
+    checked = repaired.verify(paper)
     flags_checked = verify.verify_red_flags(out.red_flags, paper)
     # An agency's anti-fraud line ("USCIS will never ask you to pay with gift cards") quoted as a
     # payment red flag is boilerplate, not a demand: it neither scores nor shows.
@@ -1123,7 +1125,9 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     )  # fmt: skip
     if ctx.today != today:  # a sample paper: pinned day (the state's zone never moves it)
         ctx = replace(ctx, today=today)
-    demands = deadline_rules.apply_deadline_rules(checked.verified, checked.sources, ctx, paper)
+    demands = deadline_rules.apply_deadline_rules(
+        checked.verified, checked.sources, ctx, paper, span_aliases=repaired.span_aliases(checked)
+    )
 
     # §11.10 (part) tags; the one ``tag`` call runs now so its emergency hint reaches §11.7.
     geo = geo_hints(out)

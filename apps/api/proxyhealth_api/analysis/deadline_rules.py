@@ -14,7 +14,10 @@ The model never computes a date: it records ``date_text`` as printed, or ``relat
   skip weekends and the federal-holiday table below.
 * ``unresolved`` — anything else; the client shows "Ask the sender which date this means."
 
-A printed date on the same demand always wins. Eviction papers never receive an estimate.
+A printed date on the same demand always wins. Eviction papers never receive an estimate. A
+verified ``amount``/``document_requested``/``action`` demand with a date role gets a ``stated``
+date only from a ``date_text`` printed inside its quote (``resolve_carried``), never an estimate.
+``time_text`` is kept only when it sits in the verified quote.
 
 ``DateInfo.localized_line`` is the line the app *adds* under a date (D-26, never a substitute
 for the printed value): for a ``stated`` date the ISO day in the pack's own digits (Persian,
@@ -36,7 +39,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.transcript import Transcript
-from proxyhealth_api.analysis.verify import ascii_digits, check_value
+from proxyhealth_api.analysis.urgency import ANY_DRIVING
+from proxyhealth_api.analysis.verify import ascii_digits, check_value, verify_span
 from proxyhealth_api.contracts.analysis import DateInfo, Demand
 from proxyhealth_api.contracts.enums import (
     Confidence,
@@ -52,6 +56,10 @@ from proxyhealth_api.contracts.rules import DeadlineRule
 
 AMBIGUOUS_DATE_KEY = "demand.ambiguous_date"
 DATED_KINDS = frozenset({DemandKind.deadline, DemandKind.relative_deadline, DemandKind.appointment})
+# Kinds that may carry a printed date for a date role ("return the form by …", "prepay … by …").
+DATE_CARRYING_KINDS = frozenset(
+    {DemandKind.amount, DemandKind.document_requested, DemandKind.action}
+)
 NEVER_ESTIMATE_TYPES = frozenset({DocumentType.pay_or_quit, DocumentType.eviction_summons})
 # DOCUMENT_TAXONOMY §5.3: on the catch-all ``other_notice`` (also the scam re-type target) these
 # rules apply only to a paper of this category, so a debt collector's "within 30 days" never gets
@@ -608,6 +616,14 @@ def _printed_date_text(demand: Demand, source: DemandOut | None) -> str | None:
     return demand.value_verbatim or None
 
 
+def _printed_time_text(demand: Demand, source: DemandOut | None) -> str | None:
+    """``time_text`` only when it sits in the verified quote (D-09): the client shows it next to
+    the date, so a time the paper does not print never reaches the reader (AI_PROMPTS §11.2)."""
+    if source is None or not source.time_text:
+        return None
+    return source.time_text if check_value(source.time_text, demand.source_quote) is None else None
+
+
 def _append_note(existing: str | None, note: str) -> str:
     if not existing:
         return note
@@ -651,7 +667,7 @@ class DeadlineContext:
 
 def resolve_stated(demand: Demand, source: DemandOut | None, ctx: DeadlineContext) -> Demand:
     """Pass 1 for one verified demand: ``stated`` when a printed date exists, else leave it."""
-    time_text = source.time_text if source is not None else None
+    time_text = _printed_time_text(demand, source)
     printed = _printed_date_text(demand, source)
     if printed is None:
         return demand
@@ -678,25 +694,64 @@ def resolve_stated(demand: Demand, source: DemandOut | None, ctx: DeadlineContex
     return demand.model_copy(update=update)
 
 
+def resolve_carried(
+    demand: Demand,
+    source: DemandOut | None,
+    ctx: DeadlineContext,
+    transcript: Transcript | None = None,
+) -> Demand:
+    """Pass 1 for a printed date carried by another kind ("return the form by October 23, 2026"
+    as ``document_requested``, "prepay $156.00 by October 9, 2026" as ``amount``).
+
+    Only a verified ``amount``/``document_requested``/``action`` demand with a date role
+    (``urgency.ANY_DRIVING``) whose ``date_text`` sits inside its verified quote — and, given the
+    transcript, passes ``verify_span`` as a value of that quote — and parses to exactly one day.
+    The printed ``date_text`` then becomes ``value_verbatim``, so every ``{date}`` the reader sees
+    (banner, reminder, quick sheet) is the printed date; the kind, quote, ``amount`` and
+    ``documents`` stay. Never an estimate. Otherwise the demand is returned unchanged.
+    """
+    if not demand.verified or demand.kind not in DATE_CARRYING_KINDS:
+        return demand
+    if demand.role not in ANY_DRIVING or source is None or not source.date_text:
+        return demand
+    printed = source.date_text.strip()
+    if check_value(printed, demand.source_quote) is not None:
+        return demand
+    if transcript is not None and not verify_span(
+        transcript, demand.span_ids, demand.source_quote, value_verbatim=printed
+    ).verified:
+        return demand
+    dated = resolve_stated(demand.model_copy(update={"value_verbatim": printed}), source, ctx)
+    if dated.date is None or not dated.date.value_iso:
+        return demand
+    return dated
+
+
 def _anchor_for(
     source: DemandOut | None,
     rule: DeadlineRule,
     stated: Sequence[Demand],
     transcript: Transcript | None,
+    span_aliases: Mapping[str, Sequence[str]] | None = None,
 ) -> Demand | None:
     """D-11 (b): the verified *stated* demand whose span holds ``anchor_span_id`` and whose role
-    is the rule's ``anchor_role``. No other demand may stand in."""
+    is the rule's ``anchor_role``. No other demand may stand in. ``span_aliases`` (final demand
+    id → the model's own ``span_ids``) lets a demand re-anchored by ``demand_repair`` (R4) still
+    answer to the id the model cited for it."""
     if source is None or not source.anchor_span_id:
         return None
-    anchor_id = transcript.resolve(source.anchor_span_id) if transcript else source.anchor_span_id
+    resolve = transcript.resolve if transcript else (lambda span_id: span_id)
+    anchor_id = resolve(source.anchor_span_id)
+    aliases = span_aliases or {}
     for cand in stated:
+        cited = [*cand.span_ids, *(resolve(a) for a in aliases.get(cand.id, ()))]
         if (
             cand.verified
             and cand.date is not None
             and cand.date.kind is DateKind.stated
             and cand.date.value_iso
             and cand.role == rule.anchor_role
-            and anchor_id in cand.span_ids
+            and anchor_id in cited
         ):
             return cand
     return None
@@ -708,15 +763,16 @@ def resolve_relative(
     stated: Sequence[Demand],
     ctx: DeadlineContext,
     transcript: Transcript | None = None,
+    span_aliases: Mapping[str, Sequence[str]] | None = None,
 ) -> Demand:
     """Pass 2 for one verified demand without a stated date: ``estimated`` or ``unresolved``."""
-    time_text = source.time_text if source is not None else None
+    time_text = _printed_time_text(demand, source)
     rule: DeadlineRule | None = None
     anchor: Demand | None = None
     if demand.kind is DemandKind.relative_deadline and source is not None:
         phrase = source.relative_rule_text
         for cand in matching_rules(phrase, ctx.document_type, ctx.rules, ctx.today, ctx.category):
-            anchor = _anchor_for(source, cand, stated, transcript)
+            anchor = _anchor_for(source, cand, stated, transcript, span_aliases)
             if anchor is not None:
                 rule = cand
                 break
@@ -740,13 +796,18 @@ def apply_deadline_rules(
     sources: Mapping[str, DemandOut],
     ctx: DeadlineContext,
     transcript: Transcript | None = None,
+    *,
+    span_aliases: Mapping[str, Sequence[str]] | None = None,
 ) -> list[Demand]:
     """Fill ``Demand.date`` + ``reminder_eligible`` for verified demands (AI_PROMPTS §11.4).
 
     ``demands`` are the *verified* demands (``VerifiedDemands.verified``), ``sources`` the
-    ``VerifiedDemands.sources`` map. Only kinds ``deadline``/``relative_deadline``/``appointment``
-    get a ``DateInfo``; other kinds and unverified demands are returned unchanged. A printed date
-    always wins over a computed one; ``reminder_eligible = verified and stated and value_iso``.
+    ``VerifiedDemands.sources`` map. Kinds ``deadline``/``relative_deadline``/``appointment`` get
+    a ``DateInfo``; an ``amount``/``document_requested``/``action`` demand gets a ``stated`` one
+    only for a printed date it carries (``resolve_carried``), unless another verified demand
+    already states that day for the same role; other demands are returned unchanged. A printed
+    date always wins over a computed one; ``reminder_eligible = verified and stated and
+    value_iso``. ``span_aliases`` comes from ``demand_repair`` (``_anchor_for``).
     """
     first: list[Demand] = []
     for d in demands:
@@ -754,11 +815,24 @@ def apply_deadline_rules(
             first.append(resolve_stated(d, sources.get(d.id), ctx))
         else:
             first.append(d)
+    taken: set[tuple[str | None, str | None]] = {
+        (d.date.value_iso, d.role) for d in first
+        if d.date is not None and d.date.kind is DateKind.stated and d.date.value_iso
+    }  # fmt: skip
+    for i, d in enumerate(first):
+        carried = resolve_carried(d, sources.get(d.id), ctx, transcript)
+        if carried is d or carried.date is None:
+            continue
+        if (carried.date.value_iso, carried.role) not in taken:
+            taken.add((carried.date.value_iso, carried.role))
+            first[i] = carried
     stated = [d for d in first if d.date is not None and d.date.kind is DateKind.stated]
     out: list[Demand] = []
     for d in first:
         if d.kind in DATED_KINDS and d.verified and d.date is None:
-            out.append(resolve_relative(d, sources.get(d.id), stated, ctx, transcript))
+            out.append(
+                resolve_relative(d, sources.get(d.id), stated, ctx, transcript, span_aliases)
+            )
         else:
             out.append(d)
     return out
@@ -790,6 +864,7 @@ def context_for(
 __all__ = [
     "AMBIGUOUS_DATE_KEY",
     "DATED_KINDS",
+    "DATE_CARRYING_KINDS",
     "DEFAULT_TIME_ZONE",
     "EN_MONTHS",
     "MONTH_LANGUAGES",
@@ -814,6 +889,7 @@ __all__ = [
     "numeric_order_cue",
     "paper_default_order",
     "parse_dates",
+    "resolve_carried",
     "resolve_relative",
     "resolve_stated",
     "rule_applies",
