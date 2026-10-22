@@ -6,6 +6,7 @@ injected clock stands in for a slow local model. No network, no model."""
 
 import json
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,7 +27,7 @@ from proxyhealth_api.analysis.pipeline import (
     run_analysis,
 )
 from proxyhealth_api.contracts.analysis import AnalysisResult, AnalyzeRequest
-from proxyhealth_api.contracts.common import TranslatedPage
+from proxyhealth_api.contracts.common import TextBlock, TranslatedPage
 from proxyhealth_api.contracts.enums import AnalysisMode, Provider, WarningCode
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, RewriteOut
 from proxyhealth_api.demo.fixtures import FixtureStore
@@ -179,7 +180,9 @@ async def run_with(settings: Settings, name: Provider, out: AnalysisModelOut) ->
 
 
 async def test_same_language_stub_becomes_the_transcript_on_openai_compat(tmp_path: Path) -> None:
-    out = medicaid_out(translated_pages=[TranslatedPage(page=1, text=BANNER)])
+    # The sweep's stub: one line of the page (there, the sample banner the model transcribed).
+    stub = medicaid_out().blocks[0].text.split("\n")[0]
+    out = medicaid_out(translated_pages=[TranslatedPage(page=1, text=stub)])
     res = await run_with(local(tmp_path), Provider.openai_compat, out)
     assert [p.page for p in res.translated_text] == [1]
     assert res.translated_text[0].text == page_text(res)
@@ -224,10 +227,17 @@ def test_same_language_pages_unit_rules(tmp_path: Path) -> None:
             settings, o, paper, detected=detected, target="en-US"
         ).translated_pages
 
+    lines = text.split("\n")
     copy = [TranslatedPage(page=1, text=text)]
-    assert pages_for([TranslatedPage(page=1, text=BANNER)]) == copy  # a stub
+    assert pages_for([TranslatedPage(page=1, text=lines[0])]) == copy  # a stub: the first line
+    assert pages_for([TranslatedPage(page=1, text=lines[-1][:30])]) == copy  # a cut-off line
     assert pages_for([TranslatedPage(page=1, text=text.upper() + " x")]) == copy  # a re-typed copy
+    merged = " ".join(lines[:3]) + "\n" + "\n".join(lines[3:]).replace("2026", "2O26", 1)
+    assert pages_for([TranslatedPage(page=1, text=merged)]) == copy  # lines joined, a digit slip
     assert pages_for([]) == copy  # nothing written
+    # Words the page does not have are never discarded: a note is the model's own text.
+    note = [TranslatedPage(page=1, text="This letter is already in English.")]
+    assert pages_for(note) == note
     extra = TranslatedPage(page=7, text="a page the paper does not have")
     assert pages_for([extra]) == [*copy, extra]
     assert pages_for([TranslatedPage(page=1, text=BANNER)], detected="es") == [
@@ -236,6 +246,79 @@ def test_same_language_pages_unit_rules(tmp_path: Path) -> None:
     mock = make_settings(tmp_path)
     o = out.model_copy(update={"translated_pages": []})
     assert compat_runtime.same_language_pages(mock, o, paper, detected="en", target="en") is o
+
+
+LEASE_ES = [
+    "CONTRATO DE ARRENDAMIENTO RESIDENCIAL",
+    "Inquilino: Maria Lopez. Propietario: Casa Verde LLC.",
+    "La renta mensual es de 1.200 dolares, pagadera el primer dia de cada mes.",
+    "El inquilino debe mantener la vivienda limpia y en buen estado.",
+]
+NOTICE_EN = (
+    "NOTICE: Your lease ends on November 30, 2026. You must move out or sign a renewal by "
+    "November 15, 2026."
+)
+NOTICE_ES = (
+    "AVISO: Su contrato termina el 30 de noviembre de 2026. Debe mudarse o firmar una renovacion "
+    "antes del 15 de noviembre de 2026."
+)
+LETTER_EN = [
+    "Fairfax County Department of Family Services",
+    "Your SNAP interview is on November 4, 2026 at 10:00 AM.",
+    "If you cannot come, call us before that day to change the time.",
+    "Bring proof of income for the last 30 days.",
+]
+
+
+def bilingual(lines: list[str]) -> transcript.Transcript:
+    blocks = [
+        TextBlock(id=f"b{i}", page=1, text=t, bbox=None, is_handwriting=False, is_unclear=False)
+        for i, t in enumerate(lines, 1)
+    ]  # fmt: skip
+    return transcript.assemble_transcript(blocks, pages_received=1)
+
+
+@pytest.mark.parametrize(
+    ("target", "page", "model", "translated", "foreign"),
+    [
+        # A Spanish lease with an English deadline notice, read in Spanish.
+        ("es", [*LEASE_ES, NOTICE_EN], [*LEASE_ES, NOTICE_ES], NOTICE_ES, NOTICE_EN),
+        # An English letter with a Spanish passage, read in English (the mirror case).
+        ("en", [*LETTER_EN[:2], NOTICE_ES, *LETTER_EN[2:]],
+         [*LETTER_EN[:2], NOTICE_EN, *LETTER_EN[2:]], NOTICE_EN, NOTICE_ES),
+    ],
+)  # fmt: skip
+def test_bilingual_page_keeps_the_translated_passage(
+    tmp_path: Path, target: str, page: list[str], model: list[str], translated: str, foreign: str
+) -> None:
+    paper = bilingual(page)
+    out = medicaid_out(translated_pages=[TranslatedPage(page=1, text="\n".join(model))])
+    res = compat_runtime.same_language_pages(
+        local(tmp_path), out, paper, detected=target, target=target
+    ).translated_pages
+    assert len(res) == 1 and translated in res[0].text.split("\n")
+    assert foreign not in res[0].text  # the passage is not shown untranslated
+    assert res[0].text.split("\n") == model  # the copied lines are the transcript's own
+    # Copied lines the model re-typed with a slip come back as the transcript's lines.
+    slipped = [model[0].upper(), re.sub(r"(\w+)(\W*)$", r"\1s\2", model[1]), *model[2:]]
+    assert slipped[1] != model[1]
+    out = medicaid_out(translated_pages=[TranslatedPage(page=1, text="\n".join(slipped))])
+    res = compat_runtime.same_language_pages(
+        local(tmp_path), out, paper, detected=target, target=target
+    ).translated_pages
+    assert res[0].text.split("\n") == model
+
+
+async def test_bilingual_page_through_the_pipeline_has_no_partial_warning(tmp_path: Path) -> None:
+    fx = medicaid_out()
+    blocks = [*fx.blocks, fx.blocks[-1].model_copy(update={"id": "b-es", "text": NOTICE_ES})]
+    page = [ln for b in fx.blocks for ln in b.text.split("\n") if ln.strip()]
+    model = "\n".join([*page, NOTICE_EN])
+    out = medicaid_out(blocks=blocks, translated_pages=[TranslatedPage(page=1, text=model)])
+    res = await run_with(local(tmp_path), Provider.openai_compat, out)
+    text = res.translated_text[0].text
+    assert NOTICE_EN in text and NOTICE_ES not in text
+    assert WarningCode.translation_partial not in res.warnings
 
 
 # ---------------------------------------------------------- one rewrite per sentence (§11.9)

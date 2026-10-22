@@ -71,9 +71,11 @@ WRITE_TIMEOUT_S = 30.0
 POOL_TIMEOUT_S = 5.0
 LOCAL_DOWN_RETRY_AFTER_S = 30
 MODEL_MISSING_RETRY_AFTER_S = 60
-# A call that waited this long for the semaphore and then ran out of time lost its budget to
-# another request holding the one loopback slot: "busy", not "too slow on this paper" (§4.7).
-QUEUE_BUSY_S = 10.0
+# A call that spent at least this share of its budget waiting for the semaphore and then ran out
+# of time lost its budget to another request holding the one loopback slot: "busy", not "too
+# slow on this paper" (§4.7). A shorter wait (a third is 100 s of 300 s; a loopback paper reads
+# in ≈ 65–200 s) did not cause the timeout, so the paper itself is reported as too slow.
+QUEUE_BUSY_SHARE = 1 / 3
 
 # §4.4 capability table: host pattern → (mode with images, mode for text-only tasks). Patterns use
 # the ``ATTESTED_HOST_DENYLIST`` syntax. Anything else (loopback Ollama/LM Studio included) gets
@@ -495,9 +497,11 @@ class OpenAICompatProvider:
                 thinking=thinking, max_output_tokens=max_output_tokens, deadline=deadline,
             )  # fmt: skip
         except (httpx.ReadTimeout, TimeoutError):
-            if waited >= QUEUE_BUSY_S:
+            if waited >= self._timeout_s * QUEUE_BUSY_SHARE:
                 raise busy_error(waited) from None
-            raise too_slow_error(task, self._timeout_s, reason="ai_timeout") from None
+            raise too_slow_error(
+                task, self._timeout_s, reason="ai_timeout", local=self._loopback
+            ) from None
         finally:
             self._semaphore.release()
             self.last_latency_ms = int((self._clock() - started) * 1000)

@@ -3,8 +3,10 @@ LOCAL_AI.md §5, §9).
 
 A local model at ``temperature: 0`` that runs out of time on a paper runs out again on a retry, so
 these errors carry their own pack keys instead of the Gemini meaning of ``503`` ("a transient
-upstream hiccup, try again in a minute"). The code and status stay ``503 upstream_unavailable``
-(API_CONTRACT §0.1); an app whose pack lacks a key falls back to ``err.upstream_unavailable``.
+upstream hiccup, try again in a minute"). A hosted endpoint's timeout is often a passing overload
+that a retry gets through, so there the "too slow" error keeps the generic copy. The code and
+status stay ``503 upstream_unavailable`` (API_CONTRACT §0.1); an app whose pack lacks a key falls
+back to ``err.upstream_unavailable``.
 Messages are fixed server text: never an upstream body, a prompt or model output.
 
 Its own module because both ``openai_compat`` and ``failover`` raise them (``failover`` cannot
@@ -22,14 +24,16 @@ AI_BUSY_RETRY_AFTER_S = 60
 PAPER_TASKS = frozenset({Task.analyze_single, Task.transcribe, Task.explain})
 
 
-def too_slow_error(task: Task, budget_s: float, *, reason: str) -> ApiError:
+def too_slow_error(task: Task, budget_s: float, *, reason: str, local: bool) -> ApiError:
     """The call's budget (``reason`` ``ai_timeout``) or the request's deadline (``deadline``) ran
-    out. No short retry hint is set (the envelope still carries the §0.1 default
-    ``Retry-After``)."""
+    out. ``err.ai_too_slow`` only for a paper-reading task on a loopback endpoint (``local``);
+    otherwise the generic ``err.upstream_unavailable`` copy. No short retry hint is set (the
+    envelope still carries the §0.1 default ``Retry-After``; the app shows no countdown for
+    ``err.ai_too_slow``)."""
     return ApiError(
         ErrorCode.upstream_unavailable, 503,
         f"The AI server did not finish within {int(budget_s)} s.",
-        user_message_key=AI_TOO_SLOW_KEY if task in PAPER_TASKS else None,
+        user_message_key=AI_TOO_SLOW_KEY if local and task in PAPER_TASKS else None,
         details={"reason": reason, "timeout_s": int(budget_s)},
     )  # fmt: skip
 

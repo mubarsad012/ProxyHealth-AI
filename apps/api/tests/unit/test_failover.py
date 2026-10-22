@@ -688,10 +688,15 @@ async def test_no_slots_configured_is_429_key_exhausted(tmp_path: Path) -> None:
 # ------------------------------------------- openai_compat: "too slow", not "try again later"
 
 
-def compat_harness(tmp_path: Path, script: Script) -> Harness:
+def compat_harness(tmp_path: Path, script: Script, *, hosted: bool = False) -> Harness:
+    tier: dict[str, Any] = (
+        {"openai_compat_data_tier": "unpaid", "openai_compat_vendor_name": "Groq",
+         "openai_compat_api_key": "sk-test-0001",
+         "openai_compat_base_url": "https://api.groq.com/openai/v1"}
+        if hosted else {"openai_compat_data_tier": "local", "openai_compat_model_label": "Qwen"}
+    )  # fmt: skip
     settings = Settings(
-        _env_file=None, ai_provider="openai_compat", openai_compat_data_tier="local",
-        openai_compat_model_label="Qwen", var_dir=tmp_path / "var",
+        _env_file=None, ai_provider="openai_compat", var_dir=tmp_path / "var", **tier
     )  # fmt: skip
     clock = FakeClock()
     keypool = KeyPool(
@@ -724,8 +729,25 @@ async def test_openai_compat_deadline_refusal_is_ai_too_slow(tmp_path: Path) -> 
     assert chat_info.value.user_message_key == "err.upstream_unavailable"  # not a paper
 
 
+async def test_hosted_openai_compat_deadline_refusal_keeps_the_generic_copy(
+    tmp_path: Path,
+) -> None:
+    # A hosted endpoint's slowness is often a passing overload: "try again" is the right copy.
+    h = compat_harness(tmp_path, [ok()], hosted=True)
+    deadline = h.service.request_deadline()
+    h.clock.advance(h.settings.failover_deadline_s + 1)
+    with pytest.raises(ApiError) as info:
+        await call(h, Task.explain, deadline_at=deadline)
+    err = info.value
+    assert (err.status, err.code, err.user_message_key) == (
+        503, ErrorCode.upstream_unavailable, "err.upstream_unavailable",
+    )  # fmt: skip
+    assert err.details is not None and err.details["reason"] == "deadline"
+    assert h.provider.calls == []
+
+
 async def test_openai_compat_timeout_error_passes_through_unchanged(tmp_path: Path) -> None:
-    slow = too_slow_error(Task.analyze_single, 300, reason="ai_timeout")
+    slow = too_slow_error(Task.analyze_single, 300, reason="ai_timeout", local=True)
     h = compat_harness(tmp_path, [slow])
     with pytest.raises(ApiError) as info:
         await call(h, Task.analyze_single)

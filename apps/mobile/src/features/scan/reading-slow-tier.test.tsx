@@ -11,7 +11,7 @@ import { resetServerConfigSession, setClient } from '@/api/config';
 import { ApiError } from '@/api/errors';
 import type { ClientTimeouts, ServerConfig } from '@/api/types';
 import { AppProviders } from '@/design/components/Providers';
-import { errorCopyKey } from '@/design/components/States';
+import { ErrorState, errorCopyKey } from '@/design/components/States';
 import { isSlowTier, TIP_SLOW_MS, TIP_STILL_MS } from '@/features/analysis/useAnalyze';
 import { ReadingScreen } from '@/features/scan/ReadingScreen';
 import { samplePages } from '@/features/scan/samples';
@@ -153,6 +153,28 @@ describe('timeout error copy', () => {
     expect(t('err.ai_too_slow')).not.toBe('err.ai_too_slow');
     const busy = new ApiError({ code: 'upstream_unavailable', status: 503, userMessageKey: 'err.ai_busy' });
     expect(errorCopyKey(busy)).toBe('err.ai_busy');
+  });
+
+  it('shows no Retry countdown for err.ai_too_slow, but keeps it for other 503s', async () => {
+    const client = readingClient(LOCAL);
+    const slow = new ApiError({ code: 'upstream_unavailable', status: 503, userMessageKey: 'err.ai_too_slow', retryAfterSeconds: 30 });
+    const tooSlow = await render(
+      <AppProviders client={client} staticMetrics>
+        <ErrorState error={slow} onRetry={jest.fn()} />
+      </AppProviders>,
+    );
+    expect(tooSlow.getByText(t('btn.retry'))).toBeTruthy();
+    expect(tooSlow.queryByText(`${t('btn.retry')} (0:30)`)).toBeNull();
+    await tooSlow.unmount();
+
+    const busy = new ApiError({ code: 'upstream_unavailable', status: 503, userMessageKey: 'err.ai_busy', retryAfterSeconds: 60 });
+    const waiting = await render(
+      <AppProviders client={client} staticMetrics>
+        <ErrorState error={busy} onRetry={jest.fn()} />
+      </AppProviders>,
+    );
+    expect(waiting.getByText(`${t('btn.retry')} (1:00)`)).toBeTruthy();
+    await waiting.unmount();
   });
 
   it('falls back to the code copy for a key this app does not know', () => {

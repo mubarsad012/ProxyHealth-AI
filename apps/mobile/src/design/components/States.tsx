@@ -96,7 +96,9 @@ function ErrorStateBody({ error, onRetry, onSaveLater, onCall211, onTrySample }:
   const t = useT();
   const { colors } = useTheme();
   const limits = useSession((s) => s.serverConfig?.limits ?? null);
-  const left = useCountdown(error.retryAfterSeconds);
+  // `err.ai_too_slow` (a local test model): a retry takes as long again, so no countdown invites
+  // one, although the 503 envelope still carries the §0.1 default Retry-After.
+  const left = useCountdown(error.userMessageKey === 'err.ai_too_slow' ? null : error.retryAfterSeconds);
   const vars = errorMessageVars(error, limits);
   if (left !== null) vars.minutes = Math.max(1, Math.ceil(left / 60));
   const primary = primaryErrorAction(error);

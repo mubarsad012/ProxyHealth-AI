@@ -537,6 +537,18 @@ async def test_timeouts_on_other_tasks_keep_the_generic_copy(tmp_path: Path) -> 
     assert info.value.details is not None and info.value.details["reason"] == "ai_timeout"
 
 
+async def test_read_timeout_on_a_hosted_endpoint_keeps_the_generic_copy(tmp_path: Path) -> None:
+    # A hosted endpoint's timeout is often a passing overload that a retry gets through.
+    server = FakeServer(httpx.ReadTimeout("slow"))
+    with pytest.raises(ApiError) as info:
+        await call(provider(hosted(tmp_path, "api.groq.com"), server), task=Task.analyze_single)
+    err = info.value
+    assert (err.status, err.code, err.user_message_key) == (
+        503, ErrorCode.upstream_unavailable, "err.upstream_unavailable",
+    )  # fmt: skip
+    assert err.details == {"reason": "ai_timeout", "timeout_s": 90}
+
+
 async def test_semaphore_wait_timeout_is_ai_busy(tmp_path: Path) -> None:
     server = FakeServer(ok())
     p = provider(compat(tmp_path), server)
@@ -565,6 +577,22 @@ async def test_timeout_after_a_long_queue_wait_is_ai_busy(tmp_path: Path) -> Non
         await pending
     assert info.value.user_message_key == "err.ai_busy"
     assert info.value.details == {"reason": "ai_busy", "waited_s": 200}
+
+
+async def test_timeout_after_a_short_queue_wait_is_still_ai_too_slow(tmp_path: Path) -> None:
+    # 15 s behind another user's short call, then this paper ran away for the rest of its 300 s:
+    # the queue did not cause the timeout, and "wait a minute, then retry" would fail again.
+    now = [0.0]
+    p = provider(compat(tmp_path), FakeServer(httpx.ReadTimeout("slow")), clock=lambda: now[0])
+    await p._semaphore.acquire()
+    pending = asyncio.ensure_future(call(p, task=Task.analyze_single))
+    await asyncio.sleep(0)
+    now[0] = 15.0
+    p._semaphore.release()
+    with pytest.raises(ApiError) as info:
+        await pending
+    assert info.value.user_message_key == "err.ai_too_slow"
+    assert info.value.details == {"reason": "ai_timeout", "timeout_s": 300}
 
 
 async def test_trickling_endpoint_cannot_outlast_the_call_budget(tmp_path: Path) -> None:

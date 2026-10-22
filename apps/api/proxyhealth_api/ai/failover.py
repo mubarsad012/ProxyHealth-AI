@@ -250,7 +250,10 @@ class AIService:
         if timed_out and not failures and self.provider.name is Provider.openai_compat:
             # The request's budget went on earlier calls (a slow local model), so this one never
             # started: that is "too slow", not a transient upstream hiccup (free-ai-providers §4.7).
-            raise too_slow_error(task, self.settings.failover_deadline_s, reason="deadline")
+            raise too_slow_error(
+                task, self.settings.failover_deadline_s, reason="deadline",
+                local=self.settings.openai_compat_is_loopback,
+            )  # fmt: skip
         raise self._exhausted_error(cfg.tier, failures, timed_out=timed_out)
 
     # ------------------------------------------------------------------- one slot
