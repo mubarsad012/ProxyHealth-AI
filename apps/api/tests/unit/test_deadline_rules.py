@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from proxyhealth_api.analysis import deadline_rules as dr
+from proxyhealth_api.analysis.demand_repair import R4_REANCHORED, repair_demands
 from proxyhealth_api.analysis.transcript import Transcript, assemble_transcript
 from proxyhealth_api.analysis.verify import VerifiedDemands, verify_demands
 from proxyhealth_api.contracts.analysis import Demand
@@ -21,6 +22,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     RuleVerification,
 )
+from proxyhealth_api.contracts.model_out import DemandOut
 from proxyhealth_api.contracts.rules import DeadlineRule
 from proxyhealth_api.resources.rules_repo import load_deadlines
 from proxyhealth_api.settings import DATA_DIR
@@ -539,3 +541,292 @@ def test_estimate_text_follows_the_printed_anchor(
     anchor: str | None, anchor_iso: str | None, expected: str
 ) -> None:
     assert dr.estimate_text(date(2026, 11, 13), anchor, anchor_iso) == expected
+
+
+# --- a printed date carried by another kind (resolve_carried; AI_PROMPTS §11.4) -----------------
+
+PREPAY = "You may prepay $156.00 by October 9, 2026 instead of coming to court."
+QUESTIONNAIRE = "Juror Qualification Questionnaire"
+RETURN_FORM = f"Please complete the {QUESTIONNAIRE} and return it by October 23, 2026."
+
+
+def _carried_paper() -> Transcript:
+    return assemble_transcript(
+        [
+            block("p1b1", "You must appear in court on October 13, 2026 at 9:00 AM, Courtroom 2B."),
+            block("p1b2", f"This is a prepayable offense. {PREPAY}"),
+            block("p1b3", RETURN_FORM),
+            block("p1b4", "Amount due: $312.45 Pay by: October 26, 2026"),
+        ],
+        pages_received=1,
+    )
+
+
+def _prepay(demand_id: str = "d2", role: str | None = "payment_due") -> DemandOut:
+    return demand_out(
+        demand_id, kind=DemandKind.amount, value_verbatim="$156.00", source_quote=PREPAY,
+        span_ids=["p1b2"], date_text="October 9, 2026", amount_text="$156.00", role=role,
+    )  # fmt: skip
+
+
+def test_dated_role_on_amount_gets_stated_date(rules: list[DeadlineRule]) -> None:
+    """traffic_court_notice d2: "prepay $156.00 by October 9, 2026" as an ``amount``."""
+    t = _carried_paper()
+    v = verify_demands([_prepay()], t)
+    out = _apply(v, rules, DocumentType.traffic_court, t)[0]
+    assert out.kind is DemandKind.amount and out.source_quote == PREPAY
+    assert out.date is not None and out.date.kind is DateKind.stated
+    assert out.date.value_iso == "2026-10-09" and out.reminder_eligible
+    # The banner, reminder and quick sheet show ``value_verbatim`` as the date: the printed one.
+    assert out.value_verbatim == "October 9, 2026"
+    assert out.amount is not None and out.amount.amount_minor == 15600
+
+
+def test_dated_role_on_document_request_gets_stated_date(rules: list[DeadlineRule]) -> None:
+    """jury_summons d1: "return it by October 23, 2026" as ``document_requested``."""
+    t = _carried_paper()
+    d = demand_out(
+        "d1", kind=DemandKind.document_requested, value_verbatim=QUESTIONNAIRE,
+        source_quote=RETURN_FORM, span_ids=["p1b3"], date_text="October 23, 2026",
+        documents=[QUESTIONNAIRE], role="response_due",
+    )  # fmt: skip
+    v = verify_demands([d], t)
+    out = _apply(v, rules, DocumentType.jury_summons, t)[0]
+    assert out.kind is DemandKind.document_requested
+    assert out.date is not None and out.date.value_iso == "2026-10-23" and out.reminder_eligible
+    assert out.documents == [QUESTIONNAIRE]
+    assert out.value_verbatim == "October 23, 2026"
+
+
+def test_date_text_outside_quote_is_ignored(rules: list[DeadlineRule]) -> None:
+    """irs_cp_notice d1: the quote is "Amount due: $312.45"; the date beside it is not quoted."""
+    t = _carried_paper()
+    d = demand_out(
+        "d1", kind=DemandKind.amount, value_verbatim="$312.45", source_quote="Amount due: $312.45",
+        span_ids=["p1b4"], date_text="October 26, 2026", amount_text="$312.45",
+        role="payment_due",
+    )  # fmt: skip
+    v = verify_demands([d], t)
+    out = _apply(v, rules, DocumentType.irs_notice, t)[0]
+    assert out.date is None and out.value_verbatim == "$312.45" and not out.reminder_eligible
+
+
+@pytest.mark.parametrize("role", ["other", "notice_date", "decision_date", None])
+def test_role_other_or_notice_date_not_dated(rules: list[DeadlineRule], role: str | None) -> None:
+    t = _carried_paper()
+    v = verify_demands([_prepay(role=role)], t)
+    out = _apply(v, rules, DocumentType.traffic_court, t)[0]
+    assert out.date is None and out.value_verbatim == "$156.00"
+
+
+def test_duplicate_date_not_added_twice(rules: list[DeadlineRule]) -> None:
+    t = _carried_paper()
+    deadline = demand_out(
+        "d1", value_verbatim="October 9, 2026", source_quote=PREPAY, span_ids=["p1b2"],
+        date_text="October 9, 2026", role="payment_due",
+    )  # fmt: skip
+    v = verify_demands([deadline, _prepay("d2"), _prepay("d3")], t)
+    out = _apply(v, rules, DocumentType.traffic_court, t)
+    assert out[0].date is not None and out[0].date.value_iso == "2026-10-09"
+    assert [d.date for d in out[1:]] == [None, None]
+    # Without the deadline the first carrier gets the date and the second stays as written.
+    v2 = verify_demands([_prepay("d2"), _prepay("d3")], t)
+    out2 = _apply(v2, rules, DocumentType.traffic_court, t)
+    assert out2[0].date is not None and out2[1].date is None
+
+
+def test_no_estimate_for_non_dated_kinds(rules: list[DeadlineRule]) -> None:
+    t = _denial_paper()
+    v = _denial_demands(t)
+    action = demand_out(
+        "d4", kind=DemandKind.action, value_verbatim="internal appeal",
+        source_quote="You may ask for an internal appeal within 180 days of this notice.",
+        span_ids=["p1b2"], relative_rule_text="within 180 days of this notice",
+        anchor_span_id="p1b1", role="response_due",
+    )  # fmt: skip
+    both = verify_demands([*v.sources.values(), action], t)
+    out = _apply(both, rules, DocumentType.insurance_denial, t)
+    assert out[1].date is not None and out[1].date.kind is DateKind.estimated
+    assert out[3].kind is DemandKind.action and out[3].date is None
+
+
+def test_carried_date_needs_one_printed_day(rules: list[DeadlineRule]) -> None:
+    t = assemble_transcript(
+        [block("p1b1", "Bring your lease by Monday, October 14."),
+         block("p1b2", "Please return the form by Octobr 23, 2026.")],
+        pages_received=1,
+    )  # fmt: skip
+    yearless = demand_out(
+        "d1", kind=DemandKind.document_requested, value_verbatim="your lease",
+        source_quote="Bring your lease by Monday, October 14.", span_ids=["p1b1"],
+        date_text="Monday, October 14", documents=["your lease"], role="response_due",
+    )  # fmt: skip
+    # A fuzzy quote (the page misspells the month): the model's date is not what is printed.
+    misprint = demand_out(
+        "d2", kind=DemandKind.document_requested, value_verbatim="the form",
+        source_quote="Please return the form by October 23, 2026.", span_ids=["p1b2"],
+        date_text="October 23, 2026", documents=["the form"], role="response_due",
+    )  # fmt: skip
+    v = verify_demands([yearless, misprint], t)
+    assert len(v.verified) == 2
+    out = _apply(v, rules, DocumentType.other_notice, t)
+    for d, before in zip(out, v.verified, strict=True):
+        assert d == before, "no date, no low-confidence side effect, value unchanged"
+
+
+# --- time_text must be printed in the quote (AI_PROMPTS §11.2, D-09) ----------------------------
+
+
+def test_time_text_not_in_quote_is_dropped(rules: list[DeadlineRule]) -> None:
+    t = assemble_transcript(
+        [block("p1b1", "Please respond by October 14, 2026.")], pages_received=1
+    )
+    d = demand_out(
+        "d1", value_verbatim="October 14, 2026", source_quote="respond by October 14, 2026",
+        span_ids=["p1b1"], date_text="October 14, 2026", time_text="7:00 AM",
+        role="response_due",
+    )  # fmt: skip
+    rel = demand_out(
+        "d2", kind=DemandKind.relative_deadline, value_verbatim="by October 14, 2026",
+        source_quote="respond by October 14, 2026", span_ids=["p1b1"],
+        relative_rule_text="within 3 days", time_text="5:00 PM", role="response_due",
+    )  # fmt: skip
+    v = verify_demands([d, rel], t)
+    stated, relative = _apply(v, rules, DocumentType.other_notice, t)
+    assert stated.date is not None and stated.date.value_iso == "2026-10-14"
+    assert stated.date.time_text is None
+    assert relative.date is not None and relative.date.time_text is None
+
+
+def test_printed_time_kept(rules: list[DeadlineRule]) -> None:
+    line = (
+        "YOU ARE ORDERED to appear before an immigration judge at 100 Sample Plaza, Suite 200, "
+        "Fairfax, VA 22030 on October 7, 2026 at 8:30 AM."
+    )
+    t = assemble_transcript([block("p1b1", line)], pages_received=1)
+    d = demand_out(
+        "d1", kind=DemandKind.appointment, value_verbatim="October 7, 2026", source_quote=line,
+        span_ids=["p1b1"], date_text="October 7, 2026", time_text="8:30 AM", role="hearing_date",
+    )  # fmt: skip
+    v = verify_demands([d], t)
+    out = _apply(v, rules, DocumentType.nta, t)[0]
+    assert out.date is not None and out.date.time_text == "8:30 AM"
+    assert out.date.value_iso == "2026-10-07"
+
+
+# --- an anchor re-anchored by demand_repair (R4) still answers to its cited id ------------------
+
+
+def test_anchor_resolves_after_reanchor(rules: list[DeadlineRule]) -> None:
+    window ="within 180 days of the date of this notice"
+    appeal_line = f"You must ask for an internal appeal {window}."
+    t = assemble_transcript(
+        [
+            block("p1b1", "Blue Ridge Sample Health Plan"),
+            block("p1b2", "Date of this notice: April 20, 2026"),
+            block("p1b3", appeal_line),
+        ],
+        pages_received=1,
+    )
+    notice = demand_out(
+        "d1", value_verbatim="April 20, 2026", source_quote="Date of this notice: April 20, 2026",
+        span_ids=["p1b1"], date_text="April 20, 2026", role="notice_date",
+    )  # fmt: skip
+    appeal = demand_out(
+        "d2", kind=DemandKind.relative_deadline, value_verbatim=window, source_quote=appeal_line,
+        span_ids=["p1b3"], relative_rule_text=window, anchor_span_id="p1b1", role="response_due",
+    )  # fmt: skip
+    repaired = repair_demands([notice, appeal], t)
+    assert repaired.repairs[0].codes == (R4_REANCHORED,)
+    checked = repaired.verify(t)
+    assert [d.span_ids for d in checked.verified] == [["p1b2"], ["p1b3"]]
+    ctx = _ctx(rules, DocumentType.insurance_denial, date(2026, 5, 1))
+    plain = dr.apply_deadline_rules(checked.verified, checked.sources, ctx, t)
+    assert plain[1].date is not None and plain[1].date.kind is DateKind.unresolved
+    aliases = repaired.span_aliases(checked)
+    assert aliases == {"d1": ["p1b1"]}
+    out = dr.apply_deadline_rules(checked.verified, checked.sources, ctx, t, span_aliases=aliases)
+    assert out[1].date is not None and out[1].date.kind is DateKind.estimated
+    assert out[1].date.anchor_demand_id == "d1" and out[1].date.value_iso == "2026-10-17"
+
+
+def _appeal_paper(*extra: tuple[str, str]) -> Transcript:
+    return assemble_transcript(
+        [
+            block("p1b1", "Blue Ridge Sample Health Plan"),
+            block("p1b2", "Date of this notice: April 20, 2026"),
+            block("p1b3", "You must ask for an internal appeal within 180 days of the date of "
+                          "this notice."),
+            *(block(i, text) for i, text in extra),
+        ],
+        pages_received=1,
+    )  # fmt: skip
+
+
+def _appeal_demands(*anchors: DemandOut, anchor_span_id: str = "p1b2") -> list[DemandOut]:
+    window = "within 180 days of the date of this notice"
+    appeal = demand_out(
+        "d3", kind=DemandKind.relative_deadline, value_verbatim=window,
+        source_quote=f"You must ask for an internal appeal {window}.", span_ids=["p1b3"],
+        relative_rule_text=window, anchor_span_id=anchor_span_id, role="response_due",
+    )  # fmt: skip
+    return [*anchors, appeal]
+
+
+def _mailed(span: str = "p1b2") -> DemandOut:
+    """"Date mailed" quoted exactly but cited to ``span`` (R4 moves it to p1b4)."""
+    return demand_out(
+        "d1", value_verbatim="April 27, 2026", source_quote="Date mailed: April 27, 2026",
+        span_ids=[span], date_text="April 27, 2026", role="notice_date",
+    )  # fmt: skip
+
+
+def _estimate_with_aliases(
+    rules: list[DeadlineRule], t: Transcript, demands: list[DemandOut]
+) -> Demand:
+    repaired = repair_demands(demands, t)
+    checked = repaired.verify(t)
+    ctx = _ctx(rules, DocumentType.insurance_denial, date(2026, 5, 1))
+    out = dr.apply_deadline_rules(
+        checked.verified, checked.sources, ctx, t, span_aliases=repaired.span_aliases(checked)
+    )
+    return out[-1]
+
+
+def test_direct_anchor_wins_over_reanchored_alias(rules: list[DeadlineRule]) -> None:
+    """D-11 (b): the demand whose own span holds ``anchor_span_id`` is the anchor, whatever the
+    list order; a demand R4 moved *away* from that block (listed first here) never stands in, so
+    the estimate never counts from the later "Date mailed"."""
+    t = _appeal_paper(("p1b4", "Date mailed: April 27, 2026"))
+    notice = demand_out(
+        "d2", value_verbatim="April 20, 2026", source_quote="Date of this notice: April 20, 2026",
+        span_ids=["p1b2"], date_text="April 20, 2026", role="notice_date",
+    )  # fmt: skip
+    appeal = _estimate_with_aliases(rules, t, _appeal_demands(_mailed(), notice))
+    assert appeal.date is not None and appeal.date.kind is DateKind.estimated
+    assert appeal.date.anchor_demand_id == "d2" and appeal.date.value_iso == "2026-10-17"
+
+
+def test_alias_refused_when_named_block_prints_another_date(rules: list[DeadlineRule]) -> None:
+    """No demand quotes p1b2's own date (April 20): the re-anchored "Date mailed" (April 27) may
+    not stand in for it, so the appeal stays unresolved rather than a week too late."""
+    t = _appeal_paper(("p1b4", "Date mailed: April 27, 2026"))
+    appeal = _estimate_with_aliases(rules, t, _appeal_demands(_mailed()))
+    assert appeal.date is not None and appeal.date.kind is DateKind.unresolved
+
+
+def test_alias_kept_when_named_block_prints_the_same_date(rules: list[DeadlineRule]) -> None:
+    t = assemble_transcript(
+        [
+            block("p1b1", "Issued April 27, 2026"),
+            block("p1b2", "Blue Ridge Sample Health Plan"),
+            block("p1b3", "You must ask for an internal appeal within 180 days of the date of "
+                          "this notice."),
+            block("p1b4", "Date mailed: April 27, 2026"),
+        ],
+        pages_received=1,
+    )  # fmt: skip
+    demands = _appeal_demands(_mailed("p1b1"), anchor_span_id="p1b1")
+    appeal = _estimate_with_aliases(rules, t, demands)
+    assert appeal.date is not None and appeal.date.kind is DateKind.estimated
+    assert appeal.date.anchor_demand_id == "d1" and appeal.date.value_iso == "2026-10-24"

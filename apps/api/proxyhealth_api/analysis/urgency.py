@@ -4,7 +4,10 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
 
 1. the emergency lexicon fired → ``emergency``;
 2. candidates = verified demands with a ``stated`` ``value_iso`` whose ``role`` is a driving role
-   of the type (§5.2); ``notice_date`` / ``decision_date`` / ``other`` never drive;
+   of the type (§5.2); ``notice_date`` / ``decision_date`` / ``other`` never drive. A *carried*
+   date (``deadline_rules.resolve_carried``: a printed date on an ``amount``/
+   ``document_requested``/``action`` demand) is a candidate too, but it never lowers the result:
+   steps 2–8 also run without carried dates, and that result stands when strictly more severe;
 3. a future date → ``critical`` ≤ 7 days only for the type's critical set, else ``high`` ≤ 14,
    ``medium`` ≤ 30, ``info`` beyond (the most severe candidate wins; ties → nearest);
 4. only past dates (≤ 60 days) → ``date_passed`` headline, ``critical`` on immigration/court
@@ -14,6 +17,9 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
    and ``date_iso`` are both the ISO day (``date == date_iso`` marks the estimate: the client
    writes it out in the reader's language, as on the demand row, whose readable server line is
    ``DateInfo.localized_line`` — ``deadline_rules.estimate_text``);
+   5b. still nothing, but a verified future stated date ≤ 30 days carries a driving role of
+   another type (``ANY_DRIVING`` minus the type's roles) → ``medium`` ``date_soon`` (the model
+   chose an off-type role; capped like an estimate; not for types without driving roles);
 6. floors: ``nta``, ``hearing_notice``, ``eviction_summons``, ``uscis_noid``, ``utility_shutoff``,
    ``pay_or_quit`` never below ``high``;
 7. no verified date drives it but ``unverified[]`` holds a dated demand (a quote that did not
@@ -215,11 +221,21 @@ class UrgencyOutcome:
     red_flags: list[RedFlag] = field(default_factory=list)
 
 
-def _candidates(demands: Iterable[Demand], roles: frozenset[str], kind: DateKind, today: date
-                ) -> list[_Candidate]:  # fmt: skip
+def _is_carried(d: Demand) -> bool:
+    """A date on a kind outside ``DATED_KINDS``: ``deadline_rules.resolve_carried`` put it there
+    (a printed ``date_text`` inside an ``amount``/``document_requested``/``action`` quote)."""
+    return d.date is not None and d.kind not in DATED_KINDS
+
+
+def _candidates(
+    demands: Iterable[Demand], roles: frozenset[str], kind: DateKind, today: date,
+    *, carried: bool = True,
+) -> list[_Candidate]:  # fmt: skip
     out: list[_Candidate] = []
     for d in demands:
         if not d.verified or d.date is None or d.date.kind is not kind or not d.date.value_iso:
+            continue
+        if not carried and _is_carried(d):
             continue
         if d.role not in roles or d.role in NEVER_DRIVING:
             continue
@@ -258,27 +274,47 @@ def _pick(cands: Sequence[_Candidate], level_of: dict[int, UrgencyLevel]) -> _Ca
     )
 
 
-def compute_urgency(
+def _off_type_urgency(
+    demands: Sequence[Demand], roles: frozenset[str], today: date, verify: str | None,
+    *, carried: bool = True,
+) -> Urgency | None:
+    """Step 5b: a verified printed date whose role drives *some* type (``ANY_DRIVING``) but not
+    this one — "Please pay by …" labelled ``response_due`` on a ``medical_bill`` — counts like an
+    estimate: future dates only, capped at ``medium``, and only when that cap is reached (≤ 30
+    days), so it never lowers the step-7 result. ``None`` otherwise."""
+    off_type = ANY_DRIVING - roles
+    cands = [
+        c for c in _candidates(demands, off_type, DateKind.stated, today, carried=carried)
+        if c.days_until >= 0
+    ]  # fmt: skip
+    levels = {
+        id(c): min(threshold_level(c.days_until, critical_allowed=False), UrgencyLevel.medium,
+                   key=level_rank)
+        for c in cands
+    }  # fmt: skip
+    medium = [c for c in cands if levels[id(c)] is UrgencyLevel.medium]
+    if not medium:
+        return None
+    cand = _pick(medium, levels)
+    params = {"date": cand.demand.value_verbatim, "date_iso": cand.when.isoformat()}
+    return _urgency(UrgencyLevel.medium, KEY_MEDIUM_SOON, cand=cand, params=params, verify=verify)
+
+
+def _ladder(
     document_type: DocumentType,
     category: DocumentCategory,
     demands: Sequence[Demand],
     *,
-    emergency: bool,
     today: date,
-    t: Translator | None = None,
-    unverified: Sequence[Demand] = (),
+    t: Translator | None,
+    unverified: Sequence[Demand],
+    carried: bool,
 ) -> UrgencyOutcome:
-    """DOCUMENT_TAXONOMY §5.1 over the **verified** ``demands`` (any ``verified=False`` item there
-    is ignored). ``unverified`` is ``AnalysisResult.unverified``: a dated item there never drives
-    a date, but lifts a dateless result to ``medium`` with its own headline (step 7) and keeps the
-    banner from saying "Nothing to do right now". ``t`` renders the ``expired_date`` red flag
-    text; without it the key is used as text."""
-    if emergency:
-        return UrgencyOutcome(_urgency(UrgencyLevel.emergency, KEY_EMERGENCY))
+    """Steps 2–8 (module docstring); ``carried=False`` ignores every carried date."""
     roles = DRIVING_ROLES.get(document_type, ANY_DRIVING)
     critical_roles = CRITICAL_SET.get(document_type, frozenset())
     verify = verify_resource_for(document_type)
-    stated = _candidates(demands, roles, DateKind.stated, today)
+    stated = _candidates(demands, roles, DateKind.stated, today, carried=carried)
     future = [c for c in stated if c.days_until >= 0]
     past = [c for c in stated if -PAST_WINDOW_DAYS <= c.days_until < 0]
     flags: list[RedFlag] = []
@@ -329,6 +365,8 @@ def compute_urgency(
                 levels[id(cand)], KEY_MEDIUM_ESTIMATED, cand=cand,
                 params={"date": iso, "date_iso": iso}, verify=verify,
             )  # fmt: skip
+    if result is None and roles:
+        result = _off_type_urgency(demands, roles, today, verify, carried=carried)
     if result is None and any(
         d.kind in DATED_KINDS and d.role not in NEVER_DRIVING for d in unverified
     ):
@@ -345,6 +383,35 @@ def compute_urgency(
             update["headline_params"] = {}
         result = result.model_copy(update=update)
     return UrgencyOutcome(result, flags)
+
+
+def compute_urgency(
+    document_type: DocumentType,
+    category: DocumentCategory,
+    demands: Sequence[Demand],
+    *,
+    emergency: bool,
+    today: date,
+    t: Translator | None = None,
+    unverified: Sequence[Demand] = (),
+) -> UrgencyOutcome:
+    """DOCUMENT_TAXONOMY §5.1 over the **verified** ``demands`` (any ``verified=False`` item there
+    is ignored). ``unverified`` is ``AnalysisResult.unverified``: a dated item there never drives
+    a date, but lifts a dateless result to ``medium`` with its own headline (step 7) and keeps the
+    banner from saying "Nothing to do right now". ``t`` renders the ``expired_date`` red flag
+    text; without it the key is used as text.
+
+    A carried date (step 2) never lowers the result: when one is present the ladder also runs
+    without carried dates, and that result stands when it is strictly more severe (a far carried
+    date would otherwise hide a nearer estimate, a past date or an unverified date)."""
+    if emergency:
+        return UrgencyOutcome(_urgency(UrgencyLevel.emergency, KEY_EMERGENCY))
+    args = (document_type, category, demands)
+    full = _ladder(*args, today=today, t=t, unverified=unverified, carried=True)
+    if not any(d.verified and _is_carried(d) for d in demands):
+        return full
+    base = _ladder(*args, today=today, t=t, unverified=unverified, carried=False)
+    return base if level_rank(base.urgency.level) > level_rank(full.urgency.level) else full
 
 
 __all__ = [
