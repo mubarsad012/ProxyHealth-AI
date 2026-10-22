@@ -14,6 +14,11 @@ ignored, so one ``vars`` mapping serves both ``system()`` and ``user()`` of a ta
 Text typed by the reader (document hint, goal, question, calendar notes, language name) goes
 through ``untrusted()``, which wraps it in fixed marker strings the prompts describe as data.
 Nothing here logs or stores prompt text.
+
+Two pieces of text are added only under a condition (§5.8): ``{sample_note}`` carries
+``user/sample_note.md`` for a known sample paper and is empty otherwise, and ``system()`` appends
+a provider addendum (``compat_analyze.md``) to the ``analyze_single`` and ``explain`` system
+prompts on ``openai_compat`` only, so the Gemini and mock prompts never change.
 """
 
 import functools
@@ -27,6 +32,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
     PlanStepKind,
+    Provider,
     RedFlagKind,
     ResourceTag,
 )
@@ -38,6 +44,7 @@ USER_TEXT_BEGIN = "<<<USER_TEXT_BEGIN>>>"
 USER_TEXT_END = "<<<USER_TEXT_END>>>"
 NONE_TEXT = "(none)"
 PREAMBLE = "preamble.md"
+SAMPLE_NOTE = "user/sample_note.md"
 
 # AI_PROMPTS §3 "System prompt" column (the pipeline's ``TASK_PROMPT`` mirrors this map).
 SYSTEM_PROMPT: Mapping[Task, str] = {
@@ -64,6 +71,12 @@ USER_PROMPT: Mapping[Task, str] = {
     Task.resolve_language: "user/resolve_language_user.md",
     Task.tag: "user/tag_user.md",
     Task.phrasing_rewrite: "user/phrasing_rewrite_user.md",
+}
+# AI_PROMPTS §5.8.2: text appended to one task's system prompt for one provider. Only the small
+# OpenAI-compatible models get the worked demand example; Gemini and mock prompts stay as §5.
+PROVIDER_ADDENDUM: Mapping[tuple[Provider, Task], str] = {
+    (Provider.openai_compat, Task.analyze_single): "compat_analyze.md",
+    (Provider.openai_compat, Task.explain): "compat_analyze.md",
 }
 
 # AI_PROMPTS §5.1.3 — the 13 scam signal keys, in this order (``scam_reasons`` chips).
@@ -143,14 +156,27 @@ def render(name: str, **vars: str) -> str:
     return PLACEHOLDER.sub(lambda m: str(vars[m.group(1)]), text).rstrip("\n")
 
 
-def system(task: Task, **vars: str) -> str:
-    """``preamble.md`` + one blank line + the task's system prompt, rendered."""
-    return render(PREAMBLE, **vars) + "\n\n" + render(SYSTEM_PROMPT[task], **vars)
+def system(task: Task, provider: Provider | None = None, /, **vars: str) -> str:
+    """``preamble.md`` + one blank line + the task's system prompt, rendered; when ``provider``
+    has an addendum for ``task`` (``PROVIDER_ADDENDUM``), one more blank line + the addendum.
+
+    ``provider`` is positional-only, so ``**vars`` stays a plain placeholder mapping."""
+    text = render(PREAMBLE, **vars) + "\n\n" + render(SYSTEM_PROMPT[task], **vars)
+    addendum = PROVIDER_ADDENDUM.get((provider, task)) if provider is not None else None
+    return f"{text}\n\n{render(addendum, **vars)}" if addendum else text
 
 
 def user(task: Task, **vars: str) -> str:
     """The task's user template (``user/<task>_user.md``), rendered."""
     return render(USER_PROMPT[task], **vars)
+
+
+def sample_note(sample: bool) -> str:
+    """AI_PROMPTS §2 ``{sample_note}``: the §5.8.1 note for a known sample paper, else ``""``.
+
+    The placeholder is the last line of its templates, so an empty note leaves a real upload's
+    user prompt byte-identical to the template without it."""
+    return render(SAMPLE_NOTE) if sample else ""
 
 
 def _strip_markers(text: str) -> str:
@@ -198,7 +224,7 @@ def catalog_vars() -> dict[str, str]:
 
 @functools.cache
 def prompts_version() -> str:
-    """``2026-09-27.1`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
+    """``2026-10-22.1`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
     raw = VERSION_FILE.read_text(encoding="utf-8").strip()
     m = re.fullmatch(r"prompts_version = (\d{4}-\d{2}-\d{2}\.\d+)", raw)
     if m is None:
@@ -221,6 +247,8 @@ __all__ = [
     "PLACEHOLDER",
     "PREAMBLE",
     "PROMPTS_DIR",
+    "PROVIDER_ADDENDUM",
+    "SAMPLE_NOTE",
     "SCAM_SIGNAL_KEYS",
     "SYSTEM_PROMPT",
     "USER_PROMPT",
@@ -233,6 +261,7 @@ __all__ = [
     "placeholders",
     "prompts_version",
     "render",
+    "sample_note",
     "system",
     "untrusted",
     "user",

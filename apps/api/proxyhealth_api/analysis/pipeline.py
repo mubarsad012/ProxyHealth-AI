@@ -288,7 +288,7 @@ async def generate(
 
     ``lead`` parts go before the user text (the mock reads the chat ``AnalysisContext`` from the
     first text part; Gemini never receives them — see ``chat_pipeline``)."""
-    system = prompt.system(task, **vars)
+    system = prompt.system(task, deps.ai.provider.name, **vars)
     user_text = prompt.user(task, **vars)
     return await deps.ai.generate(
         task=task, parts=[*lead, Part.of_text(user_text), *media], system=system,
@@ -491,9 +491,10 @@ def prepare_upload(req: AnalyzeRequest, deps: PipelineDeps) -> PreparedUpload:
 
 
 def analysis_vars(
-    req: AnalyzeRequest, deps: PipelineDeps, *, page_count: int, today: date
+    req: AnalyzeRequest, deps: PipelineDeps, *, page_count: int, today: date, sample: bool = False
 ) -> dict[str, str]:
-    """AI_PROMPTS §2 placeholders for ``analyze_single`` / ``transcribe`` / ``explain``."""
+    """AI_PROMPTS §2 placeholders for ``analyze_single`` / ``transcribe`` / ``explain``;
+    ``sample`` (``is_sample_paper``) fills ``{sample_note}`` (§5.8.1), empty for real uploads."""
     notes = "; ".join(n.strip() for n in req.preferences.calendar_notes if n.strip())
     full = page_count <= deps.settings.translate_full_max_pages
     return {
@@ -508,6 +509,7 @@ def analysis_vars(
         "page_count": str(page_count),
         "translate_full": "yes" if full else "no",
         "document_hint": req.document_hint.value if req.document_hint else prompt.NONE_TEXT,
+        "sample_note": prompt.sample_note(sample),
     }
 
 
@@ -1052,7 +1054,7 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         thumbnails=await offload(page_thumbnails, req, upload),
     )  # fmt: skip
     hints = hints_for(demo_sample_id=req.demo_sample_id, target_language=req.target_language)
-    vars = analysis_vars(req, deps, page_count=upload.pages_received, today=today)
+    vars = analysis_vars(req, deps, page_count=upload.pages_received, today=today, sample=sample)
 
     # Model reading, then transcript assembly + quality (§11.1).
     reading = await read_paper(
