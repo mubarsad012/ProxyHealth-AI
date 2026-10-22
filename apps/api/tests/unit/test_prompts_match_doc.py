@@ -16,7 +16,7 @@ EXPECTED = {
     "user/transcribe_user.md", "user/explain_user.md", "user/troubleshoot_user.md",
     "user/chat_user.md", "user/langpack_user.md", "user/tag_user.md",
     "user/phrasing_rewrite_user.md", "user/resolve_language_user.md",
-    "compat_analyze.md", "user/sample_note.md",
+    "compat_analyze.md", "user/sample_note.md", "user/sample_screen_note.md",
 }  # fmt: skip
 
 pytestmark = pytest.mark.skipif(not DOC.is_file(), reason="docs/ not present in this checkout")

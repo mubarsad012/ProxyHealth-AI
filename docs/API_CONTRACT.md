@@ -606,8 +606,8 @@ Response `TroubleshootResult`
 | `scam_risk` | `ScamRisk` | |
 | `scam_reasons` | `list[str]` | Fixed keys. |
 | `needs_human_help` | `bool` | "Ask a person" CTA (211 / agency from DB). |
-| `red_flags` | `list[RedFlag]` | |
-| `resource_tags` | `list[ResourceTag]` | `scam_report` forced first when `scam_risk=="likely"`. |
+| `red_flags` | `list[RedFlag]` | Model flags whose quote is in `screen_text`, screened as in the analysis (DOCUMENT_TAXONOMY §6.1, §6.3: no payment flag on a quote that asks for no payment; on a `demo_sample_id` screenshot none on its SAMPLE footer), then the scorer's code flags. |
+| `resource_tags` | `list[ResourceTag]` | `scam_report` forced first when `scam_risk=="likely"`. On a `demo_sample_id` screenshot a model `crisis`/`poison`/`domestic_violence`/`trafficking`/`scam_report` tag needs code evidence (AI_PROMPTS §11.10); a real screenshot keeps the model's tags. |
 | `screen_text` | `list[str]` | Quoted UI strings the answer relies on (contact-filtered). |
 | `confidence` | `Confidence` | |
 | `safety` | `Safety` | Same shape as `AnalysisResult.safety`. The emergency lexicon (D-14) runs in code over `screen_text` and `user_goal`; `credential_or_payment_request` mirrors `asks_for_credentials_or_payment`. The client shows the fixed emergency card first when `emergency` is true. |
@@ -672,7 +672,7 @@ Response `ChatAnswer`
 | `grounded_quotes` | `list[Quote { span_id: str, text: str, page: int }]` | Verified quotes for chips. |
 | `not_in_document` | `bool` | "The paper does not say." When true and `refusal_kind` is `none`, `answer` already carries the target pack's `chat.not_in_document` sentence exactly once (`chat_pipeline.with_not_in_document`); clients add the key only to an empty non-refusal answer. A refusal shows its template instead (CL-072(e)). |
 | `refusal_kind` | `RefusalKind` | `none` when answered. |
-| `refer_to_professional` | `ReferTo` | |
+| `refer_to_professional` | `ReferTo` | Never `sender` or `benefits_office` (the paper's own contact) when the context's `red_flags` show a scam (DOCUMENT_TAXONOMY §6.4, `chat_pipeline.context_scam_risk`): the model's referral and the default for a refusal then follow `scam_refer_to_by_category`. |
 | `distress_acknowledged` | `bool` | |
 | `suggested_questions` | `list[str]` (≤ 3) | |
 | `resource_tags` | `list[ResourceTag]` | |

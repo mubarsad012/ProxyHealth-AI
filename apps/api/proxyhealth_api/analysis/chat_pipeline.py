@@ -9,7 +9,9 @@ what the reader typed (in every bundled language) → context compaction (≤ 60
 → one ``chat`` call (fast,
 ``low``) → grounding check (every ``grounded_span_ids`` id must exist in ``original_text``; none
 left → ``not_in_document``) → contact scrubber (only contacts printed on the paper survive) →
-phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a referral) →
+phrasing lint (a hedged answer carries the matching ``refusal_kind`` and a referral; on a paper
+whose red flags show a scam, ``context_scam_risk``, neither the rewrite template nor the referral
+sends the reader back to the paper's own contact, TAXONOMY §6.4) →
 injection guard (typed instructions + a failing answer → ``out_of_scope``) → a
 ``not_in_document`` answer that is not a refusal carries the pack's fixed ``chat.not_in_document``
 sentence exactly once (``with_not_in_document``; the client never adds it) → printed forms
@@ -27,7 +29,7 @@ import re
 import time
 import unicodedata
 import weakref
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import replace
 
 from starlette.concurrency import run_in_threadpool
@@ -44,6 +46,7 @@ from proxyhealth_api.analysis import (
     injection,
     phrasing,
     prose_dates,
+    scam,
     tagging,
 )
 from proxyhealth_api.analysis.i18n import Translator
@@ -77,6 +80,8 @@ from proxyhealth_api.contracts.enums import (
     ReferTo,
     RefusalKind,
     ResourceTag,
+    ScamRisk,
+    Severity,
     WarningCode,
 )
 from proxyhealth_api.contracts.model_out import ChatModelOut
@@ -98,6 +103,9 @@ REFER_REQUIRED = frozenset(
     {RefusalKind.eligibility, RefusalKind.filing_advice, RefusalKind.outcome,
      RefusalKind.medical_interpretation, RefusalKind.drafting}
 )  # fmt: skip
+# Referrals back to the paper's own contact ("Ask the sender. Their contact is on the paper.",
+# "The office that sent this paper … Its number is on the paper."): never on a scam (§6.4).
+PAPER_CONTACT_REFERRALS = frozenset({ReferTo.sender, ReferTo.benefits_office})
 
 
 def _q(text: str | None) -> str:
@@ -313,6 +321,45 @@ def with_not_in_document(answer: str, fixed: str, *variants: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text)
 
 
+# ----------------------------------------------------------------------------- scam (§6.4)
+
+
+def scorer_reason_texts(*translators: Translator) -> frozenset[str]:
+    """The text of every red flag the scam scorer can add (``t(reason_key)`` of each
+    ``scam.yaml`` signal, TAXONOMY §6.4) in each translator's language, spaces collapsed."""
+    keys = [s.reason_key for s in scam.load_config().signals if s.reason_key]
+    return frozenset(" ".join(tr(key).split()) for tr in translators for key in keys)
+
+
+def context_scam_risk(ctx: AnalysisContext, reason_texts: Collection[str]) -> ScamRisk:
+    """``possible`` when the re-sent context shows the analysis scored the paper a scam, else
+    ``none`` (TAXONOMY §6.4 in chat).
+
+    ``AnalysisContext`` (a WP0 contract) carries no ``scam_risk``, so it is read from the paper's
+    red flags, which the analysis returned and the client re-sends. One red flag that is no fixed
+    card (``fixed_copy_key`` null) is enough when it (a) is of a kind the analysis itself takes as
+    scam evidence (``tagging.SCAM_FLAG_KINDS``: a payment method, impersonation, a notario);
+    (b) is of a kind the scorer emits and has ``high`` severity (the scorer marks its own flags
+    high only on a ``likely`` scam; a model flag is high only for kinds whose one signal reaches
+    ``possible``); or (c) has the text of a scorer flag (``reason_texts``: the scorer adds those
+    only when the risk is ``possible`` or ``likely``). A lone model ``urgency_pressure`` flag in
+    the model's own words (``medium``) is not enough: the scorer weighs it below ``possible``.
+    Not covered: a ``possible`` that rests only on such medium model flags, or on scorer flags
+    rendered in a language that is neither the reader's nor English. The phrasing helpers treat
+    ``possible`` and ``likely`` alike, so no finer level is derived."""
+    scorer_kinds = {s.red_flag_kind for s in scam.load_config().signals}
+    for f in ctx.red_flags:
+        if f.fixed_copy_key:
+            continue
+        if (
+            f.kind in tagging.SCAM_FLAG_KINDS
+            or (f.kind in scorer_kinds and f.severity is Severity.high)
+            or " ".join(f.text.split()) in reason_texts
+        ):
+            return ScamRisk.possible
+    return ScamRisk.none
+
+
 # ----------------------------------------------------------------------------- sample papers
 
 CONTEXT_FIELDS: tuple[str, ...] = tuple(AnalysisContext.model_fields)
@@ -475,14 +522,17 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     answer = scrubber.scrub(out.answer)
     suggested = [q for q in scrubber.scrub_all(out.suggested_questions[:MAX_SUGGESTED]) if q]
 
-    # Phrasing lint: the answer is information, never advice.
+    # Phrasing lint: the answer is information, never advice. On a scam (§6.4) the rewrite
+    # template's professional is never the paper's own sender, as on the analysis card.
+    scam_risk = context_scam_risk(ctx, scorer_reason_texts(t, english(deps)))
     refusal, refer = out.refusal_kind, out.refer_to_professional
     rewrite = make_rewriter(
         deps, language=target, today=today, budget=RewriteBudget(), deadline_at=deadline_at
     )
     linted = await phrasing.enforce(
-        answer, t=t, category=ctx.category, language=target, rewrite=rewrite
-    )
+        answer, t=t, category=ctx.category, language=target, rewrite=rewrite,
+        document_type=ctx.document_type, scam_risk=scam_risk,
+    )  # fmt: skip
     answer = linted.text
     warnings.extend(linted.warnings)
     if linted.hedged and refusal is RefusalKind.none:
@@ -509,7 +559,10 @@ async def run_chat(req: ChatRequest, deps: PipelineDeps) -> ChatAnswer:
     if refusal is RefusalKind.medical_interpretation:
         refer = ReferTo.clinician
     elif refusal in REFER_REQUIRED and refer is ReferTo.none:
-        refer = phrasing.refer_to_for(ctx.category)
+        refer = phrasing.refer_to_for(ctx.category, scam_risk=scam_risk)
+    # §6.4: on a scam no referral — the model's own included — sends the reader to the sender.
+    if scam_risk is not ScamRisk.none and refer in PAPER_CONTACT_REFERRALS:
+        refer = phrasing.refer_to_for(ctx.category, scam_risk=scam_risk)
 
     # D-26 / rule 7: a date the paper prints keeps its printed spelling; digits stay Western.
     printed = prose_dates.printed_forms(paper_text, ctx.detected_language, ctx.demands)
