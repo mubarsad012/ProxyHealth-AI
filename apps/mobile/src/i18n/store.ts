@@ -2,6 +2,7 @@
 // font hint, loading state and the restart-pending flag for native RTL switches. zustand, not
 // persisted (the chosen tag lives in `store/settings.ts`; cached packs live in `kv`).
 
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import type { ApiError } from '@/api/errors';
@@ -217,17 +218,44 @@ export function translate(
 }
 
 /**
+ * Device-naming lines ("No {language} voice on this phone") built by shared code that does not
+ * pick a platform variant itself (`lib/tts`, `features/speech`, `SpeakButton`). On web `t(key)`
+ * reads `<key>.web` ("in this browser") instead.
+ */
+export const WEB_VARIANT_KEYS: ReadonlySet<string> = new Set([
+  'tts.no_voice',
+  'tts.fallback_offer',
+  'tts.fallback_offer_english',
+]);
+
+/**
+ * The key `t` reads for `key` on this platform. Unlike the privacy copy
+ * (`features/vault/platformCopy`), a translated "phone" line beats an English "browser" one: the
+ * web variant is used when the pack has it, or when the pack has neither (English either way).
+ */
+export function platformVariantKey(strings: Record<string, string>, key: string, os: string = Platform.OS): string {
+  if (os !== 'web' || !WEB_VARIANT_KEYS.has(key)) return key;
+  const web = `${key}.web`;
+  const own = (k: string) => typeof strings[k] === 'string' && strings[k].length > 0;
+  if (own(web)) return web;
+  if (own(key)) return key;
+  return typeof BASE_STRINGS[web] === 'string' ? web : key;
+}
+
+/**
  * `translate` plus the RTL isolation rule (D-26): in an RTL layout, copy whose template (the pack
  * string or its English fallback, placeholders removed) runs all left-to-right comes back
  * FSI/LRI…PDI-wrapped, whatever script the inserted variables use (`isolateTemplateForLayout`).
- * Missing keys (the key itself) are never wrapped. Pure; `useT`, `t` and tests share it.
+ * Missing keys (the key itself) are never wrapped. On web, `WEB_VARIANT_KEYS` read their `.web`
+ * variant (`platformVariantKey`). Pure; `useT`, `t` and tests share it.
  */
 export function translateForLayout(
   strings: Record<string, string>,
   layout: LayoutDir,
-  key: string,
+  requestedKey: string,
   vars?: Record<string, string | number>,
 ): string {
+  const key = platformVariantKey(strings, requestedKey);
   const text = translate(strings, key, vars);
   if (layout !== 'rtl') return text;
   const template = templateFor(strings, key);

@@ -8,9 +8,11 @@
 // "Hide parts" on the preview (S5's MaskEditor; boxes sent like S5: web burns them, native sends
 // `masks[]`). "Save as proof" opens "Whose paper is this?" (default Me) and stores only the
 // pixels that were sent with the boxes burned in (`masks.ts`).
+// A new result is scrolled into view with focus on its first heading (`reveal.ts`), unless the
+// emergency card opened first.
 
 import { type Href, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import type { MaskRect, PortalHint, TroubleshootMode } from '@/api/types';
@@ -24,7 +26,7 @@ import {
   ProgressSteps,
   Screen,
 } from '@/design/components';
-import { useTheme } from '@/design/theme';
+import { useReduceMotion, useTheme } from '@/design/theme';
 import { radius, size, space } from '@/design/tokens';
 import { EmergencyCard, useEmergencyTrigger } from '@/features/emergency';
 import { useConsentDecision } from '@/features/onboarding/consentState';
@@ -41,6 +43,7 @@ import { prepareScreenshot } from './masks';
 import { pickScreenshot, type Screenshot } from './pick';
 import { buildTroubleshootRequest, MAX_GOAL_CHARS, PORTAL_HINTS, SAMPLE_SCREENSHOT_ID } from './request';
 import { CredentialGuard, type EvidenceControl, TroubleshootResultCards } from './ResultCards';
+import { revealResult } from './reveal';
 import { ScreenshotPreview } from './ScreenshotPreview';
 import { useTroubleshoot } from './useTroubleshoot';
 
@@ -86,11 +89,22 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
   const consentOk = decision === 'accepted' && consent !== null;
   const emergency = useEmergencyTrigger(ts.result?.safety ?? null);
   const resultId = ts.result?.request_id ?? null;
+  const resultRef = useRef<View | null>(null);
+  const reduceMotion = useReduceMotion();
+  // A result can repeat its request_id (the recorded sample): reveal per arrival, not per id.
+  const shownResult = ts.result;
 
   useEffect(() => {
     // D-14: the fixed emergency card opens first (modal route), then the result stays below.
     if (emergency.triggered && resultId) openEmergency();
   }, [emergency.triggered, resultId]);
+
+  useEffect(() => {
+    if (!shownResult || emergency.triggered) return;
+    // After layout: the result's position is only known once it has rendered.
+    const id = setTimeout(() => revealResult(resultRef.current, { smooth: !reduceMotion }), 50);
+    return () => clearTimeout(id);
+  }, [shownResult, emergency.triggered, reduceMotion]);
 
   const openConsent = () => router.push('/onboarding/consent' as Href);
 
@@ -282,7 +296,7 @@ export function TroubleshootScreen({ initialMode = 'portal' }: TroubleshootScree
           <ErrorState error={ts.error} onRetry={shot ? onSubmit : undefined} onTrySample={onSample} />
         ) : null}
         {ts.result ? (
-          <View style={styles.wrap}>
+          <View ref={resultRef} style={styles.wrap} testID="troubleshoot-result-block">
             {ts.result.model_meta?.demo || ts.offlineSample ? <Banner kind="demo" /> : null}
             <TroubleshootResultCards result={ts.result} evidence={evidenceControl} />
           </View>

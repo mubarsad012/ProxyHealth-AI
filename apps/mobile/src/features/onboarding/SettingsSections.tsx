@@ -1,6 +1,7 @@
 // Settings sections owned by WP4's `(tabs)/settings.tsx` (PRODUCT_SPEC S17 items 3, 9, 10): region
-// (state + optional zip3 — never a full ZIP, never GPS, D-24), about (versions, models, the fixed
-// "what it does not do" list) and the developer section (non-production builds only).
+// (state + optional zip3 — never a full ZIP, never GPS, D-24), about (versions, the helper by
+// provider, the fixed "what it does not do" list) and the developer options (non-production builds
+// only, collapsed until opened).
 
 import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
@@ -138,6 +139,22 @@ function ReportProblem() {
   );
 }
 
+/**
+ * The About line naming the server's helper, by provider: the mock has no model (the sample-mode
+ * line, not the Gemini ids it still reports), `openai_compat` shows its `ai_model_label`, Gemini
+ * (and an unlabelled `openai_compat`) the model ids — once when pro and fast are the same.
+ */
+export function helperModelsLine(
+  config: Pick<ServerConfig, 'provider' | 'models' | 'ai_model_label'>,
+): { key: string; vars: Record<string, string> } {
+  if (config.provider === 'mock') return { key: 'banner.sample_mode', vars: {} };
+  const label = config.provider === 'openai_compat' ? config.ai_model_label?.trim() : '';
+  if (label) return { key: 'settings.model_single', vars: { model: label } };
+  const { pro, fast } = config.models;
+  if (pro === fast) return { key: 'settings.model_single', vars: { model: pro } };
+  return { key: 'settings.models', vars: { pro, fast } };
+}
+
 export interface AboutSectionProps {
   config: ServerConfig | null;
   /** The config came from the device cache (server unreachable): rows are marked `state.cached`. */
@@ -148,6 +165,7 @@ export function AboutSection({ config, cached = false }: AboutSectionProps) {
   const t = useT();
   const pack = useI18n((s) => s.pack);
   const packVersion = (pack.pack_version ?? config?.base_pack_version ?? 'en').slice(0, 8);
+  const helper = config ? helperModelsLine(config) : null;
   return (
     <SettingsSection title={t('settings.about')} testID="settings-about">
       <AppText weight="bold">{t('app.name')}</AppText>
@@ -164,11 +182,14 @@ export function AboutSection({ config, cached = false }: AboutSectionProps) {
           <VersionRow labelKey="settings.contract_version" version={String(config.contract_version)} />
           <VersionRow labelKey="settings.resources_version" version={config.resource_db_version} />
           <VersionRow labelKey="settings.rules_version" version={config.rules_version} />
-          <Interpolated
-            template={t('settings.models')}
-            vars={{ pro: config.models.pro, fast: config.models.fast }}
-            ltrKeys={['pro', 'fast']}
-          />
+          {helper ? (
+            <Interpolated
+              testID="settings-about-models"
+              template={t(helper.key)}
+              vars={helper.vars}
+              ltrKeys={['pro', 'fast', 'model']}
+            />
+          ) : null}
         </>
       ) : null}
       <View role="list" style={styles.list}>
@@ -198,32 +219,36 @@ export function DeveloperSection({ apiUrl, config, getInstallId, rotateInstallId
   const tier = useSession((s) => s.tier);
   const setTier = useSession((s) => s.setTier);
   const [installId, setInstallId] = useState<string | null>(null);
+  // Collapsed until opened: a development build shown to someone else (a judge, a tester) opens on
+  // the app's own settings, not on the API address and the tier preview.
   return (
-    <SettingsSection title={t('settings.developer')} testID="settings-developer">
-      <AppText weight="bold">{t('settings.developer_api_url')}</AppText>
-      <VersionLine text={apiUrl} />
-      {installId ? <VersionLine text={installId} /> : null}
-      <BigButton
-        label={t('btn.rotate_install_id')}
-        variant="secondary"
-        size={56}
-        onPress={() => {
-          void (installId ? rotateInstallId() : getInstallId()).then(setInstallId);
-        }}
-      />
-      <ChoiceChips
-        options={PREVIEW_TIERS.map((v) => ({ value: v, label: t(`consent.badge.${v}`) }))}
-        value={tier === 'mixed' ? 'unpaid' : tier === 'none' ? 'unknown' : tier}
-        onChange={(v) => setTier(v)}
-      />
-      {config ? (
-        <Collapsible title="ServerConfig">
-          <Bidi dir="ltr" variant="caption">
-            {JSON.stringify({ ...config, languages: `${config.languages?.length ?? 0} languages` }, null, 2)}
-          </Bidi>
-        </Collapsible>
-      ) : null}
-    </SettingsSection>
+    <View testID="settings-developer" style={styles.developer}>
+      <Collapsible title={t('settings.developer_options')} testID="settings-developer-toggle">
+        <AppText weight="bold">{t('settings.developer_api_url')}</AppText>
+        <VersionLine text={apiUrl} />
+        {installId ? <VersionLine text={installId} /> : null}
+        <BigButton
+          label={t('btn.rotate_install_id')}
+          variant="secondary"
+          size={56}
+          onPress={() => {
+            void (installId ? rotateInstallId() : getInstallId()).then(setInstallId);
+          }}
+        />
+        <ChoiceChips
+          options={PREVIEW_TIERS.map((v) => ({ value: v, label: t(`consent.badge.${v}`) }))}
+          value={tier === 'mixed' ? 'unpaid' : tier === 'none' ? 'unknown' : tier}
+          onChange={(v) => setTier(v)}
+        />
+        {config ? (
+          <Collapsible title="ServerConfig">
+            <Bidi dir="ltr" variant="caption">
+              {JSON.stringify({ ...config, languages: `${config.languages?.length ?? 0} languages` }, null, 2)}
+            </Bidi>
+          </Collapsible>
+        ) : null}
+      </Collapsible>
+    </View>
   );
 }
 
@@ -237,5 +262,8 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: space.sm,
+  },
+  developer: {
+    paddingVertical: space.lg,
   },
 });

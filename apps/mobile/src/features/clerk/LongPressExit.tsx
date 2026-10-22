@@ -1,6 +1,8 @@
 // "Back to me" — exits clerk mode only after a 1.5 s hold (PRODUCT_SPEC §8.3/§8.6). Release early
 // cancels. Alternatives: the accessibility "activate" action starts the same timer with an
-// announced countdown; on web, holding Space or Enter for 1.5 s works too.
+// announced countdown; on web, holding Space or Enter for 1.5 s works too. The caption
+// `clerk.hold_hint` ("Hold to go back") is always shown inside the button and is its accessibility
+// hint; a short tap (released before the hold completes) emphasises it and announces it.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -12,6 +14,8 @@ import { useT } from '@/i18n/useT';
 
 import { CLERK_HOLD_MS } from './clerkModel';
 
+const WEB_QUICK_CLICK = Platform.OS === 'web' ? () => undefined : undefined;
+
 export interface LongPressExitProps {
   onExit(): void;
   holdMs?: number;
@@ -21,6 +25,7 @@ export function LongPressExit({ onExit, holdMs = CLERK_HOLD_MS }: LongPressExitP
   const t = useT();
   const { colors } = useTheme();
   const [progress, setProgress] = useState(0);
+  const [nudged, setNudged] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAt = useRef(0);
   const exitRef = useRef(onExit);
@@ -37,6 +42,7 @@ export function LongPressExit({ onExit, holdMs = CLERK_HOLD_MS }: LongPressExitP
   const begin = useCallback(
     (announce: boolean) => {
       if (timer.current) return;
+      setNudged(false);
       startedAt.current = Date.now();
       let lastSecond = -1;
       timer.current = setInterval(() => {
@@ -67,6 +73,21 @@ export function LongPressExit({ onExit, holdMs = CLERK_HOLD_MS }: LongPressExitP
 
   useEffect(() => cancel, [cancel]);
 
+  // Finger (or focused-button key) lifted: a release before the hold completes was a short tap,
+  // so say how the button works instead of doing nothing.
+  const release = useCallback(() => {
+    const running = timer.current !== null;
+    const early = running && Date.now() - startedAt.current < holdMs;
+    cancel();
+    if (!early) return;
+    setNudged(true);
+    try {
+      AccessibilityInfo.announceForAccessibility(t('clerk.hold_hint'));
+    } catch {
+      // best-effort
+    }
+  }, [cancel, holdMs, t]);
+
   // Web keyboard alternative: hold Space / Enter.
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -89,12 +110,16 @@ export function LongPressExit({ onExit, holdMs = CLERK_HOLD_MS }: LongPressExitP
       testID="clerk-exit"
       role="button"
       accessibilityLabel={t('clerk.back_to_me')}
+      accessibilityHint={t('clerk.hold_hint')}
       accessibilityActions={[{ name: 'activate', label: t('clerk.back_to_me') }]}
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === 'activate') begin(true);
       }}
       onPressIn={() => begin(false)}
-      onPressOut={cancel}
+      onPressOut={release}
+      // react-native-web delays press-in by 50 ms and, for a quicker click, only fires press-in /
+      // press-out when there is an `onPress` — without one a quick click did nothing at all.
+      onPress={WEB_QUICK_CLICK}
       hitSlop={size.hitSlop}
       style={[styles.button, { borderColor: colors.text, backgroundColor: colors.surfaceRaised }]}>
       <View
@@ -103,6 +128,14 @@ export function LongPressExit({ onExit, holdMs = CLERK_HOLD_MS }: LongPressExitP
       />
       <AppText variant="bodyLarge" weight="bold" align="center">
         {t('clerk.back_to_me')}
+      </AppText>
+      <AppText
+        testID="clerk-exit-hint"
+        variant="caption"
+        weight={nudged ? 'bold' : 'regular'}
+        align="center"
+        role={nudged ? 'alert' : undefined}>
+        {t('clerk.hold_hint')}
       </AppText>
     </Pressable>
   );
@@ -115,6 +148,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderRadius: radius.md,
     paddingHorizontal: space.xl,
+    paddingVertical: space.xs,
+    gap: space.xxs,
     overflow: 'hidden',
   },
   fill: {

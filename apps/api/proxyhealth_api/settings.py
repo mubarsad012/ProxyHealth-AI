@@ -8,7 +8,9 @@ must not print a key into the boot traceback.
 ``.env`` is read from the current directory and, as a fallback, from ``apps/api/.env`` (anchored
 on this file), so repo-root commands (``uvicorn --app-dir apps/api``, ``scripts/gen_packs.py``)
 see the same file; the current directory's ``.env`` wins on conflicts. An empty ``GEMINI_KEYS``
-means no slots.
+means no slots. ``PROXYHEALTH_NO_DOTENV=1`` in the process environment turns every ``.env`` read
+off (also an explicit ``_env_file``); ``tests/conftest.py`` sets it so the developer's local
+``.env`` never leaks into the test suite or the scripts it runs. Unset, nothing changes.
 
 Boot-time rules (WP1):
 
@@ -35,6 +37,7 @@ server does not geolocate users; see ``.env.example``.
 
 import ipaddress
 import json
+import os
 import re
 import secrets
 from pathlib import Path
@@ -49,7 +52,12 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from proxyhealth_api.contracts.config import ClientTimeouts, FeatureFlags
 from proxyhealth_api.contracts.enums import DataUseTier, ModelTier, Provider, ThinkingLevel
@@ -59,6 +67,15 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 # apps/api/.env — read after (so overridden by) the current directory's ``.env``.
 API_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+# Process-environment opt-out: when truthy, ``Settings`` reads no ``.env`` file at all (tests).
+NO_DOTENV_ENV = "PROXYHEALTH_NO_DOTENV"
+
+
+def dotenv_disabled() -> bool:
+    """``PROXYHEALTH_NO_DOTENV`` is ``1``/``true``/``yes``/``on`` (read on every ``Settings()``)."""
+    return os.environ.get(NO_DOTENV_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
 
 CONTRACT_VERSION = 1
 
@@ -224,6 +241,20 @@ class Settings(BaseSettings):
     record_fixtures: bool = False
     log_level: str = "info"
     run_live: bool = False
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """pydantic-settings' default order, minus the ``.env`` source under the opt-out."""
+        if dotenv_disabled():
+            return init_settings, env_settings, file_secret_settings
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
 
     @field_validator("model_pro", "model_fast")
     @classmethod

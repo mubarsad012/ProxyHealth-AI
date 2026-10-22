@@ -134,6 +134,8 @@ open http://localhost:8081   # or let Expo open the browser for you
 
 The zero-key walk-through: pick **Dari** (the layout flips right to left) → the consent screen shows **Sample mode** ("Sample mode. No AI service is contacted. Your photo is only compared with our sample papers and is not kept.") → **Try a sample paper first** → the Medicaid letter → urgency banner, three cards with quotes, a speaker on every paragraph → **Show the clerk**, **Get help nearby**, **Save**. The full three-minute script is [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md).
 
+**About the sample papers:** all 18 are synthetic and watermarked SAMPLE, with made-up names, numbers and amounts. Some show real agency or organisation names (for example Medicaid, USCIS, the IRS or a hospital system) only so they look realistic; their seals are generic placeholders, and ProxyHealth AI is not affiliated with or endorsed by any of them.
+
 Check the API alone:
 
 ```sh
@@ -388,7 +390,9 @@ Hard rules (from [`CLAUDE.md`](CLAUDE.md)): no installs while other agents run; 
 
 Questions only the user can answer: [`docs/DECISIONS.md`](docs/DECISIONS.md) §12 (Q1 billing owner, Q2 developer accounts, Q3 counsel, Q4 bundle id and web host, Q5 pilot geography, Q6–Q7 language reviewers, Q8 per-device budget, Q9 web positioning, Q10 Interactions API, Q11 hosting) and [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) §19 (Q15 operator identity for the privacy policy, Q16 iOS backup exclusion, Q17 label stance, Q18–Q25, Q26 approving the local-AI install, Q27 a hosted second opinion). Until Q1 is answered, keyed runs use sample papers only.
 
-**License:** not chosen yet. `apps/mobile/LICENSE` is the MIT notice from Expo's template and covers only that template code. The Noto fonts in `apps/api/data/fonts/` and `apps/mobile/assets/fonts/` are under the SIL Open Font License (`OFL.txt`).
+**License:** not chosen yet — the owner adds a root `LICENSE` (for example MIT in their own name). `apps/mobile/LICENSE` is the MIT notice from Expo's template and covers only that template code. Every open-source package, font, asset and service the app uses — and the AI tools used to build it — is listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+**Congressional App Challenge:** rules, deadline, the honest AI-usage disclosure, the demo-video plan and the submission checklist are in [`docs/CONGRESSIONAL_APP_CHALLENGE.md`](docs/CONGRESSIONAL_APP_CHALLENGE.md).
 
 ---
 

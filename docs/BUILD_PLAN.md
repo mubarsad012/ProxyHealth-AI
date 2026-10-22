@@ -1,6 +1,6 @@
 # ProxyHealth AI — Build Plan (work packages for parallel coding agents)
 
-Status: **authoritative for process, sequencing and file ownership**. Written 2026-09-27 from `docs/DECISIONS.md` (D-01…D-32), `docs/API_CONTRACT.md` and `docs/ARCHITECTURE.md`. It mirrors and expands ARCHITECTURE §4 "Ownership map". On *what* to build, those three documents win and this file is corrected; on *who writes which file, when, and how "done" is proven*, this file wins. Every path is relative to `/Users/sadiqmubarak/Desktop/ProxyHealth`.
+Status: **authoritative for process, sequencing and file ownership**. Written 2026-09-27 from `docs/DECISIONS.md` (D-01…D-32), `docs/API_CONTRACT.md` and `docs/ARCHITECTURE.md`. It mirrors and expands ARCHITECTURE §4 "Ownership map". On *what* to build, those three documents win and this file is corrected; on *who writes which file, when, and how "done" is proven*, this file wins. Every path is relative to `the repository root`.
 
 Coding agents build from this document without asking questions. If something is genuinely missing, the agent appends one line to `docs/DECISIONS.md` §14 "Change log" (see §1.2) and proceeds with the most conservative reading of the backbone.
 

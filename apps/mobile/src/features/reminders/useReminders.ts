@@ -17,6 +17,7 @@ import { useVault } from '@/storage/StorageProvider';
 import { useSettings } from '@/store/settings';
 
 import { icsEvents, offerEvents, rescheduleMissing, setReminderEnabled } from './manage';
+import { showNotice } from './notice';
 import { createRemindersService, type OwnDateInput, type RemindersDeps, type ScheduleOutcome } from './service';
 import { deviceZone, isZoneStamp, retimeForZoneChange, ZONE_KEY, type ZoneStore } from './timezone';
 
@@ -67,6 +68,8 @@ export function remindersDeps(vault: Vault): RemindersDeps {
     lockScreenDetail: () => useSettings.getState().lockScreenDetail,
     explainPermission,
     onChange: bumpVault,
+    notify: (message) =>
+      showNotice(message, { isWeb, title: translate('app.name'), close: translate('btn.close') }),
   };
 }
 

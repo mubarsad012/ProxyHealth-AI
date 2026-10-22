@@ -1,6 +1,9 @@
 """``settings.py`` boot rules (ARCHITECTURE §6.1; D-01, D-03, D-04; BUILD_PLAN §5.2 step 1)."""
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,7 +11,7 @@ from pydantic import ValidationError
 
 from proxyhealth_api.contracts.enums import DataUseTier, Provider
 from proxyhealth_api.main import create_app
-from proxyhealth_api.settings import KeySlotConfig, Settings
+from proxyhealth_api.settings import NO_DOTENV_ENV, KeySlotConfig, Settings, dotenv_disabled
 from tests.conftest import make_settings
 
 
@@ -160,7 +163,9 @@ def test_install_hash_secret_is_random_per_process_when_unset() -> None:
     assert a.install_hash_secret.get_secret_value() != b.install_hash_secret.get_secret_value()
 
 
-LEAKY_KEY = "AIzaSyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUvW"
+# A fake key shaped like a real Google API key (39 chars), assembled at run time so secret
+# scanners (GitHub push protection) do not flag this file.
+LEAKY_KEY = "AIza" + "Sy" + "A1b2C3d4E5f6G7h8I9j0" + "KlMnOpQrStUvW"
 
 
 @pytest.mark.parametrize(
@@ -223,6 +228,7 @@ def test_env_file_falls_back_to_apps_api_env(
     elsewhere.mkdir()
     monkeypatch.delenv("ADMIN_TOKEN", raising=False)
     monkeypatch.delenv("CONSENT_VERSION", raising=False)
+    monkeypatch.delenv(NO_DOTENV_ENV, raising=False)  # outside tests: .env is read as before
     monkeypatch.setitem(Settings.model_config, "env_file", (api_env, ".env"))
     monkeypatch.chdir(elsewhere)
     assert Settings().admin_token.get_secret_value() == "from-api-dotenv"
@@ -230,3 +236,76 @@ def test_env_file_falls_back_to_apps_api_env(
     s = Settings()
     assert s.admin_token.get_secret_value() == "from-cwd-dotenv"
     assert s.consent_version == "2026-01-01"  # still read from apps/api/.env
+
+
+def test_leaky_key_still_looks_like_a_google_key() -> None:
+    assert len(LEAKY_KEY) == 39 and LEAKY_KEY.startswith("AIzaSy") and LEAKY_KEY.isalnum()
+
+
+def test_the_suite_never_reads_the_developers_dotenv() -> None:
+    """``tests/conftest.py`` turns ``.env`` reading off for the whole run (and its children)."""
+    if os.environ.get("RUN_LIVE") == "1":
+        pytest.skip("the live gate reads .env on purpose")
+    assert os.environ.get(NO_DOTENV_ENV) == "1" and dotenv_disabled()
+
+
+@pytest.mark.parametrize(
+    ("value", "disabled"),
+    [("1", True), ("true", True), (" YES ", True), ("on", True), ("0", False), ("", False)],
+)
+def test_no_dotenv_opt_out_values(
+    monkeypatch: pytest.MonkeyPatch, value: str, disabled: bool
+) -> None:
+    monkeypatch.setenv(NO_DOTENV_ENV, value)
+    assert dotenv_disabled() is disabled
+
+
+def test_no_dotenv_opt_out_ignores_every_env_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api_env = tmp_path / "api" / ".env"
+    api_env.parent.mkdir()
+    api_env.write_text("AI_PROVIDER=openai_compat\nOPENAI_COMPAT_DATA_TIER=local\n"
+                       "OPENAI_COMPAT_MODEL_LABEL=Qwen\nCONSENT_VERSION=2001-01-01\n")  # fmt: skip
+    (tmp_path / ".env").write_text("ADMIN_TOKEN=from-cwd-dotenv\n")
+    for name in ("AI_PROVIDER", "OPENAI_COMPAT_DATA_TIER", "OPENAI_COMPAT_MODEL_LABEL",
+                 "CONSENT_VERSION", "ADMIN_TOKEN"):  # fmt: skip
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", (api_env, ".env"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(NO_DOTENV_ENV, "1")
+    s = Settings()
+    assert s.ai_provider == "mock" and s.consent_version == "2026-10-04"
+    assert s.admin_token.get_secret_value() == ""
+    assert Settings(_env_file=api_env).ai_provider == "mock"  # explicit files too
+    monkeypatch.setenv("CONSENT_VERSION", "from-real-env")  # the process environment still counts
+    assert Settings().consent_version == "from-real-env"
+    monkeypatch.delenv("CONSENT_VERSION")
+    monkeypatch.delenv(NO_DOTENV_ENV)  # unset: both files are read exactly as before
+    s = Settings()
+    assert s.ai_provider == "openai_compat" and s.consent_version == "2001-01-01"
+    assert s.admin_token.get_secret_value() == "from-cwd-dotenv"
+
+
+def test_scripts_spawned_by_the_suite_inherit_the_opt_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child process (a script under test) ignores a ``.env`` in its working directory."""
+    (tmp_path / ".env").write_text("CONSENT_VERSION=2001-01-01\n")
+    monkeypatch.delenv("CONSENT_VERSION", raising=False)
+    monkeypatch.setenv(NO_DOTENV_ENV, "1")
+    api_root = Path(__file__).resolve().parents[2]
+    code = (
+        "from proxyhealth_api.settings import Settings\n"
+        "print(Settings().consent_version, Settings(_env_file='.env').consent_version)\n"
+    )
+
+    def run(env: dict[str, str]) -> str:
+        env = env | {"PYTHONPATH": str(api_root)}
+        done = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env=env,
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        return done.stdout.strip()
+
+    assert run(dict(os.environ)) == "2026-10-04 2026-10-04"
+    without = {k: v for k, v in os.environ.items() if k != NO_DOTENV_ENV}
+    assert run(without).split()[1] == "2001-01-01"  # control: the opt-out is what hides it

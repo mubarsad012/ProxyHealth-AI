@@ -2,7 +2,7 @@
 // when `asks_for_credentials_or_payment`, the scam card first, the offline sample path, and the
 // consent gate (CL-070: no real screenshot is picked or sent before consent; the sample stays open).
 
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 
@@ -19,6 +19,7 @@ import { buildTroubleshootRequest, clampGoal, NotAnImageError, parseMode } from 
 import { buildEvidenceDocument, canSaveEvidence, saveScamEvidence } from './evidence';
 import { pickScreenshot, type Screenshot } from './pick';
 import { askPersonHref, TroubleshootResultCards } from './ResultCards';
+import { revealResult } from './reveal';
 import { reportingResources } from './ScamReport';
 import { TroubleshootScreen } from './TroubleshootScreen';
 
@@ -35,6 +36,8 @@ jest.mock('expo-router', () => ({
 
 // The system picker cannot run under jest; each test says what it "picks".
 jest.mock('./pick', () => ({ ...jest.requireActual('./pick'), pickScreenshot: jest.fn() }));
+// The result arrives below the fold: the screen hands its node to `revealResult` (reveal.test.ts).
+jest.mock('./reveal', () => ({ ...jest.requireActual('./reveal'), revealResult: jest.fn() }));
 
 const portal = require('../../../assets/fixtures/portal_file_too_large.result.en.json') as TroubleshootResult;
 const png = { mime_type: 'image/png' as const, data_base64: 'iVBORw0KGgo=', masks: [], rotation: 0 as const };
@@ -213,10 +216,18 @@ describe('TroubleshootScreen', () => {
     expect(getByText('Stuck on a website')).toBeTruthy();
     expect(getByText('Is this a scam?')).toBeTruthy();
     expect(getByTestId('credential-guard')).toBeTruthy();
+    jest.mocked(revealResult).mockClear();
     await fireEvent.press(getByTestId('troubleshoot-sample'));
     expect(await findByTestId('troubleshoot-result')).toBeTruthy();
     expect(getByText('Do this next')).toBeTruthy();
     expect(router.push).not.toHaveBeenCalledWith('/onboarding/consent');
+    // The new result is brought into view (and focused) once, with its own block's node.
+    // (Only the node's testID is compared: printing a node would walk the whole tree.)
+    await waitFor(() => expect(jest.mocked(revealResult).mock.calls.length).toBe(1));
+    const [node, opts] = jest.mocked(revealResult).mock.calls[0];
+    expect((node as { props?: { testID?: string } } | null)?.props?.testID).toBe('troubleshoot-result-block');
+    expect(opts).toEqual({ smooth: true });
+    jest.mocked(revealResult).mockClear();
   });
 });
 

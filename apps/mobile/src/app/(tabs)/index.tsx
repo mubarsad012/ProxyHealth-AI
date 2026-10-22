@@ -125,6 +125,7 @@ export default function HomeScreen() {
   const { online } = useOnline();
   const decision = useConsentDecision((s) => s.decision);
   const consent = useSession((s) => s.consent);
+  const openRealPaper = useSession((s) => s.currentAnalysis !== null && s.demoSampleId === null);
   const webPersist = useSettings((s) => s.webPersist);
   const tag = useSettings((s) => s.languageTag);
   const coolingUntil = useQuotaCoolingUntil();
@@ -214,7 +215,9 @@ export default function HomeScreen() {
       {!online ? <Banner kind="offline" /> : null}
       <TierBanner tier={tier} />
       {tier === 'demo' || sample.enabled ? <Banner kind="demo" /> : null}
-      {isWeb && webPersist === 'session' ? (
+      {/* "This paper is kept only while this tab is open" needs a paper: a saved one or an open
+          unsaved real one — never on a fresh tab or for a sample. */}
+      {isWeb && webPersist === 'session' && (rows.length > 0 || openRealPaper) ? (
         <AppText variant="caption" color="textMuted">
           {t('banner.web_session_only')}
         </AppText>

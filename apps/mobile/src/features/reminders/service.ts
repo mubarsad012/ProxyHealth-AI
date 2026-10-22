@@ -6,8 +6,14 @@
 //   web    → no scheduling: the .ics file (one VEVENT per reminder) is offered FIRST, synchronously
 //            inside the click handler, then the rows are stored for the in-app list ('ics').
 // Every reminder row stores only the demand label, the fire time and ids (D-22).
+// Sample papers (PRODUCT_SPEC §12.3): eligibility and fire times run as of the samples' fixed day
+// (`features/demo/asOf.ts`, the server's DEMO_AS_OF), the result gets the sample note
+// (`demo.as_of_note`) through `notify`, and only fire times still ahead of the real clock become
+// OS notifications. "Remind me" never fails silently: a real paper whose date has passed resolves
+// 'past' and shows `reminders.date_passed`.
 
 import type { AnalysisResult, Demand } from '@/api/types';
+import { DEMO_AS_OF_NOTE, isSampleAnalysis, sampleNow } from '@/features/demo/asOf';
 import { buildIcs, type IcsEvent, icsFileName } from '@/lib/ics';
 import type { IcsOfferResult, NotificationPermission, NotificationsApi } from '@/lib/notifications';
 import type { Reminder, StoredDocument, Vault } from '@/storage/index';
@@ -23,7 +29,9 @@ import {
   type Translate,
 } from './schedule';
 
-export type ScheduleOutcome = 'scheduled' | 'ics' | 'denied' | 'not_eligible';
+/** 'past' (a widening): the date is before today (a sample: before its as-of day); the service
+ *  has already shown `reminders.date_passed` through `notify`. */
+export type ScheduleOutcome = 'scheduled' | 'ics' | 'denied' | 'not_eligible' | 'past';
 
 export const OWN_PREFIX = 'own:';
 export const OWN_TITLE_MAX = 60;
@@ -44,6 +52,9 @@ export interface RemindersDeps {
   explainPermission(): Promise<boolean>;
   /** Called after any change so lists re-read the vault. */
   onChange?(): void;
+  /** Shows one short, already-translated line the calling screen does not show itself (the date
+   *  has passed; the sample note). */
+  notify?(message: string): void;
 }
 
 export interface OwnDateInput {
@@ -160,9 +171,12 @@ export function createRemindersService(deps: RemindersDeps) {
     const granted = perm === 'granted';
     if (granted) await deps.notifications.ensureChannel(t('notif.channel_name'));
     await removeExisting(plan.documentId, plan.demandId);
+    // A sample's fire times are counted from its as-of day, so they can be behind the real clock:
+    // those stay in the list only (the OS would fire them at once or refuse them).
+    const realNow = deps.now().getTime();
     for (const slot of plan.slots) {
       const text = notificationText(t, slot, { optIn: detailOptIn, ...plan.detail });
-      const notificationId = granted
+      const notificationId = granted && slot.fireAt.getTime() > realNow
         ? await deps.notifications.schedule({
             fireAt: slot.fireAt,
             title: text.title,
@@ -184,9 +198,24 @@ export function createRemindersService(deps: RemindersDeps) {
     return granted ? 'scheduled' : 'denied';
   }
 
+  function notify(key: string): void {
+    try {
+      deps.notify?.(t(key));
+    } catch {
+      // best-effort: the outcome still reaches the caller
+    }
+  }
+
   function scheduleForDemand(analysis: AnalysisResult, demand: Demand, documentId?: string): Promise<ScheduleOutcome> {
-    const now = deps.now();
-    if (reminderEligibility(demand, now) !== 'ok' || !demand.date?.value_iso) return Promise.resolve('not_eligible');
+    // Everything up to `store` runs synchronously: on web the .ics download must stay in the tap.
+    const sample = isSampleAnalysis(analysis);
+    const now = sample ? sampleNow(deps.now()) : deps.now();
+    const eligibility = reminderEligibility(demand, now);
+    if (eligibility === 'past') {
+      notify('reminders.date_passed');
+      return Promise.resolve('past');
+    }
+    if (eligibility !== 'ok' || !demand.date?.value_iso) return Promise.resolve('not_eligible');
     const slots = computeFireTimes(demand.date.value_iso, now);
     if (slots.length === 0) return Promise.resolve('not_eligible');
     const plan: Plan = {
@@ -200,7 +229,12 @@ export function createRemindersService(deps: RemindersDeps) {
         date: demand.value_verbatim || demand.date.value_iso,
       },
     };
-    return store(plan);
+    const stored = store(plan);
+    if (!sample) return stored;
+    return stored.then((outcome) => {
+      notify(DEMO_AS_OF_NOTE);
+      return outcome;
+    });
   }
 
   function addOwnDate(input: OwnDateInput): Promise<ScheduleOutcome> {

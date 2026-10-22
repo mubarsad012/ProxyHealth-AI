@@ -1,12 +1,14 @@
 // Pack loading chain (D-25, ARCHITECTURE §3 "packLoader.ts"):
 //   bundled (`packs/`) → device cache (`kv`, keyed tag|pack_version) → GET /v1/language-packs/{tag}
 //   with `If-None-Match` → POST /v1/language-packs for tags the server has not generated yet and
-//   for typed language names. A `409 pack_version_mismatch` is retried once after the caller
-//   refreshes `/v1/config`. Nothing here touches React.
+//   for typed language names. The GET is only sent when the server can have the pack
+//   (`shouldGetFirst`): a miss is a 404 the browser logs as a console error. A
+//   `409 pack_version_mismatch` is retried once after the caller refreshes `/v1/config`. Nothing
+//   here touches React.
 
 import type { ApiClient } from '@/api/client';
 import { ApiError } from '@/api/errors';
-import type { LanguagePack } from '@/api/types';
+import type { LanguagePack, ServerConfig } from '@/api/types';
 import {
   bundledPackFor,
   EN_PACK,
@@ -22,6 +24,31 @@ export interface PackLoaderDeps {
   basePackVersion(): string | null;
   /** Called once on 409 so the base version can be refreshed before the single retry. */
   onVersionMismatch?(): Promise<void>;
+  /** `/v1/config` (provider + the languages the server bundles); null/absent while unknown. */
+  serverConfig?(): Pick<ServerConfig, 'provider' | 'languages'> | null;
+}
+
+/** The server keeps a generated pack only at this coverage or more (api `packs/cache.py`). */
+export const SERVER_CACHE_MIN_COVERAGE = 0.9;
+
+/**
+ * Whether to try `GET /v1/language-packs/{tag}` before POST. The GET answers only for a pack the
+ * server bundles or kept from an earlier generation; any other tag is a 404 (an expected cache
+ * miss, but browsers log it as a console error). POST returns the server's existing pack too, so
+ * skipping the GET never loses a pack, it only skips the ETag revalidation. GET first when
+ * `/v1/config` says the server bundles the tag (a server newer than this app build), or when we
+ * hold a copy the server may also have kept: a real provider (the mock never keeps generated
+ * packs) and coverage ≥ 0.9. With no config yet, GET only to revalidate a copy we hold.
+ */
+export function shouldGetFirst(
+  tag: string,
+  cached: LoadedPack | null,
+  config: Pick<ServerConfig, 'provider' | 'languages'> | null,
+): boolean {
+  if (!config) return cached !== null;
+  if (config.languages?.some((l) => l.tag === tag && l.bundled)) return true;
+  if (!cached || config.provider === 'mock') return false;
+  return cached.coverage >= SERVER_CACHE_MIN_COVERAGE;
 }
 
 interface CachedPackEnvelope {
@@ -114,12 +141,14 @@ export async function loadKnownPack(tag: string, deps: PackLoaderDeps, opts: Loa
     throw new ApiError({ code: 'network', status: 0, message: `pack ${tag} not available offline` });
   }
   try {
-    let pack: LoadedPack | null;
-    try {
-      pack = await fetchKnownPack(tag, cached, deps);
-    } catch (e) {
-      if (e instanceof ApiError && e.code === 'not_found') pack = null;
-      else throw e;
+    let pack: LoadedPack | null = null;
+    if (shouldGetFirst(tag, cached, deps.serverConfig?.() ?? null)) {
+      try {
+        pack = await fetchKnownPack(tag, cached, deps);
+      } catch (e) {
+        // The server dropped its copy (restart, new base version): generate it again below.
+        if (!(e instanceof ApiError && e.code === 'not_found')) throw e;
+      }
     }
     if (!pack) pack = await postPack(tag, languageInfoFor(tag).tag, deps);
     await cachePack(pack);

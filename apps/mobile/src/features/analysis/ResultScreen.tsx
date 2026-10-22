@@ -51,6 +51,8 @@ export function remindNotice(outcome: string, d: Demand, t: (k: string, v?: Reco
       return t('reminders.web_explain');
     case 'denied':
       return t('reminders.permission_denied');
+    case 'past':
+      return t('reminders.date_passed');
     case 'not_eligible':
       return d.date?.kind === 'estimated' ? t('reminders.estimate_blocked') : null;
     default:

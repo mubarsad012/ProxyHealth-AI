@@ -15,15 +15,18 @@ export interface CollapsibleProps {
   title: string;
   children: ReactNode;
   initiallyOpen?: boolean;
+  /** On the heading button. */
+  testID?: string;
 }
 
-export function Collapsible({ title, children, initiallyOpen = false }: CollapsibleProps) {
+export function Collapsible({ title, children, initiallyOpen = false, testID }: CollapsibleProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const { colors } = useTheme();
   const dir = useDirection();
   return (
     <View>
       <Pressable
+        testID={testID}
         role="button"
         aria-expanded={open}
         accessibilityState={{ expanded: open }}

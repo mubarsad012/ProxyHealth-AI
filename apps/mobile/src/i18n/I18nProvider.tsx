@@ -8,6 +8,7 @@
 import { type ReactNode, useEffect } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
+import { ensureServerConfig } from '@/api/config';
 import { applyDirection } from '@/i18n/direction';
 import { activatePack, packLoaderDeps } from '@/i18n/language';
 import { loadKnownPack, readCachedPack } from '@/i18n/packLoader';
@@ -38,8 +39,11 @@ export function bootI18n(): Promise<void> {
       }
       useI18n.getState().setReady(true);
       if (bundled) return;
-      // Revalidate / fetch in the background; failures keep what we have.
+      // Revalidate / fetch in the background; failures keep what we have. Wait for /v1/config
+      // first: it says whether the server can have this pack at all (no GET that can only 404,
+      // `shouldGetFirst`) and gives the current base pack version.
       try {
+        await ensureServerConfig();
         const fresh = await loadKnownPack(tag, packLoaderDeps());
         if (useI18n.getState().tag === tag || !first) activatePack(fresh, { persist: false });
       } catch {

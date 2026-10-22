@@ -2,7 +2,7 @@
 
 # ProxyHealth AI — Product + Technical Specification (builder-first)
 
-Spec date: 2026-09-23. Targets the existing scaffold at `/Users/sadiqmubarak/Desktop/ProxyHealth` (Expo SDK 57 / RN 0.86.3 / TS 6 in `apps/mobile`, Python 3.13 venv with fastapi + google-genai 2.x + pydantic v2 + pyyaml + pillow + pypdfium2 in `apps/api/.venv`). Every model ID, package, and URL below comes from the verified research bundle; anything not verified is marked **(unverified)**.
+Spec date: 2026-09-23. Targets the existing scaffold at `the repository root` (Expo SDK 57 / RN 0.86.3 / TS 6 in `apps/mobile`, Python 3.13 venv with fastapi + google-genai 2.x + pydantic v2 + pyyaml + pillow + pypdfium2 in `apps/api/.venv`). Every model ID, package, and URL below comes from the verified research bundle; anything not verified is marked **(unverified)**.
 
 ---
 

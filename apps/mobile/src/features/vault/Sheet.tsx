@@ -2,9 +2,13 @@
 // RN `Modal` works on iOS, Android and web (react-native-web portals it to <body>); Alert.alert is
 // a no-op on web, so every confirmation in WP6 uses `ConfirmDialog` instead. Scrollable body,
 // 56 pt close button, mirrored rows, `role="dialog"` with the title as its label.
+// Web: the modal is portalled to <body>, outside the LTR-pinned `#root` (global.css), so it would
+// inherit `<html dir="rtl">` and our `row-reverse` would flip twice (rows not mirrored at all). The
+// sheet pins its own subtree LTR (`dir="ltr"`, the attribute react-native-web's View passes through;
+// its StyleSheet drops a `direction` style), like `#root`, so `useDirection().row` mirrors once.
 
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/design/components/BigButton';
@@ -25,6 +29,11 @@ export interface SheetProps {
   testID?: string;
 }
 
+/** Web only: the same LTR base direction as `#root` (native layout direction is I18nManager's). */
+export function webLtrRoot(): Record<string, string> {
+  return Platform.OS === 'web' ? { dir: 'ltr' } : {};
+}
+
 export function Sheet({ visible, title, onClose, children, footer, testID }: SheetProps) {
   const t = useT();
   const { colors } = useTheme();
@@ -32,7 +41,10 @@ export function Sheet({ visible, title, onClose, children, footer, testID }: She
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
+      <View
+        testID={testID ? `${testID}-backdrop` : undefined}
+        {...webLtrRoot()}
+        style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
         <View
           testID={testID}
           role="dialog"

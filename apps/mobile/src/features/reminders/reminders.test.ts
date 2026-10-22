@@ -310,7 +310,7 @@ describe('reminders service (native)', () => {
     const service = createRemindersService(deps);
     await expect(service.scheduleForDemand(analysis(), demand({ dateKind: 'estimated' }))).resolves.toBe('not_eligible');
     await expect(service.scheduleForDemand(analysis(), demand({ verified: false }))).resolves.toBe('not_eligible');
-    await expect(service.scheduleForDemand(analysis(), demand({ iso: '2026-09-01' }))).resolves.toBe('not_eligible');
+    await expect(service.scheduleForDemand(analysis(), demand({ iso: '2026-09-01' }))).resolves.toBe('past');
     expect(rows).toHaveLength(0);
   });
 
@@ -349,6 +349,67 @@ describe('reminders service (web)', () => {
       'DESCRIPTION:You have a date coming up.',
       'DESCRIPTION:You have a date coming up.',
     ]);
+  });
+});
+
+describe('"Remind me" on a sample paper and on a passed date (never silent)', () => {
+  // The real bundled sample (dates computed by the server as of DEMO_AS_OF 2026-10-02) and a real
+  // clock three weeks later: the sample's October 14 must still get its reminders.
+  const medicaid = require('../../../assets/fixtures/medicaid_address_confirmation.result.en.json') as AnalysisResult;
+  const LATER = new Date(2026, 9, 22, 10, 0, 0, 0);
+  const sampleDemand = () => medicaid.demands.find((d) => d.id === medicaid.urgency.driving_demand_id) as Demand;
+  const realPaper = (d: Demand) =>
+    analysis([d], { warnings: [], model_meta: { ...medicaid.model_meta, demo: false } } as Partial<AnalysisResult>);
+
+  it('web: the sample Medicaid date gives the .ics as of October 2 and the sample note', async () => {
+    const notify = jest.fn();
+    const { deps, rows, offered, log } = fakeDeps({ isWeb: true, now: () => LATER, notify });
+    expect(medicaid.warnings).toContain('demo_sample');
+    expect(sampleDemand().date?.value_iso).toBe('2026-10-14');
+    await expect(createRemindersService(deps).scheduleForDemand(medicaid, sampleDemand())).resolves.toBe('ics');
+    expect(log[0]).toBe('offer');
+    expect(offered).toHaveLength(1);
+    expect(countEvents(offered[0].ics)).toBe(3);
+    expect(offered[0].ics).toContain('DTSTART:20261007T090000\r\n');
+    expect(offered[0].ics).toContain('DTSTART:20261013T090000\r\n');
+    expect(rows).toHaveLength(3);
+    expect(notify).toHaveBeenCalledWith(t('demo.as_of_note'));
+    expect(notify).not.toHaveBeenCalledWith(t('reminders.date_passed'));
+  });
+
+  it('native: the sample is listed and noted; fire times behind the real clock are not handed to the OS', async () => {
+    const notify = jest.fn();
+    const { deps, rows, notifications } = fakeDeps({ now: () => LATER, notify });
+    await expect(createRemindersService(deps).scheduleForDemand(medicaid, sampleDemand(), 'an_s')).resolves.toBe(
+      'scheduled',
+    );
+    expect(rows.map((r) => toIsoDay(new Date(r.fireAt)))).toEqual(['2026-10-07', '2026-10-11', '2026-10-13']);
+    expect(notifications.scheduled).toHaveLength(0);
+    expect(notify).toHaveBeenCalledWith(t('demo.as_of_note'));
+  });
+
+  it('a real paper whose date has passed shows the passed-date line and schedules nothing', async () => {
+    const notify = jest.fn();
+    for (const isWeb of [false, true]) {
+      notify.mockClear();
+      const { deps, rows, offered, notifications } = fakeDeps({ isWeb, now: () => LATER, notify });
+      const d = demand({ iso: '2026-10-14' });
+      await expect(createRemindersService(deps).scheduleForDemand(realPaper(d), d)).resolves.toBe('past');
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledWith(t('reminders.date_passed'));
+      expect(rows).toHaveLength(0);
+      expect(offered).toHaveLength(0);
+      expect(notifications.scheduled).toHaveLength(0);
+    }
+  });
+
+  it('a real paper with a date ahead still schedules against the real clock, with no extra line', async () => {
+    const notify = jest.fn();
+    const { deps, notifications } = fakeDeps({ now: () => LATER, notify });
+    const d = demand({ iso: '2026-11-10' });
+    await expect(createRemindersService(deps).scheduleForDemand(realPaper(d), d)).resolves.toBe('scheduled');
+    expect(notifications.scheduled.map((s) => toIsoDay(s.fireAt))).toEqual(['2026-11-03', '2026-11-07', '2026-11-09']);
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 

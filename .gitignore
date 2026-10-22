@@ -52,3 +52,7 @@ apps/api/var/
 # --- CI / tooling outputs ---
 links-report.json
 expo-env.d.ts
+
+# EAS local credentials (never commit)
+credentials.json
+credentials/

@@ -5,7 +5,7 @@
 // tel:/sms: links, the context line from `emergency_kinds`, trigger derivation biased to fire.
 
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { AccessibilityInfo, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { AnalysisResult } from '@/api/types';
@@ -158,6 +158,35 @@ describe('<LongPressExit>', () => {
       jest.advanceTimersByTime(200);
     });
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('always shows the hold hint; a short tap emphasises and announces it and does not exit', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    const onExit = jest.fn();
+    const { getByTestId } = await render(<LongPressExit onExit={onExit} />);
+    const btn = getByTestId('clerk-exit');
+    const hint = () => getByTestId('clerk-exit-hint');
+    expect(hint().props.children).toBe(t('clerk.hold_hint'));
+    expect(btn.props.accessibilityHint).toBe(t('clerk.hold_hint'));
+    expect(hint().props.role).toBeUndefined();
+    await fireEvent(btn, 'pressIn');
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
+    await fireEvent(btn, 'pressOut');
+    expect(onExit).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith(t('clerk.hold_hint'));
+    expect(hint().props.role).toBe('alert');
+    // A full hold still exits, and does not announce the hint again.
+    announce.mockClear();
+    await fireEvent(btn, 'pressIn');
+    await act(async () => {
+      jest.advanceTimersByTime(1600);
+    });
+    await fireEvent(btn, 'pressOut');
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(announce).not.toHaveBeenCalledWith(t('clerk.hold_hint'));
+    announce.mockRestore();
   });
 
   it('the accessibility "activate" action runs the same timer', async () => {

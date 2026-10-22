@@ -1,18 +1,26 @@
 """Shared fixtures (BUILD_PLAN §4.1, permanent). WP-specific fixtures live in the WP's modules."""
 
-import base64
-import io
-from collections.abc import AsyncIterator, Callable
-from datetime import UTC, datetime
-from pathlib import Path
+import os
 
-import httpx
-import pytest
-from fastapi import FastAPI
-from PIL import Image
+# Before anything imports the app: the developer's ``apps/api/.env`` (or a cwd ``.env``) must not
+# leak into the suite or into scripts it runs (child processes inherit it). The live gate
+# (``RUN_LIVE=1``) reads its billed keys from ``.env`` on purpose, so it keeps the file.
+if os.environ.get("RUN_LIVE") != "1":
+    os.environ["PROXYHEALTH_NO_DOTENV"] = "1"
 
-from proxyhealth_api.main import create_app
-from proxyhealth_api.settings import DATA_DIR, KeySlotConfig, Settings
+import base64  # noqa: E402
+import io  # noqa: E402
+from collections.abc import AsyncIterator, Callable  # noqa: E402
+from datetime import UTC, datetime  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from PIL import Image  # noqa: E402
+
+from proxyhealth_api.main import create_app  # noqa: E402
+from proxyhealth_api.settings import DATA_DIR, KeySlotConfig, Settings  # noqa: E402
 
 FROZEN_NOW = datetime(2026, 9, 24, 14, 0, 0, tzinfo=UTC)
 

@@ -1,6 +1,6 @@
 # ProxyHealth AI — Architecture (backbone document)
 
-Status: **authoritative**. Implements `docs/DECISIONS.md` and `docs/API_CONTRACT.md`. Every path below is relative to `/Users/sadiqmubarak/Desktop/ProxyHealth`. Files marked **(exists)** are already in the scaffold; **(replace)** are template files whose content is rewritten; **(delete)** are template files removed; everything else is new. Package installs are forbidden while agents run in parallel (CLAUDE.md rule 1); this architecture uses only the packages listed in `CLAUDE.md` and `apps/mobile/package.json`.
+Status: **authoritative**. Implements `docs/DECISIONS.md` and `docs/API_CONTRACT.md`. Every path below is relative to `the repository root`. Files marked **(exists)** are already in the scaffold; **(replace)** are template files whose content is rewritten; **(delete)** are template files removed; everything else is new. Package installs are forbidden while agents run in parallel (CLAUDE.md rule 1); this architecture uses only the packages listed in `CLAUDE.md` and `apps/mobile/package.json`.
 
 ---
 

@@ -23,6 +23,7 @@ export function packLoaderDeps(client: ApiClient = getClient()): PackLoaderDeps 
     onVersionMismatch: async () => {
       await refreshServerConfig(client);
     },
+    serverConfig: () => useSession.getState().serverConfig,
   };
 }
 
