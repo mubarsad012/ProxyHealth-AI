@@ -6,10 +6,12 @@ plus form-specific tags follow the model's own (an empty list is just those); wh
 empty and the paper is readable the pipeline may run task ``tag`` once
 (``TagOutcome.needs_tag_call``). ``crisis`` goes first when the emergency lexicon fired, then
 ``scam_report`` when ``scam_risk == likely``. Emergency and scam status are code decisions
-(D-13, D-14), so on the final call (``gate_sensitive=True``) a model ``crisis`` /
-``domestic_violence`` / ``trafficking`` / ``poison`` tag needs ``emergency`` (or the type's own
-primary tags), and ``scam_report`` needs ``scam_risk != none`` or a verified scam red flag.
-Resources themselves only ever come from the vetted DB through the matcher.
+(D-13, D-14), so on the final call (``gate_sensitive=True``) a model ``crisis`` / ``poison`` tag
+needs ``emergency``; a ``domestic_violence`` / ``trafficking`` tag needs ``emergency`` or a
+printed abuse context (a protective order, VAWA, a U/T visa, I-914/I-918/I-360 …; a language
+without a cue list keeps it); any of them stands when it is one of the type's own primary tags.
+``scam_report`` needs ``scam_risk != none`` or a verified scam red flag. Resources themselves
+only ever come from the vetted DB through the matcher.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from proxyhealth_api.analysis.verify import normalize
 from proxyhealth_api.contracts.analysis import RedFlag
 from proxyhealth_api.contracts.enums import (
     DocumentCategory,
@@ -95,9 +98,44 @@ FORM_TAGS: Mapping[str, ResourceTag] = {
 SCAM_FLAG_KINDS = frozenset(
     {RedFlagKind.scam_payment_method, RedFlagKind.impersonation, RedFlagKind.notario}
 )
-# Tags whose resources (crisis lines, DV and trafficking hotlines, poison help) only an emergency
-# the code detected may bring (D-14).
-EMERGENCY_TAGS = frozenset({RT.crisis, RT.domestic_violence, RT.trafficking, RT.poison})
+# Tags whose resources (crisis lines, poison help) answer an immediate danger: only an emergency
+# the code detected may bring them (D-14).
+DANGER_TAGS = frozenset({RT.crisis, RT.poison})
+# DV and trafficking help also serves a paper about abuse that prints no emergency term (a
+# protective order, a VAWA self-petition, a U/T-visa form): such a tag needs an emergency or a
+# printed abuse context (``prints_abuse_context``).
+ABUSE_TAGS = frozenset({RT.domestic_violence, RT.trafficking})
+EMERGENCY_TAGS = DANGER_TAGS | ABUSE_TAGS
+# Printed abuse context per language (every list runs on every text). A paper in a language with
+# no list keeps the model's DV/trafficking tags: there is nothing to judge them by.
+ABUSE_CONTEXT: Mapping[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"\b(protective|protection|restraining|no[- ]contact|stay[- ]away|peace) orders?\b"
+        r"|\b(family|domestic|dating|intimate[- ]partner|spousal|elder|child|sexual) "
+        r"(abuse|violence|assault)\b|\babus(e|ed|er|ers|ive)\b|\bbattered\b"
+        r"|\bstalk(ing|ed|er|ers)?\b|\bvawa\b|\bviolence against women\b"
+        r"|\btraffick(ing|ed|er|ers)?\b|\bforced (labor|labour)\b|\bcontinued presence\b"
+        r"|\b(u|t)[- ](visas?|nonimmigrant)\b|\bi-?(914|918|360)\b",
+        re.IGNORECASE,
+    ),
+    "es": re.compile(
+        r"\b[oó]rden(es)? de (protecci[oó]n|alejamiento|restricci[oó]n)\b"
+        r"|\bviolencia (dom[eé]stica|familiar|intrafamiliar|de g[eé]nero|de pareja|sexual)\b"
+        r"|\babus(o|os|ador|adora|ivo|iva)\b|\bmaltrato\b|\bacoso\b|\bvisas? (u|t)\b"
+        r"|\btrata de personas\b|\btrabajo forzoso\b",
+        re.IGNORECASE,
+    ),
+}
+
+
+def prints_abuse_context(text: str, language: str | None) -> bool:
+    """True when a model ``domestic_violence``/``trafficking`` tag may stand without an
+    emergency: the paper prints an abuse context, or its language (``None`` = not known) has no
+    ``ABUSE_CONTEXT`` list."""
+    if (language or "").split("-")[0].lower() not in ABUSE_CONTEXT:
+        return True
+    norm = normalize(text)
+    return any(p.search(norm) for p in ABUSE_CONTEXT.values())
 
 
 def validate_tags(raw: Iterable[str]) -> list[ResourceTag]:
@@ -171,24 +209,32 @@ def finalize_tags(
     red_flags: Iterable[RedFlag] = (),
     tag_call_tags: Iterable[str] | None = None,
     gate_sensitive: bool = False,
+    printed_text: str = "",
+    language: str | None = None,
 ) -> TagOutcome:
     """AI_PROMPTS §11.10 tagging. Call once with the model's tags; if ``needs_tag_call`` comes
     back true and the pipeline ran task ``tag``, call again passing ``tag_call_tags``.
 
     The type's primary tags the model left out follow its own. ``gate_sensitive`` (the final
     call, once ``scam_risk``, ``emergency`` and the verified ``red_flags`` are known) drops model
-    and tag-call emergency tags without an emergency and ``scam_report`` without scam evidence."""
+    and tag-call ``crisis``/``poison`` tags without an emergency, ``domestic_violence``/
+    ``trafficking`` tags without an emergency or an abuse context in ``printed_text`` (the
+    transcript, in the paper's ``language``; ``prints_abuse_context``), and ``scam_report``
+    without scam evidence."""
     flags = list(red_flags)
     primary = primary_tags(document_type, category, form_numbers)
     scam_flag = any(f.verified and f.kind in SCAM_FLAG_KINDS for f in flags)
+    abuse = emergency or not gate_sensitive or prints_abuse_context(printed_text, language)
 
     def backed(tags: list[ResourceTag]) -> list[ResourceTag]:
         if not gate_sensitive:
             return tags
         return [
             t for t in tags
-            if not (t in EMERGENCY_TAGS and not emergency and t not in primary)
-            and not (t is RT.scam_report and scam_risk is ScamRisk.none and not scam_flag)
+            if t in primary or not (
+                (t in DANGER_TAGS and not emergency) or (t in ABUSE_TAGS and not abuse)
+                or (t is RT.scam_report and scam_risk is ScamRisk.none and not scam_flag)
+            )
         ]  # fmt: skip
 
     tags = backed(validate_tags(model_tags))
@@ -214,7 +260,10 @@ def finalize_tags(
 
 
 __all__ = [
+    "ABUSE_CONTEXT",
+    "ABUSE_TAGS",
     "CATEGORY_TAGS",
+    "DANGER_TAGS",
     "EMERGENCY_TAGS",
     "FORM_TAGS",
     "MAX_TAGS",
@@ -223,5 +272,6 @@ __all__ = [
     "finalize_tags",
     "form_tags",
     "primary_tags",
+    "prints_abuse_context",
     "validate_tags",
 ]

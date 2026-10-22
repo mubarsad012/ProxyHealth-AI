@@ -4,7 +4,8 @@ A small local model fell back to ``other_notice`` on a SNAP interview notice who
 "Notice of Interview"; a USCIS receipt and an IRS CP14 lost their types to the scam scorer; the
 model's category disagreed with the §2 table on a Medicaid letter and a W-2. These tests pin the
 deterministic corrections and, above all, what they must never do: replace a specific type the
-model chose on anything but a printed form label, or touch a curated fixture.
+model chose on anything but a printed form label (never a sentence that mentions a form, never a
+floor-protected type), let a later page or another paper decide, or touch a curated fixture.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from proxyhealth_api.contracts.enums import (
     ScamRisk,
     Severity,
 )
-from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut, RedFlagOut
 from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER, FixtureStore
 from proxyhealth_api.settings import DATA_DIR
 from tests.unit._fixtures_wp2 import block
@@ -93,21 +94,96 @@ def test_a_form_number_outside_the_header_or_in_a_sentence_decides_nothing() -> 
     assert check(lines("Legal Aid Flyer", sentence)).rule is None
 
 
-def test_a_form_label_replaces_a_specific_type_but_two_labels_that_disagree_do_not() -> None:
-    got = check(lines("Form I-862", "Notice"), DT.hearing_notice, Confidence.high)
+def test_when_a_form_label_may_replace_a_specific_type() -> None:
+    # The model was unsure: the label decides.
+    got = check(lines("Form I-862", "Notice"), DT.hearing_notice, Confidence.low)
     assert (got.document_type, got.confidence, got.rule) == (DT.nta, Confidence.medium, "form")
-    assert check(lines("Form I-862", "Form W-2"), DT.lease, Confidence.high).rule is None
+    # The model was sure: only a strong label of a type in the same §2 category that keeps every
+    # urgency protection (hearing_notice and nta share the floor and the critical hearing date) …
+    approval = check(lines("USCIS", "I-797A, Notice of Action"), DT.uscis_receipt, Confidence.high)
+    assert approval.document_type is DT.uscis_approval and approval.rule == "form"
+    nta = check(lines("Form I-862", "Notice"), DT.hearing_notice, Confidence.high)
+    assert (nta.document_type, nta.confidence) == (DT.nta, Confidence.medium)
+    # … never one that loses a floor or a driving role, another category, or a bare number.
+    assert cl.keeps_protections(DT.hearing_notice, DT.nta)
+    assert not cl.keeps_protections(DT.uscis_noid, DT.uscis_rfe)  # the high floor
+    assert not cl.keeps_protections(DT.eviction_summons, DT.w2_1099)
+    assert not cl.keeps_protections(DT.i9, DT.w2_1099)  # response_due, expiry
+    assert check(lines("Form I-9"), DT.w2_1099, Confidence.high).document_type is DT.i9
+    assert check(lines("Form W-2"), DT.i9, Confidence.high).rule is None
+    assert check(lines("Form W-2"), DT.medicaid_renewal, Confidence.medium).rule is None
+    stub = lines("Sample Staffing LLC", "W-2 Wages", "Earnings Statement")
+    assert check(stub, DT.pay_stub, Confidence.high).rule is None
+    assert check(stub, DT.pay_stub, Confidence.low).document_type is DT.w2_1099
+    # Two labels that disagree decide nothing.
+    assert check(lines("Form I-862", "Form W-2"), DT.lease, Confidence.low).rule is None
+
+
+def test_form_label_shape() -> None:
+    assert cl.form_label("Form I-862") == cl.FormLabel("I862", strong=True)
+    assert cl.form_label("I-797C, Notice of Action") == cl.FormLabel("I797C", strong=True)
+    assert cl.form_label("Notice CP14 Tax year 2025 Notice date: September 21, 2026") == (
+        cl.FormLabel("CP14", strong=True)
+    )
+    assert cl.form_label("W-2 Wage and Tax Statement 2025") == cl.FormLabel("W2", strong=False)
+    for mention in ("Bring Form W-2 and your ID.", "your W-2 or recent pay stubs,", "W-2 or stubs.",
+                    "Form I-9 must be completed by your employer", "On day one, complete Form I-9",
+                    "IOE0912345678 I765 - Application for Employment Authorization"):  # fmt: skip
+        assert cl.form_label(mention) is None, mention
+
+
+@pytest.mark.parametrize(
+    ("texts", "doc_type", "category"),
+    [
+        (["Virginia Department of Medical Assistance Services", "Medicaid Renewal",
+          "Send proof of income, such as\nyour W-2 or recent pay stubs,\nby November 1, 2026."],
+         DT.medicaid_renewal, DC.benefits),
+        (["Fairfax County Housing Authority", "Annual Recertification",
+          "Bring Form W-2 and your ID.", "Your appointment is November 3, 2026."],
+         DT.section8_recert, DC.housing),
+        (["ACME Corp", "Offer of Employment", "On day one, complete Form I-9.",
+          "Start date: November 3, 2026"], DT.offer_letter, DC.employment),
+        (["GENERAL DISTRICT COURT", "SUMMONS FOR UNLAWFUL DETAINER",
+          "Plaintiff seeks rent; bring Form W-2 if you claim hardship."],
+         DT.eviction_summons, DC.housing),
+        (["County DSS", "SNAP", "Notice of Interview", "Bring your W-2 or pay stubs."],
+         DT.snap_notice, DC.benefits),
+    ],
+)  # fmt: skip
+def test_a_header_sentence_that_mentions_a_form_is_no_label(
+    texts: list[str], doc_type: DocumentType, category: DocumentCategory
+) -> None:
+    """Review of package B: a W-2 or I-9 mentioned in a page-1 sentence turned a Medicaid
+    renewal, a recertification, an offer letter, an eviction summons and a SNAP notice into
+    w2_1099/i9 (losing their urgency roles, floor and never-estimate rule)."""
+    for confidence in Confidence:
+        assert check(lines(*texts), doc_type, confidence, category).rule is None
+
+
+def test_i797e_reads_its_heading_and_keeps_a_noid() -> None:
+    """USCIS prints RFEs and NOIDs on I-797E alike; a NOID (floor high) never becomes an RFE."""
+    noid = lines("U.S. Citizenship and Immigration Services", "I-797E, Notice of Action",
+                 "Notice of Intent to Deny")  # fmt: skip
+    assert check(noid, DT.uscis_noid, Confidence.high).rule is None
+    assert check(noid).document_type is DT.uscis_noid
+    assert check(noid, DT.uscis_rfe, Confidence.high).document_type is DT.uscis_noid
+    bare = lines("USCIS", "I-797E, Notice of Action", "Please read this letter.")
+    assert check(bare, DT.uscis_noid, Confidence.medium).rule is None
+    assert check(bare, DT.uscis_noid, Confidence.low).rule is None
+    assert check(bare).document_type is DT.uscis_rfe
+    rfe = lines("USCIS", "I-797E, Notice of Action", "Request for Evidence")
+    assert check(rfe, DT.uscis_noid, Confidence.high).rule is None
 
 
 def test_i797c_reads_its_first_line_heading() -> None:
     receipt = check(lines("U.S. Citizenship and Immigration Services", "I-797C, Notice of Action",
                           "Notice Type: Receipt Notice"))  # fmt: skip
     assert receipt.document_type is DT.uscis_receipt and receipt.rule == "form"
-    rejection = check(
-        lines("USCIS", "I-797C, Notice of Action", "Notice Type: Rejection Notice"),
-        DT.uscis_receipt, Confidence.high,
-    )  # fmt: skip
+    rejected = lines("USCIS", "I-797C, Notice of Action", "Notice Type: Rejection Notice")
+    rejection = check(rejected, DT.uscis_receipt, Confidence.low)
     assert (rejection.document_type, rejection.confidence) == (DT.uscis_denial, Confidence.medium)
+    # A receipt the model was sure of keeps its expiry role (an extension it may print).
+    assert check(rejected, DT.uscis_receipt, Confidence.high).rule is None
     assert check(lines("USCIS", "I-797C, Notice of Action", "We received your case.")).rule is None
 
 
@@ -148,6 +224,33 @@ def test_a_heading_never_replaces_a_specific_type_or_a_confident_other_notice() 
 
 def test_two_headings_of_different_types_decide_nothing() -> None:
     assert check(lines("Explanation of Benefits", "Disconnection Notice")).rule is None
+
+
+def test_a_later_page_or_another_paper_never_types_the_upload() -> None:
+    """Review of package B: an EOB stapled behind a bill made the bill an ``eob`` (and its fixed
+    "this is not a bill" card). Headings count on page 1 only; ``[multiple_documents]`` stops
+    every correction."""
+    blocks = [
+        block("p1b1", "Riverside Medical Group", bbox=top(0)),
+        block("p1b2", "Balance due: $2,410.00. Please pay by November 30, 2026.", bbox=top(1)),
+        block("p2b1", "Explanation of Benefits", page=2, bbox=top(0)),
+        block("p2b2", "Acme Health Plan", page=2, bbox=top(1)),
+    ]
+    out, _ = reading(blocks, DT.other_notice, Confidence.medium, DC.medical)
+    paper = assemble_transcript(blocks, pages_received=2)
+    assert cl.check_document_type(out, paper).rule is None
+    eob_first = [block("p1b1", "Explanation of Benefits", bbox=top(0)),
+                 block("p1b2", "Acme Health Plan", bbox=top(1))]  # fmt: skip
+    out, paper = reading(eob_first, DT.other_notice, Confidence.medium, DC.medical)
+    assert cl.check_document_type(out, paper).document_type is DT.eob
+    sentinel = RedFlagOut(kind=RedFlagKind.other, text="[multiple_documents]", source_quote=None,
+                          span_ids=[], page=None)  # fmt: skip
+    two = out.model_copy(update={"red_flags": [sentinel]})
+    assert cl.check_document_type(two, paper).rule is None
+    labelled = lines("Form I-862", "Notice")
+    out, paper = reading(labelled)
+    assert cl.check_document_type(out.model_copy(update={"red_flags": [sentinel]}),
+                                  paper).rule is None  # fmt: skip
 
 
 def test_only_short_first_lines_are_headings() -> None:
@@ -216,7 +319,7 @@ def test_every_phrase_and_form_label_is_in_the_taxonomy() -> None:
         pytest.skip("docs/ not shipped with this checkout")
     doc = TAXONOMY.read_text("utf-8").casefold()
     phrases = {p for p, _t, cues in cl.HEADINGS for p in (p, *cues)}
-    phrases |= {p for p, _t in cl.I797C_HEADINGS} | {cl.IRS_NAME}
+    phrases |= {p for table in cl.FORM_HEADINGS.values() for p, _t in table} | {cl.IRS_NAME}
     for phrase in phrases - {"i-797c", "i-797e"}:  # the I-797 cue variants: "I-797C"/"I-797E" below
         assert phrase in doc, phrase
     printed = {"I862": "I-862", "I797E": "I-797E", "I797A": "I-797A", "I797B": "I-797B",
@@ -263,10 +366,10 @@ def test_a_scam_retype_is_low_confidence_and_a_reverted_agency_type_is_retyped()
     final, doc_type = cl.after_scam(out, same, DT.other_notice, ScamRisk.likely)
     assert doc_type is DT.other_notice and final.document_type_confidence is Confidence.low
     assert final.category is DC.immigration  # §6.5 "category unchanged"
-    # The model said irs_notice, a CP565 label made it itin; a likely scam re-types the model's
-    # own agency type, it never brings irs_notice back.
+    # The model said irs_notice (unsure), a CP565 label made it itin; a likely scam re-types the
+    # model's own agency type, it never keeps the code's itin.
     irs, paper = reading(lines("Internal Revenue Service", "Notice CP565"), DT.irs_notice,
-                         Confidence.high, DC.tax)  # fmt: skip
+                         Confidence.low, DC.tax)  # fmt: skip
     corrected = cl.check_document_type(irs, paper)
     assert corrected.document_type is DT.itin
     final, doc_type = cl.after_scam(cl.apply_type_check(irs, corrected), corrected,
@@ -295,6 +398,16 @@ def test_printed_form_numbers_keep_the_printed_number_only() -> None:
     assert cl.printed_form_numbers(["I-797C"], "I-797C, Notice of Action") == ["I-797C"]
     assert cl.printed_form_numbers(["EOIR-33/IC"], "Form EOIR-33/IC") == ["EOIR-33"]
     assert cl.printed_form_numbers(["Sample tax form"], "Sample Tax Form") == ["Sample tax form"]
+    assert cl.printed_form_numbers(["I 765"], "Case type: I 765") == ["I-765"]
+
+
+def test_a_form_number_must_be_printed_as_a_whole() -> None:
+    """Review of package B: letters and digits run together across words ("HI 96817" → I9,
+    "W 2B" → W2) never count as a printed form."""
+    text = "Kalihi Clinic\n1234 King St, Honolulu, HI 96817\nYour appointment is Nov 3. Room W 2B."
+    model = ["Form I-9, Employment Eligibility Verification", "Form W-2 Wage and Tax Statement",
+             "Form I-90"]  # fmt: skip
+    assert cl.printed_form_numbers(model, text) == []
 
 
 def test_canonical_form_spelling() -> None:
@@ -355,6 +468,19 @@ def test_footer_flags_and_footer_steps_are_dropped() -> None:
     assert cl.drop_banner_flags(flags, banner) == [real]
     steps = [step("If the paper says it is a sample, do not pay or go to court.", ["p1b9"]),
              step("Ask the office that sent this if it is a real letter.", []),
+             step("Look at the bottom to see if it says this is a sample.", []),
              step("Pay by October 9.", ["p1b2", "p1b9"]), step("Keep this paper.", [])]
     kept = cl.drop_banner_steps(steps, paper, banner)
     assert [s.text for s in kept] == ["Pay by October 9.", "Keep this paper."]
+
+
+def test_scam_advice_that_mentions_a_real_letter_stays() -> None:
+    """Review of package B: "A real letter from USCIS never asks for gift cards" is safety
+    advice on the scam sample, not the footer's claim."""
+    paper = assemble_transcript([*lines("Notice", "Pay with gift cards."), FOOTER_BLOCK],
+                                pages_received=1)  # fmt: skip
+    banner = cl.sample_banner_ids(paper)
+    steps = [step("Do not pay. A real letter from USCIS never asks for gift cards.", ["p1b2"]),
+             step("If this is a real letter, report the gift card request as a scam.", []),
+             step("If the paper is real, talk to a licensed lawyer about your ticket.", [])]
+    assert cl.drop_banner_steps(steps, paper, banner) == steps

@@ -3,19 +3,30 @@
 The model classifies from the taxonomy; code then checks its answer against the transcript with
 the two signals §3 rule 1 says decide a type (§3 rule 16, ``check_document_type``):
 
-* **Form number** (§3.1, §3.2, §3.9): a form label printed in the page-1 header — a line of at
-  most 10 words in one of the first three blocks of page 1, or in a block whose top edge lies in
-  the top quarter of the page — that names exactly one type (``FORM_TYPES``; an I-797C by its
-  first-line heading, §3.2; a CP/LTR number only on a paper that prints "Internal Revenue
-  Service"). It may replace any type the model chose.
-* **Heading** (§3.1 and the §4 **RB** lines): a block's first line (at most 8 words) holding one
-  of ``HEADINGS`` — some only with a cue printed elsewhere (a USCIS, EOIR or SNAP name). It only
-  upgrades ``other_notice``/``unknown``, never another specific type.
+* **Form label** (§3.1, §3.2, §3.9): a page-1 header line (at most 10 words, in one of the first
+  three blocks of page 1 or in a block whose top edge lies in the top quarter of the page) that
+  *is* a form label — it starts with the form number, alone or after "Form"/"Notice"/"Letter"
+  ("Form I-862", "I-797C, Notice of Action", "Notice CP14"), is no sentence (no closing
+  punctuation, no "you"/"bring"/"send"/"complete" …) — and names exactly one type
+  (``FORM_TYPES``; an I-797C or I-797E by its page-1 first-line heading, §3.2/§3.3; a CP/LTR
+  number only on a paper that prints "Internal Revenue Service"). "Send proof of income, such as
+  your W-2" mentions a form; it labels nothing. A label upgrades ``other_notice``/``unknown`` and
+  replaces a type the model gave with ``document_type_confidence=low``; a type the model was sure
+  of (medium/high) only from a "Form …"/"Notice …"/"…, Notice of Action" label of a type in the
+  same §2 category that keeps every urgency protection of the model's type — its floor,
+  never-estimate and past-date rules, critical roles and driving roles (``keeps_protections``:
+  ``hearing_notice`` → ``nta`` may happen, ``uscis_noid`` → ``uscis_rfe`` never).
+* **Heading** (§3.1 and the §4 **RB** lines): a page-1 block's first line (at most 8 words)
+  holding one of ``HEADINGS`` — some only with a cue printed elsewhere (a USCIS, EOIR or SNAP
+  name). It only upgrades ``other_notice``/``unknown``, never another specific type. A later page
+  may be a different paper (§3.8 ``[multiple_documents]``), so it decides nothing.
 
 A correction needs exactly one candidate type, never runs when the model said ``other_notice``
 with ``document_type_confidence=high`` (§4.10: the model must not be pushed to a finer type it
-ruled out) and sets the confidence to ``medium``. The phrases are English (a no-op on other
-papers); form numbers work in any language. A type the code chose never survives a likely scam:
+ruled out) or flagged ``[multiple_documents]``, and sets the confidence to ``medium``. The
+phrases are English (a no-op on other papers); form numbers work in any language. A corrected
+type is a label only: the scam scorer still reads the model's own type, so a correction never
+lowers ``scam_risk`` (pipeline). A type the code chose never survives a likely scam:
 ``after_scam`` puts the model's type back before the §6.5 re-type, and any re-type leaves
 ``document_type_confidence=low``.
 
@@ -33,17 +44,23 @@ from __future__ import annotations
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
-from difflib import SequenceMatcher
 from typing import Literal
 
 from proxyhealth_api.analysis import scam
+from proxyhealth_api.analysis.deadline_rules import NEVER_ESTIMATE_TYPES
 from proxyhealth_api.analysis.transcript import Transcript
-from proxyhealth_api.analysis.verify import normalize
+from proxyhealth_api.analysis.urgency import (
+    CRITICAL_SET,
+    DRIVING_ROLES,
+    FLOORS,
+    PAST_CRITICAL_TYPES,
+)
+from proxyhealth_api.analysis.verify import MULTIPLE_DOCUMENTS_SENTINEL, normalize
 from proxyhealth_api.contracts.analysis import RedFlag
 from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import Confidence, DocumentCategory, DocumentType, ScamRisk
 from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut
-from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER
+from proxyhealth_api.demo.fixtures import is_sample_banner
 
 DT = DocumentType
 DC = DocumentCategory
@@ -85,14 +102,35 @@ TYPE_CATEGORY: Mapping[DocumentType, DocumentCategory] = {
 }  # fmt: skip
 
 # A form number as printed ("Form I-862", "I-797C,", "Notice CP14", "W-2", "1099-NEC").
-FORM_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9-])((?:EOIR|AR|DS|SS|I|N|G|W)-?\d{1,4}[A-Z]?|CP ?\d{1,4}[A-Z]?"
-    r"|LTR ?\d{3,4}[A-Z]?|1099-?(?:NEC|MISC|K))(?![A-Za-z0-9])"
+_TOKEN = (
+    r"(?:EOIR|AR|DS|SS|I|N|G|W)-?\d{1,4}[A-Z]?|CP ?\d{1,4}[A-Z]?|LTR ?\d{3,4}[A-Z]?"
+    r"|1099-?(?:NEC|MISC|K)"
+)
+FORM_TOKEN_RE = re.compile(rf"(?<![A-Za-z0-9-])({_TOKEN})(?![A-Za-z0-9])")
+# The same anywhere in a transcript, a space allowed after the letters ("I 765", "CP 14").
+_PRINTED_FORM_RE = re.compile(
+    r"(?<![A-Za-z0-9-])((?:EOIR|AR|DS|SS|I|N|G|W)[- ]?\d{1,4}[A-Z]?|CP ?\d{1,4}[A-Z]?"
+    r"|LTR ?\d{3,4}[A-Z]?|1099[- ]?(?:NEC|MISC|K))(?![A-Za-z0-9])"
+)
+# A label line: the form number first, alone or after "Form"/"Notice"/"Letter" (§4.1 "form label
+# top-right", §4.9 "notice number top-right"). ``prefix`` makes it a strong label.
+_LABEL_RE = re.compile(
+    rf"^\(?(?P<prefix>(?i:form|notice|letter|formulario|aviso|carta)\s+)?"
+    rf"(?P<token>{_TOKEN})(?![A-Za-z0-9])(?P<rest>.*)$"
+)
+_NOTICE_OF_ACTION_RE = re.compile(r"^[\s,:-]*notice of action\b", re.IGNORECASE)
+# Sentence words: a line holding one mentions a form ("Bring Form W-2 and your ID"), it is no label.
+_SENTENCE_RE = re.compile(
+    r"\b(you|your|we|our|please|bring|send|complete|submit|attach|fill|include|provide|mail|"
+    r"sign|return|enclose|need|needs|must|should|if|when|usted|su|sus|traiga|env[ií]e|presente|"
+    r"adjunte|debe)\b",
+    re.IGNORECASE,
 )
 _HYPHENATED_RE = re.compile(r"^(EOIR|AR|DS|SS|I|N|G|W)(\d.*)$")
 _IRS_NUMBER_RE = re.compile(r"^(CP\d{1,4}[A-Z]?|LTR\d{3,4}[A-Z]?)$")
 # Form label → type (§3.1, §3.9, §4.1 headings, §4.2 ice_checkin RB, §4.3 nta). EOIR-33 (printed
-# on NTAs and hearing notices alike) and a bare I-797 (several USCIS types) decide nothing.
+# on NTAs and hearing notices alike) and a bare I-797 (several USCIS types) decide nothing; an
+# I-797C or I-797E is read by its heading (``FORM_HEADINGS``).
 FORM_TYPES: Mapping[str, DocumentType] = {
     "I862": DT.nta, "I797E": DT.uscis_rfe, "I797A": DT.uscis_approval,
     "I797B": DT.uscis_approval, "N445": DT.uscis_interview, "I220A": DT.ice_checkin,
@@ -109,6 +147,14 @@ I797C_HEADINGS: tuple[tuple[str, DocumentType], ...] = (
     ("request for applicant to appear", DT.uscis_interview),
     ("rejection notice", DT.uscis_denial),
 )  # fmt: skip
+# §3.3: USCIS prints RFEs and NOIDs alike on I-797E; the heading tells them apart. With none, an
+# I-797E is an RFE (``FORM_TYPES``) unless the model read it as a NOID.
+I797E_HEADINGS: tuple[tuple[str, DocumentType], ...] = (
+    ("request for evidence", DT.uscis_rfe), ("notice of intent to deny", DT.uscis_noid),
+)  # fmt: skip
+FORM_HEADINGS: Mapping[str, tuple[tuple[str, DocumentType], ...]] = {
+    "I797C": I797C_HEADINGS, "I797E": I797E_HEADINGS,
+}  # fmt: skip
 USCIS_CUES = ("u.s. citizenship and immigration services", "uscis", "i-797", "i-797c", "i-797e")
 EOIR_CUES = ("executive office for immigration review", "immigration judge",
              "board of immigration appeals", "immigration court")  # §3.4  # fmt: skip
@@ -151,6 +197,11 @@ HEADER_BLOCKS = 3  # … or it is one of the first three blocks
 LABEL_MAX_WORDS = 10  # a form label, not a sentence that mentions a form
 HEADING_MAX_WORDS = 8
 _UPGRADABLE = frozenset({DT.other_notice, DT.unknown})
+# Type groups with an urgency protection (DOCUMENT_TAXONOMY §5.2 floor and past-date rules, §5.3
+# never-estimate): a header label never moves a type the model was sure of out of one.
+PROTECTION_GROUPS: tuple[frozenset[DocumentType], ...] = (
+    FLOORS, NEVER_ESTIMATE_TYPES, PAST_CRITICAL_TYPES,
+)  # fmt: skip
 
 
 def _norm(text: str) -> str:
@@ -196,9 +247,12 @@ class TypeCheck:
     model_category: DocumentCategory
 
 
+def _page_one(blocks: Sequence[TextBlock]) -> list[TextBlock]:
+    return [b for b in blocks if b.page == 1]
+
+
 def _header_blocks(blocks: Sequence[TextBlock]) -> list[TextBlock]:
-    first = [b for b in blocks if b.page == 1]
-    return [b for i, b in enumerate(first)
+    return [b for i, b in enumerate(_page_one(blocks))
             if i < HEADER_BLOCKS or (b.bbox is not None and b.bbox[1] <= HEADER_TOP)]  # fmt: skip
 
 
@@ -207,24 +261,45 @@ def normalize_lines(text: str) -> list[str]:
     return [normalize(line) for line in text.splitlines() if line.strip()]
 
 
-def header_form_keys(blocks: Sequence[TextBlock]) -> list[str]:
-    """Form-number keys printed as a label in the page-1 header (``I862``, ``CP14`` …)."""
-    out: list[str] = []
+@dataclass(frozen=True)
+class FormLabel:
+    """A form label printed in the page-1 header."""
+
+    key: str
+    """``form_key`` of the printed number (``I862``, ``CP14`` …)."""
+    strong: bool
+    """"Form …"/"Notice …"/"Letter …" or "…, Notice of Action": the paper names its own form."""
+
+
+def form_label(line: str) -> FormLabel | None:
+    """The form label ``line`` is, or ``None`` when it is a sentence or a phrase that merely
+    mentions a form ("Bring Form W-2 and your ID.", "your W-2 or recent pay stubs,")."""
+    text = line.strip()
+    if not text or len(text.split()) > LABEL_MAX_WORDS or text.rstrip(" )")[-1:] in ".!?,;":
+        return None
+    m = _LABEL_RE.match(text)
+    if m is None or _SENTENCE_RE.search(m["rest"]):
+        return None
+    strong = bool(m["prefix"]) or bool(_NOTICE_OF_ACTION_RE.match(m["rest"]))
+    return FormLabel(form_key(m["token"]), strong)
+
+
+def header_form_labels(blocks: Sequence[TextBlock]) -> list[FormLabel]:
+    """The form labels printed in the page-1 header, in reading order (one per key, strong
+    when any of its lines is)."""
+    out: dict[str, FormLabel] = {}
     for b in _header_blocks(blocks):
         for line in normalize_lines(b.text):
-            if len(line.split()) > LABEL_MAX_WORDS:
-                continue
-            for m in FORM_TOKEN_RE.finditer(line):
-                key = form_key(m.group(1))
-                if key not in out:
-                    out.append(key)
-    return out
+            label = form_label(line)
+            if label is not None and not (label.key in out and out[label.key].strong):
+                out[label.key] = label
+    return list(out.values())
 
 
 def first_lines(blocks: Sequence[TextBlock]) -> list[str]:
-    """Each block's first printed line, as a matching key, when it is heading-short."""
+    """Each page-1 block's first printed line, as a matching key, when it is heading-short."""
     out: list[str] = []
-    for b in blocks:
+    for b in _page_one(blocks):
         lines = normalize_lines(b.text)
         line = _norm(lines[0]).strip(" :.-") if lines else ""
         if line and len(line.split()) <= HEADING_MAX_WORDS:
@@ -232,18 +307,31 @@ def first_lines(blocks: Sequence[TextBlock]) -> list[str]:
     return out
 
 
-def _form_types(blocks: Sequence[TextBlock], full: str) -> set[DocumentType]:
-    implied: set[DocumentType] = set()
-    for key in header_form_keys(blocks):
-        if key in FORM_TYPES:
-            implied.add(FORM_TYPES[key])
-        elif _IRS_NUMBER_RE.match(key) and _has(IRS_NAME, full):
-            implied.add(DT.irs_notice)
-        elif key == "I797C":
+def _form_types(
+    blocks: Sequence[TextBlock], full: str, model_type: DocumentType
+) -> dict[DocumentType, bool]:
+    """Type → strong for every type a header label names (``FORM_TYPES``, ``FORM_HEADINGS``)."""
+    implied: dict[DocumentType, bool] = {}
+
+    def add(doc_type: DocumentType, strong: bool) -> None:
+        implied[doc_type] = implied.get(doc_type, False) or strong
+
+    for label in header_form_labels(blocks):
+        key = label.key
+        if key in FORM_HEADINGS:
+            table = FORM_HEADINGS[key]
             lines = first_lines(blocks)
-            hits = {t for phrase, t in I797C_HEADINGS for line in lines if _has(phrase, line)}
+            hits = {t for phrase, t in table for line in lines if _has(phrase, line)}
             if len(hits) == 1:
-                implied |= hits
+                add(next(iter(hits)), label.strong)
+            elif not hits and key in FORM_TYPES:
+                # No heading: the form's own type, unless the model read another type it carries.
+                carried = {t for _phrase, t in table}
+                add(model_type if model_type in carried else FORM_TYPES[key], label.strong)
+        elif key in FORM_TYPES:
+            add(FORM_TYPES[key], label.strong)
+        elif _IRS_NUMBER_RE.match(key) and _has(IRS_NAME, full):
+            add(DT.irs_notice, label.strong)
     return implied
 
 
@@ -255,8 +343,37 @@ def _heading_types(blocks: Sequence[TextBlock], full: str) -> set[DocumentType]:
     }  # fmt: skip
 
 
+def keeps_protections(model_type: DocumentType, found: DocumentType) -> bool:
+    """``found`` keeps every urgency protection ``model_type`` has: its floor, never-estimate and
+    past-date groups (``PROTECTION_GROUPS``), its critical roles and its driving roles (§5.2)."""
+    none: frozenset[str] = frozenset()
+    return (
+        all(found in group for group in PROTECTION_GROUPS if model_type in group)
+        and CRITICAL_SET.get(model_type, none) <= CRITICAL_SET.get(found, none)
+        and DRIVING_ROLES.get(model_type, none) <= DRIVING_ROLES.get(found, none)
+    )
+
+
+def label_may_replace(
+    model_type: DocumentType, confidence: Confidence, found: DocumentType, strong: bool
+) -> bool:
+    """Whether a header form label naming ``found`` may replace the model's type: always an
+    ``other_notice``/``unknown`` or a low-confidence reading; a type the model was sure of only
+    from a strong label of the same §2 category that ``keeps_protections``."""
+    if model_type in _UPGRADABLE or confidence is Confidence.low:
+        return True
+    return (
+        strong and TYPE_CATEGORY.get(found) is TYPE_CATEGORY.get(model_type)
+        and keeps_protections(model_type, found)
+    )  # fmt: skip
+
+
+def _multiple_documents(out: AnalysisModelOut) -> bool:
+    return any(f.text.strip() == MULTIPLE_DOCUMENTS_SENTINEL for f in out.red_flags)
+
+
 def check_document_type(out: AnalysisModelOut, paper: Transcript) -> TypeCheck:
-    """§3 rule 16: the model's type, or the one a printed form label (any type) or heading
+    """§3 rule 16: the model's type, or the one a printed header form label or a page-1 heading
     (``other_notice``/``unknown`` only) decides — see the module docstring. Readable papers
     only (the pipeline stops at an unreadable one first)."""
     kept = TypeCheck(
@@ -265,12 +382,16 @@ def check_document_type(out: AnalysisModelOut, paper: Transcript) -> TypeCheck:
     )  # fmt: skip
     if out.document_type is DT.other_notice and out.document_type_confidence is Confidence.high:
         return kept
+    if _multiple_documents(out):
+        return kept  # another paper's label or heading must not type this one (§3.8)
     blocks = paper.blocks
     full = _norm(paper.full_text)
-    forms = _form_types(blocks, full)
+    forms = _form_types(blocks, full, out.document_type)
     if len(forms) == 1:
-        (found,) = forms
-        if found is out.document_type:
+        ((found, strong),) = forms.items()
+        if found is out.document_type or not label_may_replace(
+            out.document_type, out.document_type_confidence, found, strong
+        ):
             return kept
         return replace(kept, document_type=found, confidence=Confidence.medium, rule="form")
     if forms or out.document_type not in _UPGRADABLE:
@@ -323,14 +444,17 @@ def unreadable_reading(out: AnalysisModelOut) -> AnalysisModelOut:
 def printed_form_numbers(form_numbers: Sequence[str], full_text: str) -> list[str]:
     """Form numbers the model listed that are really printed (``I-765`` ≈ ``I 765``), as the
     printed number ("Form W-2 Wage and Tax Statement 2025" → ``W-2``, "Form I-765, Application
-    for Employment Authorization" → ``I-765``). A string holding no form token is kept whole when
-    it is printed (``AR-11``-style numbers outside ``FORM_TOKEN_RE``)."""
+    for Employment Authorization" → ``I-765``). A token counts only when the transcript prints it
+    as a whole form number ("HI 96817" prints no I-9, "Room W 2B" no W-2). A string holding no
+    form token ("Form SSA-1099", "Schedule A") is kept whole when its letters and digits are
+    printed, as before."""
+    printed = {form_key(m.group(1)) for m in _PRINTED_FORM_RE.finditer(normalize(full_text))}
     corpus = form_key(full_text)
     out: list[str] = []
     for form in form_numbers:
-        tokens = [m.group(1) for m in FORM_TOKEN_RE.finditer(normalize(form))]
+        tokens = [m.group(1) for m in _PRINTED_FORM_RE.finditer(normalize(form))]
         if tokens:
-            found = [canonical_form(t) for t in tokens if form_key(t) in corpus]
+            found = [canonical_form(t) for t in tokens if form_key(t) in printed]
         else:
             key = form_key(form)
             found = [form.strip()[:40]] if key and key in corpus else []
@@ -340,29 +464,16 @@ def printed_form_numbers(form_numbers: Sequence[str], full_text: str) -> list[st
 
 # ----------------------------------------------------------------------------- SAMPLE footer
 
-# The footer's claim; a sample paper's plan step that repeats it ("Ask the office that sent this
-# if it is a real letter") is about the footer, not the paper.
-_FOOTER_PHRASE = "real letter"
-BANNER_RATIO = 0.9
+# A sample paper's plan step that turns the footer's claim into a condition ("Ask the office that
+# sent this if it is a real letter", "If the paper says it is a sample, …") is about the footer,
+# not the paper — unless it also warns about a scam ("A real letter from USCIS never asks for
+# gift cards" carries no condition and stays anyway).
+_FOOTER_CLAIM_RE = re.compile(r"\b(if|whether)\b.*\b(real letter|a sample|synthetic)\b")
+_SCAM_WARNING_RE = re.compile(r"\b(scams?|scammers?|fraud\w*|gift cards?|never)\b")
 
 
 def _words(text: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", _norm(text)).split())
-
-
-_FOOTER_WORDS = _words(SAMPLE_FOOTER)
-
-
-def is_sample_banner(text: str | None) -> bool:
-    """``text`` is the SAMPLE footer of a demo paper, a piece of it ("Not a real letter.") or
-    the bare SAMPLE watermark — nothing else is printed in it."""
-    words = _words(text or "")
-    if not words:
-        return False
-    if words == "sample" or (len(words.split()) >= 3 and f" {words} " in f" {_FOOTER_WORDS} "):
-        return True
-    # The whole footer with a transcription slip ("demonstation") still counts.
-    return SequenceMatcher(None, words, _FOOTER_WORDS, autojunk=False).ratio() >= BANNER_RATIO
 
 
 def sample_banner_ids(paper: Transcript) -> frozenset[str]:
@@ -383,25 +494,32 @@ def drop_banner_flags(flags: Sequence[RedFlag], banner_ids: Collection[str]) -> 
 def drop_banner_steps(
     steps: Sequence[PlanStepOut], paper: Transcript, banner_ids: Collection[str]
 ) -> list[PlanStepOut]:
-    """Model plan steps of a sample paper minus those about the SAMPLE footer: the step repeats
-    its claim ("… if it is a real letter") or cites only the footer's block ("If the paper says
-    it is a sample, do not pay or go to court")."""
+    """Model plan steps of a sample paper minus those about the SAMPLE footer: the step cites only
+    the footer's block ("If the paper says it is a sample, do not pay or go to court"), or makes
+    the footer's claim its condition ("Ask the office … if it is a real letter") without warning
+    about a scam."""
     kept: list[PlanStepOut] = []
     for step in steps:
         cited = paper.existing(step.span_ids)
-        if f" {_FOOTER_PHRASE} " in f" {_words(step.text)} ":
-            continue
         if cited and set(cited) <= set(banner_ids):
+            continue
+        words = _words(step.text)
+        if _FOOTER_CLAIM_RE.search(words) and not _SCAM_WARNING_RE.search(words):
             continue
         kept.append(step)
     return kept
 
 
 __all__ = [
+    "FORM_HEADINGS",
     "FORM_TOKEN_RE",
     "FORM_TYPES",
     "HEADINGS",
+    "I797C_HEADINGS",
+    "I797E_HEADINGS",
+    "PROTECTION_GROUPS",
     "TYPE_CATEGORY",
+    "FormLabel",
     "TypeCheck",
     "after_scam",
     "apply_type_check",
@@ -411,8 +529,11 @@ __all__ = [
     "drop_banner_flags",
     "drop_banner_steps",
     "form_key",
-    "header_form_keys",
+    "form_label",
+    "header_form_labels",
     "is_sample_banner",
+    "keeps_protections",
+    "label_may_replace",
     "printed_form_numbers",
     "sample_banner_ids",
     "unreadable_reading",

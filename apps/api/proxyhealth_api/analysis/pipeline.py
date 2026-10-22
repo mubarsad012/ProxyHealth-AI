@@ -1092,9 +1092,10 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         if f.kind is not RedFlagKind.scam_payment_method
         or not scam.is_anti_fraud_quote(f.source_quote)
     ]  # fmt: skip
-    # A payment flag must quote a payment request (TAXONOMY §6.1); a sample paper's SAMPLE footer
-    # is no part of it — no flag, step or scam signal rests on it (classify.py, §6.3).
-    flags_checked = scam.screen_model_flags(flags_checked, language=detected)
+    # A payment flag whose quote asks for no payment (the SAMPLE footer, an agency's .gov portal)
+    # neither shows nor scores (TAXONOMY §6.1); a sample paper's SAMPLE footer is no part of it —
+    # no flag, step or scam signal rests on it (classify.py, §6.3).
+    flags_checked = scam.screen_model_flags(flags_checked)
     banner = classify.sample_banner_ids(paper) if sample else frozenset[str]()
     if sample:
         flags_checked.flags = classify.drop_banner_flags(flags_checked.flags, banner)
@@ -1110,13 +1111,13 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     scrubber = contacts_filter.make_scrubber(paper.full_text, names, t)
     scrub_en = contacts_filter.make_scrubber(paper.full_text, names, english(deps))
 
-    # §11.6 scam (before dates/urgency so a re-typed scam paper never gets agency rules).
+    # §11.6 scam (before dates/urgency so a re-typed scam paper never gets agency rules). It reads
+    # the model's own type: a code type correction is a label and never lowers scam_risk.
     scam_out = scam.score_transcript(
-        paper, document_type=out.document_type, sender_kind=out.sender_kind,
+        paper, document_type=type_check.model_type, sender_kind=out.sender_kind,
         sender_as_written=out.sender_as_written, model_flags=flags_checked.flags,
         model_signals=out.scam_signals, demands=checked.verified,
-        resource_hosts=resource_hosts(deps), t=t,
-        language=detected, skip_ids=banner,
+        resource_hosts=resource_hosts(deps), t=t, skip_ids=banner,
     )  # fmt: skip
     document_type = scam.retype_for_scam(out.document_type, scam_out.scam_risk)
     # A code-corrected type never survives a likely scam; a re-typed paper is low confidence.
@@ -1302,6 +1303,7 @@ async def finish_analysis(
         out.resource_tags, document_type=document_type, category=category, form_numbers=forms,
         readable=True, scam_risk=scam_out.scam_risk, emergency=safety.emergency,
         red_flags=flags, tag_call_tags=tag_call_tags, gate_sensitive=True,
+        printed_text=paper.full_text, language=detected,
     ).tags  # fmt: skip
     institutions = printed_institutions(out.institutions_as_written, scrubber)
     preview: list[ResourceMatch] = []

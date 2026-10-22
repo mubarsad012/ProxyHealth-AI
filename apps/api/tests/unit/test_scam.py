@@ -369,10 +369,11 @@ def test_notaria_publica_is_a_notario() -> None:
     assert "notario" in out.fired
 
 
-# --- model flags are matched on their printed quote; a payment flag needs a payment request ----
+# --- model flags are matched on their printed quote; a payment flag must quote a payment request
 # (DOCUMENT_TAXONOMY §6.1 model-only row). A small local model wrote "It does not ask for gift
 # cards" under a genuine IRS payment line and flagged the SAMPLE footer as a payment method: both
-# made real agency papers "likely scams" and re-typed them to other_notice.
+# made real agency papers "likely scams" and re-typed them to other_notice. Only quotes that ask
+# for no payment are set aside — never a real demand a word list happens not to know.
 
 IRS_LINE = "Pay online at irs.gov/payments or mail a check with the payment stub below."
 
@@ -381,39 +382,79 @@ def payment_flag(quote: str, text: str = "model text") -> RedFlag:
     return model_flag(RedFlagKind.scam_payment_method, quote).model_copy(update={"text": text})
 
 
-@pytest.mark.parametrize("language", ["en", None])
-def test_model_flag_text_is_not_evidence(language: str | None) -> None:
+def test_model_flag_text_is_not_evidence() -> None:
     flag = payment_flag(IRS_LINE, "It does not ask for gift cards, wire transfers, or crypto.")
     out = sc.score_scam(
         segs("Internal Revenue Service", IRS_LINE), document_type=DT.irs_notice,
         sender_kind=SK.federal_agency, sender_as_written="Internal Revenue Service",
-        model_flags=[flag], language=language,
+        model_flags=[flag],
     )  # fmt: skip
     assert out.scam_risk is ScamRisk.none and "gift_card" not in out.hits
     assert sc.retype_for_scam(DT.irs_notice, out.scam_risk) is DT.irs_notice
 
 
-def test_model_payment_flag_without_payment_cue_is_ignored() -> None:
+def test_a_model_payment_flag_quoting_the_sample_footer_is_ignored() -> None:
     out = sc.score_scam(
         segs("U.S. Citizenship and Immigration Services", SAMPLE_FOOTER),
         document_type=DT.uscis_receipt, sender_kind=SK.federal_agency,
-        model_flags=[payment_flag(SAMPLE_FOOTER)], language="en",
+        model_flags=[payment_flag(SAMPLE_FOOTER)],
     )  # fmt: skip
     assert out.scam_risk is ScamRisk.none and out.score == 0
     assert sc.retype_for_scam(DT.uscis_receipt, out.scam_risk) is DT.uscis_receipt
-    assert not sc.payment_flag_has_evidence(SAMPLE_FOOTER, language="en")
-    assert not sc.payment_flag_has_evidence("Notice Type: Receipt Notice", language="es-US")
-    assert not sc.payment_flag_has_evidence("   ", language="en")
+    for quote in (SAMPLE_FOOTER, "Not a real letter.", "SAMPLE", "   ", None):
+        assert not sc.payment_flag_has_evidence(quote), quote
+    # Anything else stands: the model, not a word list, decides what reads as a payment demand.
+    assert sc.payment_flag_has_evidence("Notice Type: Receipt Notice")
 
 
 def test_model_payment_flag_on_gov_portal_line_is_zero() -> None:
     """§6.2 worked check: "a genuine IRS CP14 with 'pay online at irs.gov' = 0 → none"."""
-    assert not sc.payment_flag_has_evidence(IRS_LINE, language="en")
-    out = sc.score_scam(  # language not detected (troubleshoot): the .gov portal guard zeroes it
+    assert not sc.payment_flag_has_evidence(IRS_LINE)
+    assert sc.is_gov_payment_portal(IRS_LINE)
+    assert sc.is_gov_payment_portal("Pague en línea en www.irs.gov/pagos.")
+    out = sc.score_scam(
         segs(IRS_LINE), document_type=DT.irs_notice, sender_kind=SK.federal_agency,
         model_flags=[payment_flag(IRS_LINE)],
     )  # fmt: skip
-    assert out.hits["model_payment_method"].weight == 0 and out.scam_risk is ScamRisk.none
+    assert out.scam_risk is ScamRisk.none and out.score == 0
+
+
+# Real payment demands in wording no cue list had (review of package B): each one stays a
+# shown, scored payment flag — likely on an agency sender, as before the sweep fixes.
+DEMANDS = [
+    "Settle the outstanding balance today by purchasing vouchers at any store.",
+    "Send the $500 penalty in cash to our office today. See www.uscis.gov for details.",
+    "Mail a certified check to the address below within 24 hours.",
+    "You owe the outstanding amount. Call 1-888-555-0100 to settle it.",
+    "Purchased vouchers must be read to the agent over the phone.",
+    "Liquide su deuda hoy mismo con un giro postal.",
+    "Salde su multa con un cheque certificado.",
+    "Pay online at irs.gov/payments or bring cash to the agent at the door.",
+    "Hãy mua thẻ quà tặng Google Play",  # Vietnamese: no scam.yaml list, the flag still counts
+]
+
+
+@pytest.mark.parametrize("quote", DEMANDS)
+def test_a_real_payment_demand_stays_a_likely_scam_on_an_agency_paper(quote: str) -> None:
+    assert sc.payment_flag_has_evidence(quote)
+    checked = VerifiedRedFlags(flags=[payment_flag(quote)], facts_checked=1, facts_rejected=0)
+    assert sc.screen_model_flags(checked).flags == checked.flags
+    out = sc.score_scam(
+        segs("Department of the Treasury", quote), document_type=DT.other_notice,
+        sender_kind=SK.federal_agency, sender_as_written="Department of the Treasury",
+        model_flags=[payment_flag(quote)],
+    )  # fmt: skip
+    assert out.scam_risk is ScamRisk.likely and out.likely_rule == "payment_and_agency_sender"
+
+
+def test_a_decorative_gov_link_is_no_payment_portal() -> None:
+    """The .gov guard needs the payment to go to the .gov address, not just print one."""
+    quote = "Send the $500 penalty in cash to our office today. See www.uscis.gov for details."
+    assert not sc.is_gov_payment_portal(quote)
+    assert not sc.is_gov_payment_portal("Pay online at uscis.gov or call 1-800-375-5283.")
+    out = sc.score_scam([], document_type=DT.other_notice, sender_kind=SK.federal_agency,
+                        model_flags=[payment_flag(quote)])  # fmt: skip
+    assert out.hits["model_payment_method"].weight == 2
 
 
 def test_model_payment_flag_private_named_sender_is_weight_1() -> None:
@@ -421,44 +462,47 @@ def test_model_payment_flag_private_named_sender_is_weight_1() -> None:
     out = sc.score_scam(
         segs(line), document_type=DT.pay_or_quit, sender_kind=SK.landlord,
         sender_as_written="Oak Hollow Property Management LLC",
-        model_flags=[payment_flag(line, "It does not ask for gift cards.")], language="en",
+        model_flags=[payment_flag(line, "It does not ask for gift cards.")],
     )  # fmt: skip
     assert out.score == 1 and out.scam_risk is ScamRisk.none
 
 
 @pytest.mark.parametrize(
+    "quote",
+    ["Pay the $300 in cash to our technician today.", "Bring a money order for $300.",
+     "Buy a payment voucher and give it to our agent.", "Pague $300 en efectivo hoy."],
+)  # fmt: skip
+def test_a_cash_demand_from_a_named_private_sender_keeps_weight_2(quote: str) -> None:
+    out = sc.score_scam(
+        segs(quote), document_type=DT.utility_shutoff, sender_kind=SK.utility,
+        sender_as_written="Sample Power Company", model_flags=[payment_flag(quote)],
+    )  # fmt: skip
+    assert out.hits["model_payment_method"].weight == 2 and out.scam_risk is ScamRisk.possible
+
+
+@pytest.mark.parametrize(
     "quote", ["send cash in an envelope", "Pay the $500 release fee at the window."]
 )
-def test_model_payment_flag_with_a_cue_still_scores_on_an_agency_paper(quote: str) -> None:
+def test_model_payment_flag_still_scores_on_an_agency_paper(quote: str) -> None:
     out = sc.score_scam(
         segs(quote), document_type=DT.other_notice, sender_kind=SK.federal_agency,
-        model_flags=[payment_flag(quote)], language="en",
+        model_flags=[payment_flag(quote)],
     )  # fmt: skip
     assert out.scam_risk is ScamRisk.likely and out.likely_rule == "payment_and_agency_sender"
-
-
-def test_a_language_without_payment_cues_keeps_the_model_flag() -> None:
-    quote = "Hãy mua thẻ quà tặng Google Play"  # Vietnamese: scam.yaml has no list for it
-    assert sc.payment_flag_has_evidence(quote, language="vi")
-    assert not sc.payment_flag_has_evidence("Thông báo", language="en")
-    out = sc.score_scam(segs(quote), document_type=DT.other_notice, sender_kind=SK.landlord,
-                        model_flags=[payment_flag(quote)], language="vi")  # fmt: skip
-    assert out.hits["model_payment_method"].weight == 2 and out.scam_risk is ScamRisk.possible
 
 
 def test_a_negated_method_in_the_quote_is_no_payment_signal() -> None:
     quote = "We will never ask you to pay with gift cards."
     out = sc.score_scam(segs(quote), document_type=DT.ssa_letter, sender_kind=SK.federal_agency,
-                        model_flags=[payment_flag(quote)], language="en")  # fmt: skip
+                        model_flags=[payment_flag(quote)])  # fmt: skip
     assert out.scam_risk is ScamRisk.none and out.fired == []
 
 
-def test_payment_cue_languages() -> None:
+def test_model_payment_lists_load() -> None:
     cfg = sc.load_config()
-    assert cfg.payment_cue_languages == {"en", "es", "ar", "prs", "ps"}
-    for quote in ("Envíe el dinero hoy", "ادفع الرسوم الآن", "پول را بفرستید", "$40 now"):
-        assert sc.payment_flag_has_evidence(quote, language="es"), quote
-    assert sc.payment_flag_has_evidence("Pay with Google Play gift cards", language="en")
+    assert cfg.portal_cues and cfg.in_hand_cues
+    assert cfg.names_in_hand("Pay in cash") and cfg.names_in_hand("con un giro postal")
+    assert not cfg.names_in_hand(IRS_LINE) and not cfg.names_in_hand(None)
 
 
 def test_screen_model_flags_drops_flags_without_evidence_and_duplicates() -> None:
@@ -468,11 +512,9 @@ def test_screen_model_flags_drops_flags_without_evidence_and_duplicates() -> Non
     checked = VerifiedRedFlags(
         flags=[footer, portal, keep, keep, urgent, urgent], facts_checked=6, facts_rejected=1
     )
-    out = sc.screen_model_flags(checked, language="en")
+    out = sc.screen_model_flags(checked)
     assert out.flags == [keep, urgent]
     assert (out.facts_checked, out.facts_rejected) == (6, 3)
-    vietnamese = sc.screen_model_flags(checked, language="vi")
-    assert vietnamese.flags == [footer, portal, keep, urgent] and vietnamese.facts_rejected == 1
 
 
 @pytest.mark.parametrize(
@@ -483,10 +525,10 @@ def test_fixture_scam_risk_is_unchanged_by_the_model_flag_rules(fid: str, lang: 
     out = STORE.get(fid).analysis_out(lang)  # type: ignore[union-attr]
     assert out is not None
     paper = assemble_transcript(out.blocks, pages_received=max([1, *(b.page for b in out.blocks)]))
-    checked = sc.screen_model_flags(verify_red_flags(out.red_flags, paper), language=lang)
+    checked = sc.screen_model_flags(verify_red_flags(out.red_flags, paper))
     got = sc.score_transcript(
         paper, document_type=out.document_type, sender_kind=out.sender_kind,
-        sender_as_written=out.sender_as_written, model_flags=checked.flags, language=lang,
+        sender_as_written=out.sender_as_written, model_flags=checked.flags,
     )  # fmt: skip
     if fid == "scam_gift_card_letter":
         assert got.scam_risk is ScamRisk.likely and got.score >= 8

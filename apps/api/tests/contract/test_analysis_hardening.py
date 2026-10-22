@@ -381,3 +381,45 @@ async def test_crisis_tags_need_an_emergency(
     res = await analyze(client, demo_body("prescription_label"))
     assert res.safety.emergency is False
     assert res.resource_tags == ["prescription_help", "primary_care_uninsured", "language_access"]
+
+
+async def test_abuse_context_keeps_dv_and_trafficking_tags(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """Review of package B: the pipeline hands the transcript and its language to the tag gate,
+    so a paper that prints a protective order keeps its DV and trafficking resources without an
+    emergency term — crisis still needs one."""
+    out = out_of("prescription_label")
+    out.resource_tags = ["prescription_help", "crisis", "domestic_violence", "trafficking"]
+    last = out.blocks[-1]
+    out.blocks.append(last.model_copy(update={
+        "id": f"p1b{len(out.blocks) + 1}", "bbox": [0.075, 0.6, 0.9, 0.64],
+        "text": "Copy for the petitioner under the protective order.",
+    }))  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("prescription_label"))
+    assert res.safety.emergency is False
+    assert res.resource_tags == ["prescription_help", "domestic_violence", "trafficking",
+                                 "language_access"]  # fmt: skip
+
+
+async def test_a_type_correction_never_lowers_scam_risk(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """Review of package B: scored under the nta its "Form I-862" label gave it, a scam letter's
+    arrest and deportation threats fell under the scorer's court guards (likely → none). The
+    scorer reads the model's own type; the likely scam then puts that type back."""
+    out = out_of(NTA)
+    out.document_type, out.document_type_confidence = DocumentType.other_notice, Confidence.medium
+    out.category, out.sender_kind = DocumentCategory.other, SenderKind.unknown
+    last = out.blocks[-1]
+    out.blocks.append(last.model_copy(update={
+        "id": f"p1b{len(out.blocks) + 1}", "bbox": [0.075, 0.6, 0.9, 0.64],
+        "text": "Police will arrest you today and you will be deported unless you pay the "
+                "processing fee immediately.",
+    }))  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(NTA))
+    assert res.scam_risk == "likely" and res.is_likely_scam
+    assert res.document_type == DocumentType.other_notice
+    assert res.document_type_confidence == "medium" and res.category == DocumentCategory.other

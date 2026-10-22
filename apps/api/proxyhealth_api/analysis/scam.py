@@ -7,12 +7,13 @@ negated or anti-fraud sentence ("USCIS will never ask you to pay with gift cards
 ``negation_cues``) is not a hit, and a model payment flag quoting only such sentences is ignored.
 A model flag is matched on its printed quote only — the model's own ``text`` ("It does not ask
 for gift cards") is prose, not page evidence (D-13). A model payment flag whose quote names no
-known method counts as ``model_payment_method`` only when the quote prints a payment cue
-(``payment_cues``: a currency amount or a pay/fee/cash word) and is not an agency's own ``.gov``
-payment portal (``payment_flag_has_evidence``; DOCUMENT_TAXONOMY §6.1); it takes
-``payment_app``'s guards. Guards (sender kind, document type, negative regex on the hit block, a
-``.gov`` payment portal printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights;
-``likely`` when
+known method counts as ``model_payment_method`` (weight 2) unless its quote asks for no payment at
+all: the SAMPLE footer of a demo paper, or an agency's own ``.gov`` payment portal ("Pay online at
+irs.gov/payments") with no cash, money order, voucher, courier or agent named
+(``payment_flag_has_evidence``, ``scam.yaml`` ``model_payment``; DOCUMENT_TAXONOMY §6.1). It takes
+``payment_app``'s guards read on that quote, except when the quote names such an in-hand payment.
+Guards (sender kind, document type, negative regex on the hit block, a ``.gov`` payment portal
+printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights; ``likely`` when
 ``score ≥ 4`` or one of the ``likely_rules`` holds; ``possible`` when ``2 ≤ score < 4`` or a lone
 payment-app request on a private sender; else ``none``. The model's ``scam_signals`` are hints
 only and never score.
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,7 @@ from proxyhealth_api.contracts.enums import (
     SenderKind,
     Severity,
 )
+from proxyhealth_api.demo.fixtures import is_sample_banner
 from proxyhealth_api.settings import DATA_DIR
 
 SCAM_YAML = DATA_DIR / "safety" / "scam.yaml"
@@ -86,7 +88,11 @@ class Guard:
     unless_any_of: frozenset[str] = frozenset()
     gov_url_in_segment: bool = False
     """The hit block prints a ``.gov``/``.mil`` address and no phone, e-mail or other address
-    (an agency's own payment portal: "pay online with PayPal at vacourts.gov")."""
+    (an agency's own payment portal: "pay online with PayPal at vacourts.gov"). For a model-only
+    hit, its quote must also point a payment at that address (``is_gov_payment_portal``)."""
+    unless_in_hand: bool = False
+    """The guard does not apply when the hit's model quote names an in-hand payment (cash, a money
+    order, a voucher, a courier or agent; ``scam.yaml`` ``model_payment.in_hand``)."""
 
 
 @dataclass(frozen=True)
@@ -140,11 +146,17 @@ class ScamConfig:
     signals: tuple[Signal, ...]
     reviewed_by: Mapping[str, str | None]
     negation_cues: NegationCues = field(default_factory=NegationCues)
-    payment_cues: tuple[re.Pattern[str], ...] = ()
-    """``payment_cues``: a currency amount or a pay/fee/cash word (every language's list)."""
-    payment_cue_languages: frozenset[str] = frozenset()
-    """Languages with a ``payment_cues`` list; a paper in another language keeps model payment
-    flags without a cue (no list to judge them by)."""
+    portal_cues: tuple[re.Pattern[str], ...] = ()
+    """``model_payment.portal``: a pay phrase ending right before a printed address ("Pay online
+    at …"), every language's list."""
+    in_hand_cues: tuple[re.Pattern[str], ...] = ()
+    """``model_payment.in_hand``: cash, a money order, a voucher, a courier or agent."""
+
+    def names_in_hand(self, quote: str | None) -> bool:
+        """``quote`` asks for a payment handed over in cash, by money order or voucher, or to a
+        courier or agent (never an agency's online portal)."""
+        text = normalize(quote or "")
+        return bool(text) and any(p.search(text) for p in self.in_hand_cues)
 
     def signal(self, signal_id: str) -> Signal | None:
         """The signal with id ``signal_id`` from the table, or ``None`` when it is not listed."""
@@ -187,16 +199,11 @@ def _negation_cues(raw: Any) -> NegationCues:
     )  # fmt: skip
 
 
-def _payment_cues(raw: Any) -> tuple[tuple[re.Pattern[str], ...], frozenset[str]]:
-    """``payment_cues`` → (every pattern incl. ``amount``, the languages that have a list)."""
+def _model_payment(raw: Any) -> tuple[tuple[re.Pattern[str], ...], tuple[re.Pattern[str], ...]]:
+    """``model_payment`` → (``portal`` patterns, ``in_hand`` patterns), every language's list."""
     if not isinstance(raw, Mapping):
-        return (), frozenset()
-    lists = {k: v for k, v in raw.items() if k != "amount"}
-    amount = raw.get("amount")
-    patterns = _patterns(lists)
-    if amount:
-        patterns = (re.compile(str(amount)), *patterns)
-    return patterns, frozenset(str(k) for k, v in lists.items() if v)
+        return (), ()
+    return _patterns(raw.get("portal")), _patterns(raw.get("in_hand"))
 
 
 def parse_config(data: Mapping[str, Any]) -> ScamConfig:
@@ -218,13 +225,14 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
             )
         )
     # A model scam_payment_method flag whose quote names no known method: payment_app's guards
-    # (an agency's own .gov portal → 0; a named private sender → 1), §6.1.
+    # (an agency's own .gov portal → 0; a named private sender → 1), §6.1 — never when the quote
+    # names cash, a money order, a voucher, a courier or an agent.
     app = next((s for s in signals if s.id == "payment_app"), None)
     signals.append(
         Signal("model_payment_method", None, RedFlagKind.scam_payment_method, 2, (),
-               guards=app.guards if app is not None else ())
+               guards=tuple(replace(g, unless_in_hand=True) for g in (app.guards if app else ())))
     )  # fmt: skip
-    cues, cue_languages = _payment_cues(data.get("payment_cues"))
+    portal, in_hand = _model_payment(data.get("model_payment"))
     thresholds = data.get("thresholds") or {}
 
     def ids(key: str) -> frozenset[str]:
@@ -248,7 +256,7 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
         signals=tuple(signals),
         reviewed_by=dict(data.get("reviewed_by") or {}),
         negation_cues=_negation_cues(data.get("negation_cues")),
-        payment_cues=cues, payment_cue_languages=cue_languages,
+        portal_cues=portal, in_hand_cues=in_hand,
     )  # fmt: skip
 
 
@@ -453,13 +461,18 @@ def _guard_applies(
     sender_kind: SenderKind,
     sender_as_written: str | None,
     fired_before: set[str],
-    gov_tlds: Sequence[str] = (".gov", ".mil"),
+    config: ScamConfig,
 ) -> bool:
     if guard.sender_kind and sender_kind.value not in guard.sender_kind:
         return False
-    # The hit block, or for a model-only hit the flag's verified quote.
-    where = hit.segment.text if hit.segment is not None else hit.model_quote
-    if guard.gov_url_in_segment and not (where and _gov_portal_only(where, gov_tlds)):
+    if guard.unless_in_hand and config.names_in_hand(hit.model_quote):
+        return False
+    # The hit block; for a model-only hit, the flag's verified quote must send the payment to the
+    # .gov address it prints ("Pay online at irs.gov/payments"), not merely print one.
+    if guard.gov_url_in_segment and not (
+        _gov_portal_only(hit.segment.text, config.gov_tlds) if hit.segment is not None
+        else is_gov_payment_portal(hit.model_quote, config)
+    ):  # fmt: skip
         return False
     if guard.document_type and (document_type is None or document_type.value not in
                                 guard.document_type):  # fmt: skip
@@ -496,45 +509,48 @@ def _match_signal(config: ScamConfig, kind: RedFlagKind, quote: str) -> str:
 _PAYMENT_METHODS = ("gift_card", "wire_transfer", "payment_app", "crypto")
 
 
-def _base_language(tag: str) -> str:
-    return tag.split("-")[0].lower()
+def is_gov_payment_portal(quote: str | None, config: ScamConfig | None = None) -> bool:
+    """``quote`` sends a payment to an agency's own ``.gov``/``.mil`` address it prints ("Pay
+    online at irs.gov/payments or mail a check …"): a ``model_payment.portal`` phrase ends right
+    before that address, the quote prints no phone, e-mail or other address, and it names no cash,
+    money order, voucher, courier or agent. "Send the $500 penalty in cash to our office. See
+    www.uscis.gov" is not one: the .gov link is decoration, not where the money goes."""
+    cfg = config or load_config()
+    text = normalize(quote or "")
+    if not text or not _gov_portal_only(text, cfg.gov_tlds) or cfg.names_in_hand(text):
+        return False
+    urls = [c for c in find_contacts(text, include_orgs=False) if c.kind == "url"]
+    return any(p.search(text[: c.start]) for c in urls for p in cfg.portal_cues)
 
 
-def payment_flag_has_evidence(
-    quote: str | None, *, language: str | None = None, config: ScamConfig | None = None
-) -> bool:
-    """True when a verified model ``scam_payment_method`` flag quoting ``quote`` is evidence of
-    a payment request and may show and score (DOCUMENT_TAXONOMY §6.1 model-only payment row).
+def payment_flag_has_evidence(quote: str | None, config: ScamConfig | None = None) -> bool:
+    """True when a verified model ``scam_payment_method`` flag quoting ``quote`` may show and score
+    (DOCUMENT_TAXONOMY §6.1 model-only payment row).
 
-    No: anti-fraud boilerplate (``is_anti_fraud_quote``). Yes: the quote names gift cards, a wire,
-    a payment app or crypto outside a negated sentence. Otherwise yes only when it prints a payment
-    cue (``payment_cues``: a currency amount, "pay", "fee", "cash" …) on a line that is not an
-    agency's own ``.gov`` payment portal — a heading or the SAMPLE footer asks for nothing.
-    ``language`` is the paper's detected language: ``None`` (a troubleshoot screen, language not
-    detected) and a language without a ``payment_cues`` list keep the flag, as before.
+    The flag stands unless its quote asks for no payment: anti-fraud boilerplate
+    (``is_anti_fraud_quote``), the SAMPLE footer of a demo paper or a piece of it
+    (``demo.fixtures.is_sample_banner``), or — when it names none of the four methods — an agency's
+    own ``.gov`` payment portal (``is_gov_payment_portal``). Any other quote keeps the flag, in
+    every language: a model that marks a payment demand is never second-guessed by a word list.
     """
     if not quote or not quote.strip():
         return False
     cfg = config or load_config()
-    if is_anti_fraud_quote(quote, cfg):
+    if is_anti_fraud_quote(quote, cfg) or is_sample_banner(quote):
         return False
     text = normalize(quote)
     for sid in _PAYMENT_METHODS:
         sig = cfg.signal(sid)
         if sig is not None and _signal_match(sig, text, cfg.negation_cues):
             return True
-    if language is None or _base_language(language) not in cfg.payment_cue_languages:
-        return True
-    if not any(p.search(text) for p in cfg.payment_cues):
-        return False
-    return not _gov_portal_only(text, cfg.gov_tlds)
+    return not is_gov_payment_portal(text, cfg)
 
 
 def screen_model_flags(
-    checked: VerifiedRedFlags, *, language: str | None, config: ScamConfig | None = None
+    checked: VerifiedRedFlags, config: ScamConfig | None = None
 ) -> VerifiedRedFlags:
-    """The verified model flags that may show and score: a payment flag without evidence of a
-    payment request (``payment_flag_has_evidence``) is dropped and counted as a rejected fact
+    """The verified model flags that may show and score: a payment flag whose quote asks for no
+    payment (``payment_flag_has_evidence``) is dropped and counted as a rejected fact
     (verification only gets stricter, D-09), and a repeated flag (same kind, same quote) shows
     once."""
     cfg = config or load_config()
@@ -543,7 +559,7 @@ def screen_model_flags(
     rejected = checked.facts_rejected
     for f in checked.flags:
         if f.kind is RedFlagKind.scam_payment_method and not payment_flag_has_evidence(
-            f.source_quote, language=language, config=cfg
+            f.source_quote, cfg
         ):
             rejected += 1
             continue
@@ -570,7 +586,6 @@ def score_scam(
     resource_hosts: Iterable[str] = (),
     t: Translator | None = None,
     config: ScamConfig | None = None,
-    language: str | None = None,
 ) -> ScamOutcome:
     """Score one paper or screenshot (DOCUMENT_TAXONOMY §6.2) — see the module docstring.
 
@@ -578,7 +593,6 @@ def score_scam(
     the verified demands (used by ``no_sender``). ``credential_request`` is troubleshoot's
     ``asks_for_credentials_or_payment``. ``resource_hosts`` are DB URLs that are never counted as
     a fake agency domain. ``t`` renders code red-flag text (pack key used as text without it).
-    ``language`` is the paper's detected language (``payment_flag_has_evidence``).
     """
     cfg = config or load_config()
     hits: dict[str, SignalHit] = {}
@@ -598,9 +612,9 @@ def score_scam(
         if not flag.verified or flag.kind not in MODEL_SCAM_KINDS:
             continue
         if flag.kind is RedFlagKind.scam_payment_method and not payment_flag_has_evidence(
-            flag.source_quote, language=language, config=cfg
+            flag.source_quote, cfg
         ):
-            continue  # anti-fraud boilerplate, or a quote that asks for no payment at all
+            continue  # anti-fraud boilerplate, the SAMPLE footer, an agency's own .gov portal
         # The printed quote only: the model's ``text`` is its own prose, not the page (D-13).
         sid = _match_signal(cfg, flag.kind, flag.source_quote or "")
         model_sig = cfg.signal(sid)
@@ -625,7 +639,7 @@ def score_scam(
             if _guard_applies(
                 guard, hit, document_type=document_type, sender_kind=sender_kind,
                 sender_as_written=sender_as_written, fired_before=fired_before - {hit.signal.id},
-                gov_tlds=cfg.gov_tlds,
+                config=cfg,
             ):  # fmt: skip
                 hit.weight = guard.weight
                 break
@@ -718,7 +732,6 @@ def score_transcript(
     resource_hosts: Iterable[str] = (),
     t: Translator | None = None,
     config: ScamConfig | None = None,
-    language: str | None = None,
     skip_ids: Collection[str] = (),
 ) -> ScamOutcome:
     """``score_scam`` over every transcript block (same keyword arguments as ``score_scam``)
@@ -728,7 +741,7 @@ def score_transcript(
         segments, document_type=document_type,
         sender_kind=sender_kind, sender_as_written=sender_as_written, model_flags=model_flags,
         model_signals=model_signals, demands=demands, credential_request=credential_request,
-        resource_hosts=resource_hosts, t=t, config=config, language=language,
+        resource_hosts=resource_hosts, t=t, config=config,
     )  # fmt: skip
 
 
@@ -756,6 +769,7 @@ __all__ = [
     "find_non_gov_domains",
     "host_of",
     "is_anti_fraud_quote",
+    "is_gov_payment_portal",
     "is_gov_host",
     "is_negated",
     "load_config",

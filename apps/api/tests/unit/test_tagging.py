@@ -116,17 +116,49 @@ def test_unbacked_scam_report_falls_back_to_the_type() -> None:
     assert first_call.tags[0] is RT.scam_report, "only the final call is gated"
 
 
+LABEL = "CVS Pharmacy\nTake 1 tablet by mouth twice daily\nRefills: 2"
+
+
 def test_emergency_tags_need_an_emergency() -> None:
     model = ["prescription_help", "crisis", "domestic_violence", "trafficking", "poison"]
-    calm = tg.finalize_tags(model, document_type=DT.prescription_label, gate_sensitive=True)
+    calm = tg.finalize_tags(model, document_type=DT.prescription_label, gate_sensitive=True,
+                            printed_text=LABEL, language="en")  # fmt: skip
     assert calm.tags == [RT.prescription_help, RT.language_access]
     urgent = tg.finalize_tags(model, document_type=DT.prescription_label, emergency=True,
-                              gate_sensitive=True)  # fmt: skip
+                              gate_sensitive=True, printed_text=LABEL, language="en")  # fmt: skip
     assert urgent.tags[0] is RT.crisis and RT.domestic_violence in urgent.tags
     assert len(urgent.tags) == tg.MAX_TAGS
     tag_call = tg.finalize_tags([], document_type=DT.unknown, tag_call_tags=["crisis", "food"],
                                 gate_sensitive=True)  # fmt: skip
     assert tag_call.tags == [RT.food] and tag_call.source == "tag_call"
+
+
+PROTECTIVE_ORDER = (
+    "JUVENILE AND DOMESTIC RELATIONS DISTRICT COURT\n"
+    "PRELIMINARY PROTECTIVE ORDER (FAMILY ABUSE)\n"
+    "The respondent shall have no contact with the petitioner."
+)
+
+
+def test_abuse_papers_keep_dv_and_trafficking_tags_without_an_emergency() -> None:
+    """Review of package B: a protective order, a VAWA or U/T-visa paper prints no emergency
+    term, yet the DV and trafficking hotlines are exactly its resources. Only crisis and poison
+    (immediate danger) need the emergency lexicon."""
+    model = ["court_notice", "domestic_violence", "crisis"]
+    order = tg.finalize_tags(model, document_type=DT.other_notice, category=DocumentCategory.court,
+                             gate_sensitive=True, printed_text=PROTECTIVE_ORDER,
+                             language="en")  # fmt: skip
+    assert order.tags == [RT.court_notice, RT.domestic_violence]
+    for text in ("Form I-918, Petition for U Nonimmigrant Status", "Form I-914 T visa",
+                 "VAWA self-petition (Form I-360)", "Victims of human trafficking",
+                 "Orden de protección por violencia doméstica"):  # fmt: skip
+        assert tg.prints_abuse_context(text, "en") and tg.prints_abuse_context(text, "es-US"), text
+    assert not tg.prints_abuse_context(LABEL, "en")
+    # A language with no cue list (or none detected) keeps the model's DV/trafficking tags.
+    assert tg.prints_abuse_context(LABEL, "vi") and tg.prints_abuse_context(LABEL, None)
+    kept = tg.finalize_tags(["trafficking", "crisis"], document_type=DT.unknown,
+                            gate_sensitive=True, printed_text=LABEL, language="vi")  # fmt: skip
+    assert kept.tags == [RT.trafficking]
 
 
 def test_primary_tags_follow_the_models_own() -> None:
