@@ -12,7 +12,15 @@
 # `negation: true` signals skip a match inside a negated or anti-fraud sentence (`negation_cues`):
 # agency boilerplate such as "USCIS will never ask you to pay with gift cards" is not a demand. A
 # `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match.
-version: "2026-09-30"
+# `model_payment`: a verified model `scam_payment_method` flag whose quote names none of the four
+# methods counts as signal `model_payment_method` (weight 2) unless the quote asks for no payment:
+# anti-fraud boilerplate, the SAMPLE footer of a demo paper, or an agency's own .gov payment portal
+# (a `portal` pay phrase that points at a .gov/.mil address the quote prints, no other contact and
+# no `in_hand` word) — DOCUMENT_TAXONOMY §6.1. The signal takes `payment_app`'s guards read on the
+# quote (.gov portal → 0 under the same `portal` test; named private sender → 1), and neither
+# guard applies when the quote names an `in_hand` payment (cash, a money order, a voucher, a
+# courier or agent to hand it to). Every list runs on every quote; ar/prs/ps are drafts.
+version: "2026-10-22"
 thresholds: {possible: 2, likely: 4}
 gov_tlds: [".gov", ".mil"]
 agency_names:
@@ -81,6 +89,23 @@ negation_cues:
     es:
       - "\\b(es|son) (siempre )?(una? )?(estafa|estafador|fraude|impostor)(es|a|as)?\\b"
   breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b"
+model_payment:
+  portal:
+    en:
+      - "\\b(pay|pays|paying|payment|payments|paid)\\b[^.!?;\\n]{0,40}\\b(at|on|through|via|to)\\s*$"
+    es:
+      - "\\b(pag(o|os|ar|ue|uen|a)|abone)\\b[^.!?;\\n]{0,40}\\b(en|a trav[eé]s de|mediante|por)\\s*$"
+  in_hand:
+    en:
+      - "\\b(cash|money ?orders?|vouchers?|couriers?|agents?)\\b"
+    es:
+      - "\\b(efectivo|giros? (postal(es)?|bancarios?)|vales?|cupones?|mensajer[oa]s?|agentes?)\\b"
+    ar:
+      - "(نقدا|نقداً|نقدًا|بالنقد|حوالة بريدية|مندوب)"
+    prs:
+      - "(پول نقد|نقدی|به صورت نقد|حواله پستی)"
+    ps:
+      - "(نغدې|نغدي|پوستي حواله)"
 signals:
   - id: gift_card
     reason_key: scam.gift_card

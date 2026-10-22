@@ -16,14 +16,26 @@ from proxyhealth_api.ai.provider import Task
 from proxyhealth_api.analysis import prose_dates
 from proxyhealth_api.contracts.analysis import GlossaryTerm
 from proxyhealth_api.contracts.enums import (
+    Confidence,
     DocumentCategory,
     DocumentType,
     PlanStepKind,
+    RedFlagKind,
     SenderKind,
 )
-from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, PlanStepOut, RedFlagOut
+from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER
 from proxyhealth_api.settings import Settings
-from tests.contract.test_analyze import STORE, analyze, demo_body, install, medicaid_out, result_of
+from tests.contract.test_analyze import (
+    STORE,
+    analyze,
+    body,
+    demo_body,
+    install,
+    medicaid_out,
+    page_b64,
+    result_of,
+)
 
 NTA = "nta_hearing_date"
 RFE = "uscis_rfe_87d"
@@ -175,3 +187,239 @@ async def test_failed_clerk_translation_uses_the_dari_generic_card(
     assert res.clerk_message.translated.startswith("سلام. من به")
     assert res.clerk_message.english.startswith("Hello. I speak")
     assert "translation_partial" in res.warnings
+
+
+# --- small-model sweep findings: scam scoring, the SAMPLE footer, type/category, tags ----------
+# The outputs below rebuild, on the curated fixtures, what qwen3.5:4b returned for the synthetic
+# samples (the same quotes, flag texts and steps) — no live output is committed.
+
+TRAFFIC = "traffic_court_notice"
+IRS = "irs_cp_notice"
+SNAP = "snap_interview_notice"
+
+
+def with_footer(out: AnalysisModelOut) -> AnalysisModelOut:
+    """The fixture output plus the SAMPLE footer block every rendered sample page prints."""
+    last = out.blocks[-1]
+    footer = last.model_copy(update={
+        "id": f"p1b{len(out.blocks) + 1}", "text": SAMPLE_FOOTER, "bbox": [0.25, 0.97, 0.75, 0.99],
+    })  # fmt: skip
+    out.blocks.append(footer)
+    return out
+
+
+def footer_flags(block_id: str) -> list[RedFlagOut]:
+    return [
+        RedFlagOut(kind=RedFlagKind.impersonation, source_quote=SAMPLE_FOOTER, span_ids=[block_id],
+                   text="The paper uses the name of a court but says it is fake.", page=1),
+        RedFlagOut(kind=RedFlagKind.scam_payment_method, source_quote=SAMPLE_FOOTER,
+                   span_ids=[block_id], text="This paper says it is a sample.", page=1),
+    ]  # fmt: skip
+
+
+def footer_traffic() -> AnalysisModelOut:
+    out = with_footer(out_of(TRAFFIC))
+    footer_id = out.blocks[-1].id
+    out.red_flags = footer_flags(footer_id)
+    out.plan_steps.append(PlanStepOut(
+        id="s9", text="If the paper says it is a sample, do not pay or go to court.",
+        kind=PlanStepKind.wait, resource_tags=[], span_ids=[footer_id], demand_id=None,
+    ))  # fmt: skip
+    out.resource_tags = ["scam_report", "court_notice", "traffic_court"]
+    return out
+
+
+async def test_the_sample_footer_is_no_part_of_a_demo_paper(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F2/CQ-9: no flag, step, scam signal or scam tag rests on "Not a real letter"."""
+    install(app, settings, analyze_single=lambda kw: footer_traffic())
+    res = await analyze(client, demo_body(TRAFFIC))
+    assert res.document_type == DocumentType.traffic_court and res.scam_risk == "none"
+    assert not any(f.kind in ("impersonation", "scam_payment_method") for f in res.red_flags)
+    assert all("sample" not in s.text for s in res.plan_steps) and len(res.plan_steps) == 3
+    assert "scam_report" not in res.resource_tags
+
+
+async def test_a_real_upload_keeps_every_flag_that_has_evidence(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings, consent_headers: dict[str, str]
+) -> None:
+    """Real uploads are never samples: the footer filter is off (an impersonation flag still
+    counts), while a payment flag that quotes no payment request is rejected everywhere."""
+    install(app, settings, analyze_single=lambda kw: footer_traffic())
+    page = {"mime_type": "image/png", "data_base64": page_b64(TRAFFIC)}
+    res = await analyze(client, body(pages=[page]), headers=consent_headers)
+    kinds = [f.kind for f in res.red_flags]
+    assert "impersonation" in kinds and "scam_payment_method" not in kinds
+    assert res.scam_risk == "possible" and res.verification.facts_rejected >= 1
+    assert any("sample" in s.text for s in res.plan_steps)
+
+
+async def test_an_irs_payment_line_keeps_a_real_cp14_an_irs_notice(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F1/CQ-1: the model's own "It does not ask for gift cards" is no gift-card demand, and a
+    payment flag on the agency's .gov payment line neither scores nor shows."""
+    out = out_of(IRS)
+    install(app, settings, analyze_single=lambda kw: out)
+    base = await analyze(client, demo_body(IRS))
+    out = out_of(IRS)
+    out.red_flags = [RedFlagOut(
+        kind=RedFlagKind.scam_payment_method, span_ids=["p1b11"], page=1,
+        source_quote="Pay online at irs.gov/payments or mail a check with the payment stub below.",
+        text="This paper says to pay online or by mail. It does not ask for gift cards, wire "
+             "transfers, or crypto.",
+    )]  # fmt: skip
+    out.plan_steps.append(PlanStepOut(
+        id="s4", text="If you did not pay, go to the IRS website or mail a check.",
+        kind=PlanStepKind.submit_online, resource_tags=[], span_ids=["p1b11"], demand_id=None,
+    ))  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(IRS))
+    assert res.document_type == DocumentType.irs_notice and res.document_type_confidence == "high"
+    assert res.scam_risk == "none" and res.scam_reasons == []
+    assert {"call", "submit_online"} <= {s.kind for s in res.plan_steps}
+    assert not any(f.kind == "scam_payment_method" for f in res.red_flags)
+    assert res.verification.facts_rejected == base.verification.facts_rejected + 1
+    assert "scam_report" not in res.resource_tags
+
+
+async def test_a_retyped_scam_paper_is_low_confidence(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """§6.5: a likely scam on an agency type becomes other_notice with confidence low."""
+    out = out_of("scam_gift_card_letter")
+    out.document_type, out.document_type_confidence = DocumentType.uscis_receipt, Confidence.high
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("scam_gift_card_letter"))
+    assert res.scam_risk == "likely" and res.document_type == DocumentType.other_notice
+    assert res.document_type_confidence == "low" and res.category == DocumentCategory.immigration
+
+
+async def test_a_snap_heading_upgrades_other_notice(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F3/F6: "Notice of Interview" + SNAP → snap_notice; an unbacked scam_report tag goes."""
+    out = out_of(SNAP)
+    out.document_type, out.document_type_confidence = DocumentType.other_notice, Confidence.low
+    out.category, out.resource_tags = DocumentCategory.other, ["scam_report"]
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(SNAP))
+    assert res.document_type == DocumentType.snap_notice
+    assert res.document_type_confidence == "medium" and res.category == DocumentCategory.benefits
+    assert res.disclaimer_kind == "benefits_information_only"
+    assert res.resource_tags == ["snap", "food", "benefits_navigation"]
+
+
+async def test_a_snap_themed_gift_card_scam_is_not_upgraded(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """A type the code chose never survives a likely scam (§3.11)."""
+    out = out_of(SNAP)
+    out.document_type, out.document_type_confidence = DocumentType.other_notice, Confidence.low
+    out.blocks[5].text = "Pay the $50 interview fee today with Google Play gift cards."
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(SNAP))
+    assert res.scam_risk == "likely" and res.document_type == DocumentType.other_notice
+    assert res.document_type_confidence == "low"
+
+
+async def test_the_type_fixes_the_category_and_the_disclaimer(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F4/CQ-7: TAXONOMY §2 gives medicaid_renewal benefits and w2_1099 employment."""
+    medical = medicaid_out(category=DocumentCategory.medical)
+    install(app, settings, analyze_single=lambda kw: medical)
+    res = await analyze(client, demo_body())
+    assert res.category == DocumentCategory.benefits
+    assert res.disclaimer_kind == "benefits_information_only"
+    w2 = out_of("w2_form")
+    w2.category = DocumentCategory.tax
+    w2.form_numbers = ["Form W-2 Wage and Tax Statement 2025"]
+    install(app, settings, analyze_single=lambda kw: w2)
+    res = await analyze(client, demo_body("w2_form"))
+    assert res.category == DocumentCategory.employment
+    assert res.disclaimer_kind == "legal_information_only"
+    assert res.entities.form_numbers == ["W-2"], "F7: the printed number, not the model's label"
+
+
+async def test_long_form_labels_still_bring_the_form_tag_and_card(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    out = out_of("uscis_i797c_receipt_i765")
+    out.form_numbers = ["I-797C, Notice of Action", "Form I-765, Application for Employment "
+                        "Authorization"]  # fmt: skip
+    out.resource_tags = []
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("uscis_i797c_receipt_i765"))
+    assert res.entities.form_numbers == ["I-797C", "I-765"]
+    assert "work_permit" in res.resource_tags
+    assert any(f.kind == "ead_receipt_not_work_authorization" for f in res.red_flags)
+
+
+async def test_an_unreadable_paper_is_unknown(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F5 / TAXONOMY §3.11: whatever type the model guessed for a blurry page."""
+    out = out_of("blurry_unreadable_page")
+    out.document_type, out.category = DocumentType.other_notice, DocumentCategory.tax
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("blurry_unreadable_page"))
+    assert res.quality.readable is False
+    assert res.document_type == DocumentType.unknown and res.category == DocumentCategory.other
+    assert res.disclaimer_kind == "general_information" and res.resource_tags == []
+
+
+async def test_crisis_tags_need_an_emergency(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """F6/CQ-6: no crisis, DV or trafficking resources for a pharmacy label without one."""
+    out = out_of("prescription_label")
+    out.resource_tags = ["prescription_help", "primary_care_uninsured", "language_access",
+                         "crisis", "domestic_violence", "trafficking"]  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("prescription_label"))
+    assert res.safety.emergency is False
+    assert res.resource_tags == ["prescription_help", "primary_care_uninsured", "language_access"]
+
+
+async def test_abuse_context_keeps_dv_and_trafficking_tags(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """Review of package B: the pipeline hands the transcript and its language to the tag gate,
+    so a paper that prints a protective order keeps its DV and trafficking resources without an
+    emergency term — crisis still needs one."""
+    out = out_of("prescription_label")
+    out.resource_tags = ["prescription_help", "crisis", "domestic_violence", "trafficking"]
+    last = out.blocks[-1]
+    out.blocks.append(last.model_copy(update={
+        "id": f"p1b{len(out.blocks) + 1}", "bbox": [0.075, 0.6, 0.9, 0.64],
+        "text": "Copy for the petitioner under the protective order.",
+    }))  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body("prescription_label"))
+    assert res.safety.emergency is False
+    assert res.resource_tags == ["prescription_help", "domestic_violence", "trafficking",
+                                 "language_access"]  # fmt: skip
+
+
+async def test_a_type_correction_never_lowers_scam_risk(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings
+) -> None:
+    """Review of package B: scored under the nta its "Form I-862" label gave it, a scam letter's
+    arrest and deportation threats fell under the scorer's court guards (likely → none). The
+    scorer reads the model's own type; the likely scam then puts that type back."""
+    out = out_of(NTA)
+    out.document_type, out.document_type_confidence = DocumentType.other_notice, Confidence.medium
+    out.category, out.sender_kind = DocumentCategory.other, SenderKind.unknown
+    last = out.blocks[-1]
+    out.blocks.append(last.model_copy(update={
+        "id": f"p1b{len(out.blocks) + 1}", "bbox": [0.075, 0.6, 0.9, 0.64],
+        "text": "Police will arrest you today and you will be deported unless you pay the "
+                "processing fee immediately.",
+    }))  # fmt: skip
+    install(app, settings, analyze_single=lambda kw: out)
+    res = await analyze(client, demo_body(NTA))
+    assert res.scam_risk == "likely" and res.is_likely_scam
+    assert res.document_type == DocumentType.other_notice
+    assert res.document_type_confidence == "medium" and res.category == DocumentCategory.other

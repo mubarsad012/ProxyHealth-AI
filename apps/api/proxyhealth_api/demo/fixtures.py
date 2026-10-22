@@ -17,8 +17,11 @@ shows a recorded sample's card in its recorded language instead of the ``⟦tag�
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Literal
 
@@ -34,6 +37,37 @@ FixtureOut = AnalysisModelOut | TroubleshootModelOut
 
 # The fixture everything falls back to when a caller needs "some" sample (hour-one behaviour).
 DEFAULT_FIXTURE_ID = "medicaid_address_confirmation"
+# The footer ``scripts/make_fixtures.py`` prints at the bottom of every sample page (D-29). A model
+# transcribes it with the page, but it is no part of the paper it marks: the analysis pipeline
+# drops red flags and plan steps that rest on it and never scores it as a scam sign
+# (``analysis/classify.py``; DOCUMENT_TAXONOMY §6.3).
+SAMPLE_FOOTER = "SAMPLE — synthetic document made for demonstration. Not a real letter."
+SAMPLE_SCREEN_FOOTER = "SAMPLE — synthetic screen made for demonstration. Not a real website."
+SAMPLE_BANNER_RATIO = 0.9
+
+
+def banner_words(text: str) -> str:
+    """``text`` as case-folded words (NFKC; punctuation and dashes dropped) for banner matching."""
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    return " ".join(re.sub(r"[^\w]+", " ", folded).split())
+
+
+_FOOTER_WORDS = banner_words(SAMPLE_FOOTER)
+
+
+def is_sample_banner(text: str | None) -> bool:
+    """``text`` is the SAMPLE footer of a demo paper, a piece of it ("Not a real letter.") or
+    the bare SAMPLE watermark — nothing else is printed in it. Such a text asks for nothing, so a
+    red flag quoting it is no sign of a fake or scam paper (``analysis/classify.py``,
+    ``analysis/scam.py``)."""
+    words = banner_words(text or "")
+    if not words:
+        return False
+    if words == "sample" or (len(words.split()) >= 3 and f" {words} " in f" {_FOOTER_WORDS} "):
+        return True
+    # The whole footer with a transcription slip ("demonstation") still counts.
+    ratio = SequenceMatcher(None, words, _FOOTER_WORDS, autojunk=False).ratio()
+    return ratio >= SAMPLE_BANNER_RATIO
 
 
 class FixtureError(Exception):
@@ -276,11 +310,16 @@ class FixtureStore:
 
 __all__ = [
     "DEFAULT_FIXTURE_ID",
+    "SAMPLE_BANNER_RATIO",
+    "SAMPLE_FOOTER",
+    "SAMPLE_SCREEN_FOOTER",
     "ClerkCard",
     "Fixture",
     "FixtureError",
     "FixtureKind",
     "FixtureOut",
     "FixtureStore",
+    "banner_words",
+    "is_sample_banner",
     "squash",
 ]
