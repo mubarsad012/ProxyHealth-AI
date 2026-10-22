@@ -56,3 +56,6 @@ expo-env.d.ts
 # EAS local credentials (never commit)
 credentials.json
 credentials/
+
+# Claude Code workflow worktrees (temporary git worktrees, never committed)
+.claude/worktrees/

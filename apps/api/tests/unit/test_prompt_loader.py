@@ -14,6 +14,7 @@ from proxyhealth_api.analysis.scam import load_config
 from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import DocumentType, Provider, RedFlagKind, ResourceTag
 from proxyhealth_api.contracts.model_out import DemandOut
+from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER
 
 API = Path(__file__).resolve().parents[2]
 
@@ -136,19 +137,15 @@ def test_empty_sample_note_leaves_the_user_prompt_unchanged(name: str, end: str)
     assert sample == f"{real}\n\n{pl.sample_note(True)}"
 
 
-FOOTER_DEFINITION = re.compile(r'^\s*FOOTER_TEXT(?:\s*:\s*[\w.\[\]]+)?\s*=\s*"([^"]+)"', re.M)
-
-
 def test_sample_note_quotes_the_footer_the_fixture_script_prints() -> None:
-    # The note names the footer every sample page prints: the ``FOOTER_TEXT = "…"`` definition
-    # in scripts/make_fixtures.py, or wherever it moves under proxyhealth_api. Binding to the
-    # definition (not to any copy of the string) means a changed footer fails here even when an
-    # old copy survives in a comment; then the note, its doc block and VERSION change with it.
+    # The note names the footer every sample page prints. Since package B the one definition is
+    # ``demo.fixtures.SAMPLE_FOOTER`` (scripts/make_fixtures.py imports it), so a changed footer
+    # fails here; then the note, its doc block and VERSION change with it.
     m = re.search(r'"(SAMPLE — [^"]+)"', pl.sample_note(True))
     assert m is not None
-    sources = [API / "scripts" / "make_fixtures.py", *(API / "proxyhealth_api").rglob("*.py")]
-    defined = {d for p in sources for d in FOOTER_DEFINITION.findall(p.read_text("utf-8"))}
-    assert defined == {m.group(1)}
+    assert m.group(1) == SAMPLE_FOOTER
+    script = (API / "scripts" / "make_fixtures.py").read_text("utf-8")
+    assert "FOOTER_TEXT = SAMPLE_FOOTER" in script
 
 
 @pytest.mark.parametrize("name", ["compat_analyze.md", pl.SAMPLE_NOTE])
