@@ -40,6 +40,7 @@ from proxyhealth_api.ai import prompt_loader as prompt
 from proxyhealth_api.ai.failover import AIService, GenerateOutcome, SchemaFallbackNeeded
 from proxyhealth_api.ai.provider import Part, Task
 from proxyhealth_api.analysis import (
+    classify,
     clerk,
     contacts_filter,
     deadline_rules,
@@ -162,7 +163,6 @@ CLERK_CARD_CONTEXT = (
 _LANG_RE = re.compile(LANGUAGE_TAG_PATTERN)
 _STATE_RE = re.compile(r"^[A-Za-z]{2}$")
 _ZIP3_RE = re.compile(r"^\d{3}")
-_ALNUM_RE = re.compile(r"[^0-9a-z]")
 
 
 # ----------------------------------------------------------------------------- shared helpers
@@ -801,19 +801,10 @@ def resource_hosts(deps: PipelineDeps) -> set[str]:
     return {h for h in hosts if h}
 
 
-def _compact(text: str) -> str:
-    return _ALNUM_RE.sub("", text.lower())
-
-
 def printed_forms(form_numbers: Sequence[str], full_text: str) -> list[str]:
-    """Form numbers the model listed that are really printed (``I-765`` ≈ ``I 765``)."""
-    corpus = _compact(full_text)
-    out: list[str] = []
-    for form in form_numbers:
-        key = _compact(form)
-        if key and key in corpus and form not in out:
-            out.append(form.strip()[:40])
-    return out
+    """Form numbers the model listed that are really printed (``I-765`` ≈ ``I 765``), as the
+    printed number only ("Form W-2 Wage and Tax Statement 2025" → ``W-2``; ``classify.py``)."""
+    return classify.printed_form_numbers(form_numbers, full_text)
 
 
 def printed_institutions(
@@ -991,7 +982,7 @@ def unreadable_result(
     warnings: Sequence[WarningCode],
 ) -> AnalysisResult:
     """§11.1: ``legibility == poor`` → a ``200`` that says "try again"; §11.2–§11.10 skipped."""
-    out = reading.out
+    out = classify.unreadable_reading(reading.out)  # TAXONOMY §3.11: unknown / other
     detected = language_tag(out.detected_language)
     scrubber = contacts_filter.make_scrubber(paper.full_text, rc.deps.resources.names(), rc.t)
     en = english(rc.deps)
@@ -1083,6 +1074,13 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         warnings.append(injection.INJECTION_WARNING)
         log_event(request_id=deps.request_id, route="analysis.injection", injection_suspected=1)
     detected = language_tag(out.detected_language)
+    # TAXONOMY §3 rule 16 / §2: a printed form label or heading checks the model's type, and the
+    # type fixes the category (classify.py) — before verification and scam scoring use them.
+    type_check = classify.check_document_type(out, paper)
+    out = classify.apply_type_check(out, type_check)
+    if type_check.rule is not None:
+        log_event(request_id=deps.request_id, route=f"analysis.type_check.{type_check.rule}",
+                  document_type=type_check.document_type.value)  # fmt: skip
 
     # §11.2 span verification.
     checked = verify.verify_demands(out.demands, paper)
@@ -1094,6 +1092,15 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         if f.kind is not RedFlagKind.scam_payment_method
         or not scam.is_anti_fraud_quote(f.source_quote)
     ]  # fmt: skip
+    # A payment flag must quote a payment request (TAXONOMY §6.1); a sample paper's SAMPLE footer
+    # is no part of it — no flag, step or scam signal rests on it (classify.py, §6.3).
+    flags_checked = scam.screen_model_flags(flags_checked, language=detected)
+    banner = classify.sample_banner_ids(paper) if sample else frozenset[str]()
+    if sample:
+        flags_checked.flags = classify.drop_banner_flags(flags_checked.flags, banner)
+        out = out.model_copy(
+            update={"plan_steps": classify.drop_banner_steps(out.plan_steps, paper, banner)}
+        )
     if checked.page_edge_crop:
         warnings.append(WarningCode.page_edge_crop)
     summary_ids = verify.verify_summary_span_ids(out.summary_span_ids, paper)
@@ -1109,8 +1116,11 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         sender_as_written=out.sender_as_written, model_flags=flags_checked.flags,
         model_signals=out.scam_signals, demands=checked.verified,
         resource_hosts=resource_hosts(deps), t=t,
+        language=detected, skip_ids=banner,
     )  # fmt: skip
     document_type = scam.retype_for_scam(out.document_type, scam_out.scam_risk)
+    # A code-corrected type never survives a likely scam; a re-typed paper is low confidence.
+    out, document_type = classify.after_scam(out, type_check, document_type, scam_out.scam_risk)
     code_flags.extend(scam_out.red_flags)
 
     # §11.4 deadline rules.
@@ -1291,7 +1301,7 @@ async def finish_analysis(
     tags = tagging.finalize_tags(
         out.resource_tags, document_type=document_type, category=category, form_numbers=forms,
         readable=True, scam_risk=scam_out.scam_risk, emergency=safety.emergency,
-        red_flags=flags, tag_call_tags=tag_call_tags,
+        red_flags=flags, tag_call_tags=tag_call_tags, gate_sensitive=True,
     ).tags  # fmt: skip
     institutions = printed_institutions(out.institutions_as_written, scrubber)
     preview: list[ResourceMatch] = []

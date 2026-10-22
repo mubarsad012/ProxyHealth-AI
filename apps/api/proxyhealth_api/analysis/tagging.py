@@ -1,10 +1,14 @@
 """Resource tags (D-10, D-13, D-14; AI_PROMPTS §11.10; DOCUMENT_TAXONOMY §2).
 
 The model proposes ``resource_tags`` as free strings; only values of the ``ResourceTag`` enum
-survive (de-duplicated, at most 6). An empty list falls back to the document type's primary tags
-(TAXONOMY §2 master table) plus form-specific tags; when that is still empty and the paper is
-readable the pipeline may run task ``tag`` once (``TagOutcome.needs_tag_call``). ``crisis`` goes
-first when the emergency lexicon fired, then ``scam_report`` when ``scam_risk == likely``.
+survive (de-duplicated, at most 6). The document type's primary tags (TAXONOMY §2 master table)
+plus form-specific tags follow the model's own (an empty list is just those); when that is still
+empty and the paper is readable the pipeline may run task ``tag`` once
+(``TagOutcome.needs_tag_call``). ``crisis`` goes first when the emergency lexicon fired, then
+``scam_report`` when ``scam_risk == likely``. Emergency and scam status are code decisions
+(D-13, D-14), so on the final call (``gate_sensitive=True``) a model ``crisis`` /
+``domestic_violence`` / ``trafficking`` / ``poison`` tag needs ``emergency`` (or the type's own
+primary tags), and ``scam_report`` needs ``scam_risk != none`` or a verified scam red flag.
 Resources themselves only ever come from the vetted DB through the matcher.
 """
 
@@ -91,6 +95,9 @@ FORM_TAGS: Mapping[str, ResourceTag] = {
 SCAM_FLAG_KINDS = frozenset(
     {RedFlagKind.scam_payment_method, RedFlagKind.impersonation, RedFlagKind.notario}
 )
+# Tags whose resources (crisis lines, DV and trafficking hotlines, poison help) only an emergency
+# the code detected may bring (D-14).
+EMERGENCY_TAGS = frozenset({RT.crisis, RT.domestic_violence, RT.trafficking, RT.poison})
 
 
 def validate_tags(raw: Iterable[str]) -> list[ResourceTag]:
@@ -163,19 +170,39 @@ def finalize_tags(
     emergency: bool = False,
     red_flags: Iterable[RedFlag] = (),
     tag_call_tags: Iterable[str] | None = None,
+    gate_sensitive: bool = False,
 ) -> TagOutcome:
     """AI_PROMPTS §11.10 tagging. Call once with the model's tags; if ``needs_tag_call`` comes
-    back true and the pipeline ran task ``tag``, call again passing ``tag_call_tags``."""
-    tags = validate_tags(model_tags)
+    back true and the pipeline ran task ``tag``, call again passing ``tag_call_tags``.
+
+    The type's primary tags the model left out follow its own. ``gate_sensitive`` (the final
+    call, once ``scam_risk``, ``emergency`` and the verified ``red_flags`` are known) drops model
+    and tag-call emergency tags without an emergency and ``scam_report`` without scam evidence."""
+    flags = list(red_flags)
+    primary = primary_tags(document_type, category, form_numbers)
+    scam_flag = any(f.verified and f.kind in SCAM_FLAG_KINDS for f in flags)
+
+    def backed(tags: list[ResourceTag]) -> list[ResourceTag]:
+        if not gate_sensitive:
+            return tags
+        return [
+            t for t in tags
+            if not (t in EMERGENCY_TAGS and not emergency and t not in primary)
+            and not (t is RT.scam_report and scam_risk is ScamRisk.none and not scam_flag)
+        ]  # fmt: skip
+
+    tags = backed(validate_tags(model_tags))
     source = "model"
-    if not tags:
-        tags, source = primary_tags(document_type, category, form_numbers), "type"
+    if tags:
+        tags += [t for t in primary if t not in tags]
+    else:
+        tags, source = list(primary), "type"
     if not tags and tag_call_tags is not None:
-        tags, source = validate_tags(tag_call_tags), "tag_call"
+        tags, source = backed(validate_tags(tag_call_tags)), "tag_call"
     needs_call = not tags and readable and tag_call_tags is None
     if not tags:
         source = "none"
-    if any(f.verified and f.kind in SCAM_FLAG_KINDS for f in red_flags) and category is not None:
+    if scam_flag and category is not None:
         for tag in CATEGORY_TAGS.get(category, ()):
             if tag not in tags:
                 tags.append(tag)
@@ -188,6 +215,7 @@ def finalize_tags(
 
 __all__ = [
     "CATEGORY_TAGS",
+    "EMERGENCY_TAGS",
     "FORM_TAGS",
     "MAX_TAGS",
     "PRIMARY_TAGS",

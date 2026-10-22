@@ -62,6 +62,7 @@ from proxyhealth_api.contracts.model_out import (  # noqa: E402
     AnalysisModelOut,
     TroubleshootModelOut,
 )
+from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER, SAMPLE_SCREEN_FOOTER  # noqa: E402
 from proxyhealth_api.demo.phash import dhash, hamming, hash_to_hex  # noqa: E402
 
 DATA = API_ROOT / "data"
@@ -74,8 +75,8 @@ PAGE_W = 1600
 DOC_H = 2070  # US letter aspect at 1600 px wide
 SCREEN_H = 1100
 MARGIN = 120
-FOOTER_TEXT = "SAMPLE — synthetic document made for demonstration. Not a real letter."
-SCREEN_FOOTER_TEXT = "SAMPLE — synthetic screen made for demonstration. Not a real website."
+FOOTER_TEXT = SAMPLE_FOOTER  # the pipeline recognises it on a sample paper (demo/fixtures.py)
+SCREEN_FOOTER_TEXT = SAMPLE_SCREEN_FOOTER
 
 Align = Literal["left", "center", "right"]
 Rgb = tuple[int, int, int]

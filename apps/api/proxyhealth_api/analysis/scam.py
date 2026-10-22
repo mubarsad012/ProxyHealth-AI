@@ -5,8 +5,14 @@ ar, prs and ps patterns, every one run on every text) ∪ verified model ``red_f
 kinds (a model flag and a regex for the same signal id count once). A payment term inside a
 negated or anti-fraud sentence ("USCIS will never ask you to pay with gift cards",
 ``negation_cues``) is not a hit, and a model payment flag quoting only such sentences is ignored.
-Guards (sender kind, document type, negative regex on the hit block, a ``.gov`` payment portal
-printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights; ``likely`` when
+A model flag is matched on its printed quote only — the model's own ``text`` ("It does not ask
+for gift cards") is prose, not page evidence (D-13). A model payment flag whose quote names no
+known method counts as ``model_payment_method`` only when the quote prints a payment cue
+(``payment_cues``: a currency amount or a pay/fee/cash word) and is not an agency's own ``.gov``
+payment portal (``payment_flag_has_evidence``; DOCUMENT_TAXONOMY §6.1); it takes
+``payment_app``'s guards. Guards (sender kind, document type, negative regex on the hit block, a
+``.gov`` payment portal printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights;
+``likely`` when
 ``score ≥ 4`` or one of the ``likely_rules`` holds; ``possible`` when ``2 ≤ score < 4`` or a lone
 payment-app request on a private sender; else ``none``. The model's ``scam_signals`` are hints
 only and never score.
@@ -20,7 +26,7 @@ the matched block). The same scorer serves troubleshoot (``screen_text`` lines a
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -31,7 +37,11 @@ import yaml
 from proxyhealth_api.analysis.contacts_filter import find_contacts
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.transcript import Transcript
-from proxyhealth_api.analysis.verify import normalize
+from proxyhealth_api.analysis.verify import (
+    MULTIPLE_DOCUMENTS_SENTINEL,
+    VerifiedRedFlags,
+    normalize,
+)
 from proxyhealth_api.contracts.analysis import Demand, RedFlag
 from proxyhealth_api.contracts.enums import (
     DemandKind,
@@ -130,6 +140,11 @@ class ScamConfig:
     signals: tuple[Signal, ...]
     reviewed_by: Mapping[str, str | None]
     negation_cues: NegationCues = field(default_factory=NegationCues)
+    payment_cues: tuple[re.Pattern[str], ...] = ()
+    """``payment_cues``: a currency amount or a pay/fee/cash word (every language's list)."""
+    payment_cue_languages: frozenset[str] = frozenset()
+    """Languages with a ``payment_cues`` list; a paper in another language keeps model payment
+    flags without a cue (no list to judge them by)."""
 
     def signal(self, signal_id: str) -> Signal | None:
         """The signal with id ``signal_id`` from the table, or ``None`` when it is not listed."""
@@ -172,6 +187,18 @@ def _negation_cues(raw: Any) -> NegationCues:
     )  # fmt: skip
 
 
+def _payment_cues(raw: Any) -> tuple[tuple[re.Pattern[str], ...], frozenset[str]]:
+    """``payment_cues`` → (every pattern incl. ``amount``, the languages that have a list)."""
+    if not isinstance(raw, Mapping):
+        return (), frozenset()
+    lists = {k: v for k, v in raw.items() if k != "amount"}
+    amount = raw.get("amount")
+    patterns = _patterns(lists)
+    if amount:
+        patterns = (re.compile(str(amount)), *patterns)
+    return patterns, frozenset(str(k) for k, v in lists.items() if v)
+
+
 def parse_config(data: Mapping[str, Any]) -> ScamConfig:
     """Build a ``ScamConfig`` from the loaded YAML mapping (raises on a malformed table)."""
     signals: list[Signal] = []
@@ -190,9 +217,14 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
                 negation=bool(raw.get("negation", False)),
             )
         )
-    signals.append(  # model scam_payment_method flag whose quote names no known method
-        Signal("model_payment_method", None, RedFlagKind.scam_payment_method, 2, ())
-    )
+    # A model scam_payment_method flag whose quote names no known method: payment_app's guards
+    # (an agency's own .gov portal → 0; a named private sender → 1), §6.1.
+    app = next((s for s in signals if s.id == "payment_app"), None)
+    signals.append(
+        Signal("model_payment_method", None, RedFlagKind.scam_payment_method, 2, (),
+               guards=app.guards if app is not None else ())
+    )  # fmt: skip
+    cues, cue_languages = _payment_cues(data.get("payment_cues"))
     thresholds = data.get("thresholds") or {}
 
     def ids(key: str) -> frozenset[str]:
@@ -216,6 +248,7 @@ def parse_config(data: Mapping[str, Any]) -> ScamConfig:
         signals=tuple(signals),
         reviewed_by=dict(data.get("reviewed_by") or {}),
         negation_cues=_negation_cues(data.get("negation_cues")),
+        payment_cues=cues, payment_cue_languages=cue_languages,
     )  # fmt: skip
 
 
@@ -424,9 +457,9 @@ def _guard_applies(
 ) -> bool:
     if guard.sender_kind and sender_kind.value not in guard.sender_kind:
         return False
-    if guard.gov_url_in_segment and not (
-        hit.segment is not None and _gov_portal_only(hit.segment.text, gov_tlds)
-    ):
+    # The hit block, or for a model-only hit the flag's verified quote.
+    where = hit.segment.text if hit.segment is not None else hit.model_quote
+    if guard.gov_url_in_segment and not (where and _gov_portal_only(where, gov_tlds)):
         return False
     if guard.document_type and (document_type is None or document_type.value not in
                                 guard.document_type):  # fmt: skip
@@ -450,12 +483,78 @@ def _gov_portal_only(text: str, gov_tlds: Sequence[str]) -> bool:
     return all(is_gov_host(host_of(c.text), gov_tlds) for c in urls)
 
 
-def _match_signal(config: ScamConfig, kind: RedFlagKind, text: str) -> str:
-    norm = normalize(text)
+def _match_signal(config: ScamConfig, kind: RedFlagKind, quote: str) -> str:
+    """The signal a verified model flag of ``kind`` stands for: the table row whose pattern
+    matches the printed ``quote`` outside a negated sentence, else the kind's own signal."""
+    norm = normalize(quote)
     for sig in config.signals:
-        if sig.red_flag_kind is kind and any(p.search(norm) for p in sig.patterns):
+        if sig.red_flag_kind is kind and _signal_match(sig, norm, config.negation_cues):
             return sig.id
     return _MODEL_KIND_SIGNAL.get(kind, "model_payment_method")
+
+
+_PAYMENT_METHODS = ("gift_card", "wire_transfer", "payment_app", "crypto")
+
+
+def _base_language(tag: str) -> str:
+    return tag.split("-")[0].lower()
+
+
+def payment_flag_has_evidence(
+    quote: str | None, *, language: str | None = None, config: ScamConfig | None = None
+) -> bool:
+    """True when a verified model ``scam_payment_method`` flag quoting ``quote`` is evidence of
+    a payment request and may show and score (DOCUMENT_TAXONOMY §6.1 model-only payment row).
+
+    No: anti-fraud boilerplate (``is_anti_fraud_quote``). Yes: the quote names gift cards, a wire,
+    a payment app or crypto outside a negated sentence. Otherwise yes only when it prints a payment
+    cue (``payment_cues``: a currency amount, "pay", "fee", "cash" …) on a line that is not an
+    agency's own ``.gov`` payment portal — a heading or the SAMPLE footer asks for nothing.
+    ``language`` is the paper's detected language: ``None`` (a troubleshoot screen, language not
+    detected) and a language without a ``payment_cues`` list keep the flag, as before.
+    """
+    if not quote or not quote.strip():
+        return False
+    cfg = config or load_config()
+    if is_anti_fraud_quote(quote, cfg):
+        return False
+    text = normalize(quote)
+    for sid in _PAYMENT_METHODS:
+        sig = cfg.signal(sid)
+        if sig is not None and _signal_match(sig, text, cfg.negation_cues):
+            return True
+    if language is None or _base_language(language) not in cfg.payment_cue_languages:
+        return True
+    if not any(p.search(text) for p in cfg.payment_cues):
+        return False
+    return not _gov_portal_only(text, cfg.gov_tlds)
+
+
+def screen_model_flags(
+    checked: VerifiedRedFlags, *, language: str | None, config: ScamConfig | None = None
+) -> VerifiedRedFlags:
+    """The verified model flags that may show and score: a payment flag without evidence of a
+    payment request (``payment_flag_has_evidence``) is dropped and counted as a rejected fact
+    (verification only gets stricter, D-09), and a repeated flag (same kind, same quote) shows
+    once."""
+    cfg = config or load_config()
+    kept: list[RedFlag] = []
+    seen: set[tuple[RedFlagKind, str, bool]] = set()
+    rejected = checked.facts_rejected
+    for f in checked.flags:
+        if f.kind is RedFlagKind.scam_payment_method and not payment_flag_has_evidence(
+            f.source_quote, language=language, config=cfg
+        ):
+            rejected += 1
+            continue
+        sentinel = f.text.strip() == MULTIPLE_DOCUMENTS_SENTINEL
+        key = (f.kind, normalize(f.source_quote or "").casefold(), sentinel)
+        if key not in seen:
+            seen.add(key)
+            kept.append(f)
+    return VerifiedRedFlags(
+        flags=kept, facts_checked=checked.facts_checked, facts_rejected=rejected
+    )
 
 
 def score_scam(
@@ -471,6 +570,7 @@ def score_scam(
     resource_hosts: Iterable[str] = (),
     t: Translator | None = None,
     config: ScamConfig | None = None,
+    language: str | None = None,
 ) -> ScamOutcome:
     """Score one paper or screenshot (DOCUMENT_TAXONOMY §6.2) — see the module docstring.
 
@@ -478,6 +578,7 @@ def score_scam(
     the verified demands (used by ``no_sender``). ``credential_request`` is troubleshoot's
     ``asks_for_credentials_or_payment``. ``resource_hosts`` are DB URLs that are never counted as
     a fake agency domain. ``t`` renders code red-flag text (pack key used as text without it).
+    ``language`` is the paper's detected language (``payment_flag_has_evidence``).
     """
     cfg = config or load_config()
     hits: dict[str, SignalHit] = {}
@@ -496,11 +597,12 @@ def score_scam(
     for flag in model_flags:
         if not flag.verified or flag.kind not in MODEL_SCAM_KINDS:
             continue
-        if flag.kind is RedFlagKind.scam_payment_method and is_anti_fraud_quote(
-            flag.source_quote, cfg
+        if flag.kind is RedFlagKind.scam_payment_method and not payment_flag_has_evidence(
+            flag.source_quote, language=language, config=cfg
         ):
-            continue  # "USCIS will never ask you to pay with gift cards" is not a demand
-        sid = _match_signal(cfg, flag.kind, f"{flag.source_quote or ''} {flag.text}")
+            continue  # anti-fraud boilerplate, or a quote that asks for no payment at all
+        # The printed quote only: the model's ``text`` is its own prose, not the page (D-13).
+        sid = _match_signal(cfg, flag.kind, flag.source_quote or "")
         model_sig = cfg.signal(sid)
         if model_sig is None:
             continue
@@ -616,13 +718,17 @@ def score_transcript(
     resource_hosts: Iterable[str] = (),
     t: Translator | None = None,
     config: ScamConfig | None = None,
+    language: str | None = None,
+    skip_ids: Collection[str] = (),
 ) -> ScamOutcome:
-    """``score_scam`` over every transcript block (same keyword arguments as ``score_scam``)."""
+    """``score_scam`` over every transcript block (same keyword arguments as ``score_scam``)
+    except the blocks in ``skip_ids`` (a sample paper's SAMPLE footer, ``classify.py``)."""
+    segments = [s for s in segments_from_transcript(transcript) if s.id not in skip_ids]
     return score_scam(
-        segments_from_transcript(transcript), document_type=document_type,
+        segments, document_type=document_type,
         sender_kind=sender_kind, sender_as_written=sender_as_written, model_flags=model_flags,
         model_signals=model_signals, demands=demands, credential_request=credential_request,
-        resource_hosts=resource_hosts, t=t, config=config,
+        resource_hosts=resource_hosts, t=t, config=config, language=language,
     )  # fmt: skip
 
 
@@ -654,9 +760,11 @@ __all__ = [
     "is_negated",
     "load_config",
     "parse_config",
+    "payment_flag_has_evidence",
     "retype_for_scam",
     "score_scam",
     "score_transcript",
+    "screen_model_flags",
     "segments_from_lines",
     "segments_from_transcript",
 ]

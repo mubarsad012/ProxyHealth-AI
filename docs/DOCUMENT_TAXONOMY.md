@@ -49,7 +49,7 @@ Every document type has the same eight blocks:
 4. **Common pitfalls** — what people get wrong; each becomes a fixed notice (§7), a glossary term, a plan step or a `questions_to_ask` item.
 5. **Plain-language guidance** — the shape of Card 1 / Card 2 / Card 3 at grade ≤ 4, plus the glossary terms the model should define. Card 1 always answers: *what is this paper, who sent it, and is anything cancelled, denied, approved, or only requested*.
 6. **The app does / refuses** — the information-not-advice boundary for that type (D-17). Every immigration, court and civic type ends the plan with a `professional` step naming the type's professional (§8.6: "a licensed lawyer or a DOJ-accredited representative" for immigration papers and the immigration-court types `nta`, `hearing_notice`, `ij_decision`, `bia_notice`, `ice_checkin`; "a licensed lawyer" for other court and civic papers — DOJ-accredited representatives practise immigration law only) and never a specific organization (the matcher supplies those).
-7. **Resource tags** — `resource_tags` the pipeline sets for the type (model proposal validated against this list; `tagging.py` adds the type's primary tag when the model returns none).
+7. **Resource tags** — `resource_tags` the pipeline sets for the type (model proposal validated against this list; `tagging.py` appends the type's primary tags the model left out, after the model's own). A model `crisis`/`domestic_violence`/`trafficking`/`poison` tag stays only when code detected an emergency (D-14), and `scam_report` only when `scam_risk != none` or a verified scam red flag exists (D-13) — code-authoritative since 2026-10-22.
 8. **Clerk need line (fallback)** and **Prepare checklist keys** — the English need line used when the AI line fails lint (D-18; ≤ 200 chars, no contacts), and the `prepare.yaml` keys the matcher adds to every resource shown for this type.
 
 ### 1.3 Copy rules that apply to every string in this file
@@ -141,6 +141,7 @@ Column key: **Floor** = doc-type urgency floor from D-12 (blank = none; urgency 
 13. **Multiple documents in one upload.** Classify by the first page's dominant document; if a later page clearly belongs to a different paper (different sender letterhead and subject), the model adds a red flag `kind=other` whose `text` is exactly `[multiple_documents]` with the second letterhead as `source_quote` (`RedFlagOut` has no `fixed_copy_key`, so this sentinel is the channel — AI_PROMPTS §4.3) and takes no facts from that page; `analysis/fixed_notices.py` swaps in the fixed copy key `fixed.multiple_documents` ("These pages look like two different papers. I explained the first one. Scan the other one on its own." — same `fixed.*` prefix as every other `fixed_copy_key`, PRODUCT_SPEC Appendix A; §7.1).
 14. **Language of the paper.** `detected_language` is the paper's language; when it differs from `target_language` and from `en`, set `warnings: [document_language_differs]` and the client shows "Your paper is in {Language}; I explained it in {Target}."
 15. **`sender_as_written`** is copied exactly from the letterhead or signature block; never normalized ("Virginia Department of Medical Assistance Services", not "Virginia Medicaid"). If no sender is printed, `null` and `sender_kind=unknown` (a red flag `unusual_contact` if the paper demands money or data).
+16. **Code check (`analysis/classify.py`, code-authoritative since 2026-10-22).** The model classifies; code then applies rules 1, 2 and 9 to the transcript. A **form label** printed in the page-1 header (a line of ≤ 10 words in one of the first three blocks, or in a block whose top edge is in the top quarter of the page) that names exactly one type decides it, whatever the model said: I-862 → `nta`; I-797E → `uscis_rfe`; I-797A/I-797B → `uscis_approval`; N-445 → `uscis_interview`; I-220A/I-220B → `ice_checkin`; W-2, 1099-NEC/MISC/K → `w2_1099`; Form I-9 → `i9`; W-7, CP565/CP566/CP567 → `itin`; any other CP/LTR number → `irs_notice` when "Internal Revenue Service" is printed; I-797C → by its first-line heading (rule 2). EOIR-33 and a bare I-797 decide nothing. Only when the model said `other_notice` or `unknown`, a **heading** (a block's first line of ≤ 8 words) from the §4 "Recognize by" lines that names exactly one type upgrades it ("Notice of Interview" needs a SNAP cue, "Notice to Appear" an EOIR cue, the USCIS headings a USCIS cue). Never when the model said `other_notice` with `document_type_confidence=high`; a correction sets `medium`; a type the code chose reverts to the model's when `scam_risk == likely` (§6.5). Phrases are English; form labels work in any language. Then the **§2 master table fixes `category`** for every type but `other_notice` (best fit, §4.10), and an **unreadable** paper (§11 above) is always `unknown` / `other` whatever the model guessed. `entities.form_numbers` keep the printed form number only ("Form W-2 Wage and Tax Statement 2025" → `W-2`).
 
 ---
 
@@ -789,7 +790,7 @@ D-13: scam risk is scored in code from **model red flags with verified quotes** 
 
 ### 6.1 Signal table
 
-Regexes are case-insensitive, applied to NFKC-normalized block text with whitespace collapsed (same normalizer as `verify.py`), in English and Spanish (`patterns.en`, `patterns.es`; other bundled languages inherit `en` + `es` until reviewed — scam letters and texts in the U.S. are overwhelmingly in those two). A model red flag of the same `RedFlagKind` with a verified quote counts as the same signal (max weight once).
+Regexes are case-insensitive, applied to NFKC-normalized block text with whitespace collapsed (same normalizer as `verify.py`), in English and Spanish (`patterns.en`, `patterns.es`; other bundled languages inherit `en` + `es` until reviewed — scam letters and texts in the U.S. are overwhelmingly in those two). A model red flag of the same `RedFlagKind` with a verified quote counts as the same signal (max weight once). **Code-authoritative since 2026-10-22:** a model flag is matched on its printed `source_quote` only, outside negated sentences — never on its own `text` ("It does not ask for gift cards" is model prose, not a printed demand).
 
 | Signal id | `scam_reasons` key (`scam.*`) | `RedFlagKind` | Weight | English cues (regex, abridged) | Guards |
 |---|---|---|---|---|---|
@@ -797,6 +798,7 @@ Regexes are case-insensitive, applied to NFKC-normalized block text with whitesp
 | `wire_transfer` | `scam.wire_transfer` | `scam_payment_method` | 3 | `Western Union`, `MoneyGram`, `wire (transfer\|the money)`, `bank wire` | routine bill text "wire transfer accepted" on a `hospital_or_clinic`/`utility` sender → weight 1 |
 | `payment_app` | `scam.payment_app` | `scam_payment_method` | 2 | `Zelle`, `Venmo`, `Cash ?App`, `PayPal`, `Apple Pay`, `Google Pay` | private senders (`landlord`, `hospital_or_clinic`, `utility`, `pharmacy`, `school`, `employer`) with a printed name → weight 1 |
 | `crypto` | `scam.crypto` | `scam_payment_method` | 3 | `bitcoin\|BTC\|crypto(currency)?\|Ethereum\|USDT\|Tether`, `crypto ATM`, `wallet address` | — |
+| `model_payment_method` | *(no key)* | `scam_payment_method` | 2 | none — a verified model `scam_payment_method` flag whose quote names none of the four methods above ("send cash in an envelope"); counts as a payment-method signal | the quote must print a payment cue (`payment_cues`: a currency amount or a pay/fee/cash/send/money word; en, es, ar, prs, ps) — otherwise (a heading, the SAMPLE footer) the flag neither scores nor shows and counts as a rejected fact; papers in a language without a cue list keep it; `payment_app`'s guards: the quote is an agency's own `.gov` payment portal → 0 (the flag is not shown either), a named private sender → 1 |
 | `arrest_threat` | `scam.arrest_threat` | `urgency_pressure` | 2 | `(warrant\|arrest(ed)?\|police\|sheriff\|jail\|law enforcement).{0,80}(today\|immediately\|within \d+ (hours\|minutes)\|unless you\|if you (do not\|don't\|fail))` | on a `court` sender or `traffic_court` type (genuine "a warrant may be issued" FTA text) → weight 0 unless a payment-method signal also fires |
 | `deportation_threat` | `scam.deportation_threat` | `urgency_pressure` | 2 | `(deport(ed\|ation)\|removed from the (country\|United States)\|immigration (hold\|arrest)).{0,80}(pay\|payment\|unless\|fee\|immediately)` | requires the pay/fee coupling; never fires on the statutory warnings of `nta`/`hearing_notice`/`ij_decision` (excluded types) |
 | `guaranteed` | `scam.guaranteed` | `guaranteed_result` | 2 | `guarantee(d\|s)?.{0,40}(approval\|visa\|green card\|result\|win\|citizenship)`, `100 ?% (approval\|success)`, `you (have )?won\|you have been selected.{0,60}(visa\|lottery\|green card)` | — |
@@ -822,7 +824,7 @@ Worked checks: `scam_gift_card_letter` = gift card (3) + deportation threat (2) 
 
 ### 6.3 What never counts (false-positive guards, tested in `test_scam.py`)
 
-Genuine bills with "FINAL NOTICE"; hospital, insurer, utility or landlord payment portals and their own `.com`/`.org` domains; USCIS filing-fee sentences and "premium processing"; statutory warnings on court papers ("may be ordered removed in your absence", "a warrant may be issued for failure to appear"); an I-9, W-7 or school form asking for an SSN on the form; a notary seal on a lease; SSA/IRS/USCIS letters that print only `.gov` contacts. Guards are `weight: 0` overrides keyed by `sender_kind`, `document_type` and negative regexes in `scam.yaml`.
+Genuine bills with "FINAL NOTICE"; hospital, insurer, utility or landlord payment portals and their own `.com`/`.org` domains; USCIS filing-fee sentences and "premium processing"; statutory warnings on court papers ("may be ordered removed in your absence", "a warrant may be issued for failure to appear"); an I-9, W-7 or school form asking for an SSN on the form; a notary seal on a lease; SSA/IRS/USCIS letters that print only `.gov` contacts. Guards are `weight: 0` overrides keyed by `sender_kind`, `document_type` and negative regexes in `scam.yaml`. **The SAMPLE footer of a demo paper** ("SAMPLE — synthetic document made for demonstration. Not a real letter.", `demo/fixtures.py` `SAMPLE_FOOTER`): on a sample paper (`demo_sample_id`, or a mock dHash match — never a real upload) its block is not scored, and model red flags that quote it or rest only on its block, and plan steps that cite only that block or repeat "real letter", are dropped (`analysis/classify.py`, 2026-10-22). Duplicate model flags (same kind, same quote) show once.
 
 ### 6.4 Outputs and copy
 
@@ -836,14 +838,14 @@ Genuine bills with "FINAL NOTICE"; hospital, insurer, utility or landlord paymen
 
 ### 6.5 Re-typing rule and interplay with fixed notices and urgency
 
-When `scam_risk == likely` **and** `document_type ∈ {USCIS types, ice_checkin, irs_notice, itin, ssa_letter}` (agency papers), `pipeline.py` sets `document_type = other_notice` (category unchanged, `document_type_confidence = low`) per §3.11 ("a scam letter impersonating USCIS is `other_notice` / `immigration`"). Consequences: no doc-type floor, no USCIS/EOIR `verify_resource_id` (the scam card's reporting resources take its place), no type-specific fixed notice, the generic clerk line. Printed dates still become verified Demands and may drive the banner; the scam card renders above it (S7 order). Court papers (`nta`, `hearing_notice`, `eviction_summons`, `traffic_court`) are **not** re-typed on scam signals — a forged summons is rare and a missed real hearing is catastrophic — they show the scam card *and* the court verify CTA ("call the court's own line").
+When `scam_risk == likely` **and** `document_type ∈ {USCIS types, ice_checkin, irs_notice, itin, ssa_letter}` (agency papers), `pipeline.py` sets `document_type = other_notice` (category unchanged, `document_type_confidence = low`) per §3.11 ("a scam letter impersonating USCIS is `other_notice` / `immigration`"). Consequences: no doc-type floor, no USCIS/EOIR `verify_resource_id` (the scam card's reporting resources take its place), no type-specific fixed notice, the generic clerk line. Printed dates still become verified Demands and may drive the banner; the scam card renders above it (S7 order). Court papers (`nta`, `hearing_notice`, `eviction_summons`, `traffic_court`) are **not** re-typed on scam signals — a forged summons is rare and a missed real hearing is catastrophic — they show the scam card *and* the court verify CTA ("call the court's own line"). As built (2026-10-22, `classify.after_scam`): the re-type sets `document_type_confidence = low` in code, and a type that the §3 rule 16 code check chose never survives a `likely` scam — the model's own type and category come back first, then this rule applies to them.
 
 ### 6.6 `scam.yaml` schema
 
-As built (seed `version: "2026-09-30"`, code-authoritative after Phase 2B; `analysis/scam.py`). Regexes are case-insensitive over NFKC-normalised, whitespace-collapsed block text (the `verify.py` normaliser), in **English, Spanish, Arabic, Dari and Pashto**; every pattern runs on every text, whatever the paper's language (brand names are Latin everywhere).
+As built (seed `version: "2026-09-30"`, `payment_cues` added in `"2026-10-22"`; code-authoritative after Phase 2B; `analysis/scam.py`). Regexes are case-insensitive over NFKC-normalised, whitespace-collapsed block text (the `verify.py` normaliser), in **English, Spanish, Arabic, Dari and Pashto**; every pattern runs on every text, whatever the paper's language (brand names are Latin everywhere).
 
 ```yaml
-version: "2026-09-30"
+version: "2026-10-22"
 thresholds: {possible: 2, likely: 4}
 gov_tlds: [".gov", ".mil"]
 agency_names: ["USCIS", "U.S. Citizenship", "US Citizenship", "ICE", "DHS", "Homeland Security", "Social Security", "SSA", "IRS", "Internal Revenue", "Medicare", "Medicaid", "EOIR", "Immigration Court", "Department of State", "Department of Justice", "Department of Labor"]
@@ -859,6 +861,13 @@ negation_cues:                            # agency boilerplate ("USCIS will neve
   before: {en: [...], es: [...], ar: [...], prs: [...], ps: [...]}   # a cue before the match in the same sentence negates it ...
   after:  {en: [...], es: [...]}          # ... or one after it ("… is a scam")
   breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|…)\\b|[,;:]\\s*(please |you must |…)?(pay|send|buy|…)"   # ... unless a break word stands between cue and match
+payment_cues:                             # a model payment flag naming no known method needs one in its quote (§6.1 model_payment_method)
+  amount: "[$€£]\\s?\\d"
+  en: ["\\b(pay|pays|paying|payment|payments|paid|fee|fees|send|…|cash|money|transfer|deposit|card|cards|…|dollars?)\\b"]
+  es: ["…"]
+  ar: ["…"]
+  prs: ["…"]
+  ps: ["…"]                               # drafts, reviewed_by: null like the patterns
 signals:
   - id: gift_card
     reason_key: scam.gift_card            # null = scores but shows no chip

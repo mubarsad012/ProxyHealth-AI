@@ -34,6 +34,12 @@ FixtureOut = AnalysisModelOut | TroubleshootModelOut
 
 # The fixture everything falls back to when a caller needs "some" sample (hour-one behaviour).
 DEFAULT_FIXTURE_ID = "medicaid_address_confirmation"
+# The footer ``scripts/make_fixtures.py`` prints at the bottom of every sample page (D-29). A model
+# transcribes it with the page, but it is no part of the paper it marks: the analysis pipeline
+# drops red flags and plan steps that rest on it and never scores it as a scam sign
+# (``analysis/classify.py``; DOCUMENT_TAXONOMY §6.3).
+SAMPLE_FOOTER = "SAMPLE — synthetic document made for demonstration. Not a real letter."
+SAMPLE_SCREEN_FOOTER = "SAMPLE — synthetic screen made for demonstration. Not a real website."
 
 
 class FixtureError(Exception):
