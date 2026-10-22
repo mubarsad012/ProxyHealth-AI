@@ -227,7 +227,7 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `OPENAI_COMPAT_DATA_TIER` | `unpaid` | `local` (loopback endpoint; real papers in dev/staging) · `attested` (development only; vendor terms say no training — your attestation) · `unpaid` (samples only). |
 | `OPENAI_COMPAT_MODEL_LABEL` · `OPENAI_COMPAT_VENDOR_NAME` · `OPENAI_COMPAT_NO_TRAINING_ATTESTED` | empty · empty · `false` | `{model}` (required for `local`) · `{vendor}` (required for `attested` and `unpaid`) in the consent copy · your no-training statement (required for `attested`). |
 | `OPENAI_COMPAT_JSON_MODE` · `OPENAI_COMPAT_REASONING` | `auto` · `none` | `auto \| json_schema \| json_object \| prompt` · `none \| mapped \| omit` (`none` turns Qwen's thinking off). |
-| `OPENAI_COMPAT_TIMEOUT_S` · `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` · `OPENAI_COMPAT_MAX_IMAGES` · `OPENAI_COMPAT_CONCURRENCY` | 300 loopback / 90 hosted · `6144` · `12` · 1 loopback / 4 hosted | Per call · output cap · page images per call · parallel calls. Full meanings: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6.1. |
+| `OPENAI_COMPAT_TIMEOUT_S` · `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` · `OPENAI_COMPAT_MAX_IMAGES` · `OPENAI_COMPAT_CONCURRENCY` | 300 loopback / 90 hosted · 4096 loopback / 6144 hosted · 2 loopback / 12 hosted · 1 loopback / 4 hosted | Per call · output cap · page images per call · parallel calls. Full meanings: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §6.1. |
 
 ### Mobile (Expo public env — baked in at build/export time; never secrets)
 

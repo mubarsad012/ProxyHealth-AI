@@ -77,6 +77,7 @@ apps/api/
       recording.py                    `RecordingProvider` decorator (dev only): wraps gemini, writes anonymized fixture outputs to data/fixtures/<id>/out.<lang>.json
       keypool.py                      slot state machine per tier, Retry-After/exponential cooldown, RPD detection regex, Pacific-midnight reset, `var/keypool.json` persistence, distinct-project validation (D-07)
       failover.py                     `call_with_failover(tier, build_request)`: slot selection, 3-attempt/deadline budget, 503 same-slot retry, degradation to MODEL_FAST, 429/503/422 mapping
+      slow_errors.py                  `openai_compat` "too slow"/"busy" errors: `503 upstream_unavailable` with `err.ai_too_slow` (paper reading on loopback) or `err.ai_busy` (≥ ⅓ of the budget queued); hosted keeps `err.upstream_unavailable` (LOCAL_AI.md §5)
       routing.py                      task → (tier, model id, thinking level, media resolution, max tokens); page-count-based thinking downgrade; degraded thinking config
       schema_guard.py                 import-time lint of every model_out schema: depth ≤ 3, no dict/Any/recursion, enum size (D-06)
       prompts/
@@ -98,6 +99,8 @@ apps/api/
       redaction.py                    Pillow burn of MaskRect list; rotation; EXIF strip; returns JPEG bytes (never written to disk) (D-19); HEIC/HEIF that this Pillow cannot decode passes through unchanged, EXIF included, when no masks are requested (masks → 400 invalid_request); clients send JPEG (D-21; CL-030(j)); an image over `MAX_PIXELS` = 12 MP (checked from the header, before decoding) is `413 payload_too_large`. Decoding, redaction, the mock dHash and PDF rasterization run in the thread pool behind a 2-slot semaphore (`pipeline.offload`, `MAX_PARALLEL_IMAGE_WORK = 2`) so one upload never stalls the event loop and peak memory stays bounded on 1 GiB instances
       pdf_pages.py                    pypdfium2 rasterization to PNG thumbnails ≤ 1200 px for crops
       transcript.py                   block id assignment, page dimension bookkeeping, SSN pattern masking (`***-**-1234`), optional A-number/receipt masking
+      classify.py                     type check: page-1 header form labels/headings correct the model's type, category from DOCUMENT_TAXONOMY §2, SAMPLE-footer flag/step drops, revert on likely scam (§3 rule 16; AI_PROMPTS §11.1a)
+      demand_repair.py                deterministic, all-or-nothing demand citation repair R0–R5 before `verify_demands`; never red flags; repaired demands capped at medium (D-09; AI_PROMPTS §11.2)
       verify.py                       quote/value verification: NFKC, whitespace, dash/quote unification, OCR confusion map, difflib ≥ 0.92 sliding window; edge-crop low-confidence rule (D-09)
       contacts_filter.py              phone/URL/email/address regexes; keep only if in transcript; org-name replacement using resource DB names (D-10)
       deadline_rules.py               strict date parsing (US formats + 26 languages' month names), rules table matcher, business-day/mail-day math with zoneinfo, DateKind assignment (D-11)
@@ -105,11 +108,13 @@ apps/api/
       scam.py                         regex signals + model flags → ScamRisk, reasons, scam_report tag forcing (D-13)
       emergency.py                    per-language lexicon on transcript/questions; over-trigger bias (D-14)
       phrasing.py                     forbidden-phrasing lint + one FAST rewrite + fixed hedge (D-17)
+      summary_text.py                 summary shape repairs before the lint: word-only cut of a `Str80` title ending "…", body/`body_en` join (AI_PROMPTS §11.9)
       injection.py                    injection phrase detection; block masking; single re-run (D-15)
       clerk.py                        fixed template, need-line lint/cap/fallback, conditional HHS interpreter line (D-18)
       fixed_notices.py                doc-type → fixed RedFlag cards (jury, EAD receipt, not-a-court-order, …) (D-20)
       disclaimers.py                  category → DisclaimerKind + secondary disclaimers
       tagging.py                      validate model resource_tags; FAST re-tag when empty/invalid
+      compat_runtime.py               `openai_compat` runtime limits: loopback two-call fallback only with ≥ 120 s left, same-language transcript lines, one rewrite per sentence per request (LOCAL_AI.md §5)
       troubleshoot_pipeline.py        screenshot flow: contacts filter on steps, credential guard, scam scorer, quote check against screen_text, emergency lexicon over screen_text + user_goal → `TroubleshootResult.safety` (D-14)
       chat_pipeline.py                context compaction (≤ 60k chars), FAST call, grounding check of span ids against original_text, refusal templates, emergency lexicon on question
     packs/
@@ -133,6 +138,7 @@ apps/api/
     feedback/
       store.py                        sqlite counters (`var/feedback_counts.sqlite`), enum-only keys, ULID ids
     routers/
+      _cancel.py                      `run_until_disconnect`: cancels analyze/troubleshoot/chat work when the client disconnects, freeing the `openai_compat` slot (LOCAL_AI.md §5)
       health.py                       GET /health
       config.py                       GET /v1/config
       langpacks.py                    GET/POST /v1/language-packs
@@ -498,7 +504,7 @@ Sequence: `npx eas-cli@latest build:configure` → `eas build --profile developm
 | Variable | Default | Meaning |
 |---|---|---|
 | `ENV` | `development` | `development \| staging \| production`. Production forbids unbilled keys (unless `ALLOW_UNPAID_KEYS=1`) and forbids `ALLOW_UNPAID_REAL_DOCUMENTS`. |
-| `AI_PROVIDER` | `mock` | `mock \| gemini \| openai_compat \| gemini_interactions` (last is LATER and refused at boot). `openai_compat` = any OpenAI-compatible endpoint, test builds only; refused in production (D-32; rows below). |
+| `AI_PROVIDER` | `mock` | `mock \| gemini \| openai_compat \| gemini_interactions` (last is LATER and refused at boot). `openai_compat` = any OpenAI-compatible endpoint, test builds only; refused in production (D-32; rows below). On this provider the prompt loader appends `ai/prompts/compat_analyze.md` (AI_PROMPTS §5.8.2: a worked demand example and field-format reminders) to the `analyze_single` and `explain` system prompts, and the pipeline drops any model block that echoes that example before span verification; Gemini and mock prompts and blocks are unchanged. |
 | `GEMINI_KEYS` | `[]` | JSON list of `{"key","project","billing"}`. Each key from a **different** Google Cloud project. `billing` is an operator attestation that a Cloud Billing account is attached (paid tier). EEA/CH/UK users → all `billing:true`. |
 | `ALLOW_UNPAID_KEYS` | `0` | Lets production boot with `billing:false` slots (fixtures only; real documents stay blocked). |
 | `ALLOW_UNPAID_REAL_DOCUMENTS` | `false` | Dev-only: bypass the 403 gate for synthetic test scans. Boot error in production. |
