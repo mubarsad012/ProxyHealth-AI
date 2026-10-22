@@ -14,19 +14,29 @@ ignored, so one ``vars`` mapping serves both ``system()`` and ``user()`` of a ta
 Text typed by the reader (document hint, goal, question, calendar notes, language name) goes
 through ``untrusted()``, which wraps it in fixed marker strings the prompts describe as data.
 Nothing here logs or stores prompt text.
+
+Two pieces of text are added only under a condition (§5.8): ``{sample_note}`` carries
+``user/sample_note.md`` for a known sample paper and is empty otherwise, and ``system()`` appends
+a provider addendum (``compat_analyze.md``) to the ``analyze_single`` and ``explain`` system
+prompts on ``openai_compat`` only, so the Gemini and mock prompts never change. Because that
+addendum shows a worked example, ``drop_example_echoes()`` removes any model block that repeats
+it before the transcript is assembled, so an echoed example can never pass span verification.
 """
 
+import difflib
 import functools
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from proxyhealth_api.ai.provider import Task
+from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
     PlanStepKind,
+    Provider,
     RedFlagKind,
     ResourceTag,
 )
@@ -38,6 +48,7 @@ USER_TEXT_BEGIN = "<<<USER_TEXT_BEGIN>>>"
 USER_TEXT_END = "<<<USER_TEXT_END>>>"
 NONE_TEXT = "(none)"
 PREAMBLE = "preamble.md"
+SAMPLE_NOTE = "user/sample_note.md"
 
 # AI_PROMPTS §3 "System prompt" column (the pipeline's ``TASK_PROMPT`` mirrors this map).
 SYSTEM_PROMPT: Mapping[Task, str] = {
@@ -65,6 +76,20 @@ USER_PROMPT: Mapping[Task, str] = {
     Task.tag: "user/tag_user.md",
     Task.phrasing_rewrite: "user/phrasing_rewrite_user.md",
 }
+# AI_PROMPTS §5.8.2: text appended to one task's system prompt for one provider. Only the small
+# OpenAI-compatible models get the worked demand example; Gemini and mock prompts stay as §5.
+PROVIDER_ADDENDUM: Mapping[tuple[Provider, Task], str] = {
+    (Provider.openai_compat, Task.analyze_single): "compat_analyze.md",
+    (Provider.openai_compat, Task.explain): "compat_analyze.md",
+}
+# AI_PROMPTS §5.8.2 echo guard: each addendum's worked example as (printed sentence, the value
+# inside it); no paper prints it. In ``analyze_single`` the transcript is the model's own block
+# list, so a block that repeats the example would let an echoed demand pass §11.2 (and add a
+# phantom page); the pipeline drops such blocks first (``drop_example_echoes``).
+ADDENDUM_EXAMPLES: Mapping[str, tuple[tuple[str, str], ...]] = {
+    "compat_analyze.md": (("Return the signed form by March 3, 2031.", "March 3, 2031"),),
+}
+ECHO_FUZZY_RATIO = 0.85
 
 # AI_PROMPTS §5.1.3 — the 13 scam signal keys, in this order (``scam_reasons`` chips).
 SCAM_SIGNAL_KEYS: tuple[str, ...] = (
@@ -143,14 +168,67 @@ def render(name: str, **vars: str) -> str:
     return PLACEHOLDER.sub(lambda m: str(vars[m.group(1)]), text).rstrip("\n")
 
 
-def system(task: Task, **vars: str) -> str:
-    """``preamble.md`` + one blank line + the task's system prompt, rendered."""
-    return render(PREAMBLE, **vars) + "\n\n" + render(SYSTEM_PROMPT[task], **vars)
+def system(task: Task, provider: Provider | None = None, /, **vars: str) -> str:
+    """``preamble.md`` + one blank line + the task's system prompt, rendered; when ``provider``
+    has an addendum for ``task`` (``PROVIDER_ADDENDUM``), one more blank line + the addendum.
+
+    ``provider`` is positional-only, so ``**vars`` stays a plain placeholder mapping."""
+    text = render(PREAMBLE, **vars) + "\n\n" + render(SYSTEM_PROMPT[task], **vars)
+    addendum = PROVIDER_ADDENDUM.get((provider, task)) if provider is not None else None
+    return f"{text}\n\n{render(addendum, **vars)}" if addendum else text
 
 
 def user(task: Task, **vars: str) -> str:
     """The task's user template (``user/<task>_user.md``), rendered."""
     return render(USER_PROMPT[task], **vars)
+
+
+def sample_note(sample: bool) -> str:
+    """AI_PROMPTS §2 ``{sample_note}``: the §5.8.1 note for a known sample paper, else ``""``.
+
+    The placeholder is the last line of its templates, so an empty note leaves a real upload's
+    user prompt byte-identical to the template without it."""
+    return render(SAMPLE_NOTE) if sample else ""
+
+
+def _echo_key(text: str) -> str:
+    """NFKC, case-folded, every run of non-word characters (and ``_``) → one space."""
+    return re.sub(r"[\W_]+", " ", unicodedata.normalize("NFKC", text).casefold()).strip()
+
+
+def example_echo_keys(provider: Provider | None) -> tuple[tuple[str, str], ...]:
+    """Normalised (sentence, value) pairs of the worked examples ``provider`` is shown (§5.8.2);
+    empty for every provider without an addendum."""
+    files = sorted({name for (p, _), name in PROVIDER_ADDENDUM.items() if p == provider})
+    return tuple(
+        (_echo_key(sentence), _echo_key(value))
+        for name in files
+        for sentence, value in ADDENDUM_EXAMPLES.get(name, ())
+    )
+
+
+def echoes_example(text: str, provider: Provider | None) -> bool:
+    """True when ``text`` repeats a worked example ``provider`` was shown: it carries the
+    example's value (``March 3, 2031``) and is the example sentence, holds it, is a piece of it,
+    or is a near copy of it (``difflib`` ratio ≥ ``ECHO_FUZZY_RATIO``). A printed line with a
+    different date or wording never matches."""
+    key = _echo_key(text)
+    for sentence, value in example_echo_keys(provider):
+        if value not in key:
+            continue
+        if sentence in key or key in sentence:
+            return True
+        if difflib.SequenceMatcher(None, key, sentence).ratio() >= ECHO_FUZZY_RATIO:
+            return True
+    return False
+
+
+def drop_example_echoes(blocks: Sequence[TextBlock], provider: Provider | None) -> list[TextBlock]:
+    """§5.8.2 echo guard: ``blocks`` without those that repeat a worked example ``provider``
+    was shown. Only ``openai_compat`` is shown one; for every other provider nothing is dropped."""
+    if not example_echo_keys(provider):
+        return list(blocks)
+    return [b for b in blocks if not echoes_example(b.text, provider)]
 
 
 def _strip_markers(text: str) -> str:
@@ -198,7 +276,7 @@ def catalog_vars() -> dict[str, str]:
 
 @functools.cache
 def prompts_version() -> str:
-    """``2026-09-27.1`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
+    """``2026-10-22.2`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
     raw = VERSION_FILE.read_text(encoding="utf-8").strip()
     m = re.fullmatch(r"prompts_version = (\d{4}-\d{2}-\d{2}\.\d+)", raw)
     if m is None:
@@ -214,13 +292,17 @@ def all_prompt_files() -> list[str]:
 
 
 __all__ = [
+    "ADDENDUM_EXAMPLES",
     "CODE_ONLY_RED_FLAG_KINDS",
     "DEMAND_ROLES",
+    "ECHO_FUZZY_RATIO",
     "MODEL_RED_FLAG_KINDS",
     "NONE_TEXT",
     "PLACEHOLDER",
     "PREAMBLE",
     "PROMPTS_DIR",
+    "PROVIDER_ADDENDUM",
+    "SAMPLE_NOTE",
     "SCAM_SIGNAL_KEYS",
     "SYSTEM_PROMPT",
     "USER_PROMPT",
@@ -229,10 +311,14 @@ __all__ = [
     "PromptError",
     "all_prompt_files",
     "catalog_vars",
+    "drop_example_echoes",
+    "echoes_example",
+    "example_echo_keys",
     "load",
     "placeholders",
     "prompts_version",
     "render",
+    "sample_note",
     "system",
     "untrusted",
     "user",
