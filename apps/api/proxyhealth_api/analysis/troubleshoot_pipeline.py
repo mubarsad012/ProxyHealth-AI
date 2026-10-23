@@ -257,7 +257,7 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     tags = tagging.finalize_tags(
         out.resource_tags, document_type=DocumentType.unknown, readable=True,
         scam_risk=scam_out.scam_risk, emergency=emerg.safety.emergency, red_flags=flags,
-        gate_sensitive=sample is not None, printed_text=corpus,
+        gate_sensitive=sample is not None, sample=sample is not None, printed_text=corpus,
         language=sample.manifest.language_of_document if sample is not None else None,
     ).tags  # fmt: skip
 
