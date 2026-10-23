@@ -37,12 +37,14 @@ FixtureOut = AnalysisModelOut | TroubleshootModelOut
 
 # The fixture everything falls back to when a caller needs "some" sample (hour-one behaviour).
 DEFAULT_FIXTURE_ID = "medicaid_address_confirmation"
-# The footer ``scripts/make_fixtures.py`` prints at the bottom of every sample page (D-29). A model
-# transcribes it with the page, but it is no part of the paper it marks: the analysis pipeline
-# drops red flags and plan steps that rest on it and never scores it as a scam sign
-# (``analysis/classify.py``; DOCUMENT_TAXONOMY §6.3).
+# The footers ``scripts/make_fixtures.py`` prints at the bottom of every sample page and every
+# sample screenshot (D-29). A model transcribes them with the page or screen, but they are no part
+# of what they mark: the analysis and troubleshoot pipelines drop red flags (and the analysis plan
+# steps) that rest on them and never score them as a scam sign (``analysis/classify.py``,
+# ``analysis/troubleshoot_pipeline.py``; DOCUMENT_TAXONOMY §6.3).
 SAMPLE_FOOTER = "SAMPLE — synthetic document made for demonstration. Not a real letter."
 SAMPLE_SCREEN_FOOTER = "SAMPLE — synthetic screen made for demonstration. Not a real website."
+SAMPLE_FOOTERS = (SAMPLE_FOOTER, SAMPLE_SCREEN_FOOTER)
 SAMPLE_BANNER_RATIO = 0.9
 
 
@@ -52,22 +54,27 @@ def banner_words(text: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", folded).split())
 
 
-_FOOTER_WORDS = banner_words(SAMPLE_FOOTER)
+_FOOTER_WORDS = tuple(banner_words(footer) for footer in SAMPLE_FOOTERS)
 
 
 def is_sample_banner(text: str | None) -> bool:
-    """``text`` is the SAMPLE footer of a demo paper, a piece of it ("Not a real letter.") or
-    the bare SAMPLE watermark — nothing else is printed in it. Such a text asks for nothing, so a
-    red flag quoting it is no sign of a fake or scam paper (``analysis/classify.py``,
-    ``analysis/scam.py``)."""
+    """``text`` is the SAMPLE footer of a demo paper or demo screenshot, a piece of one ("Not a
+    real letter.", "Not a real website.") or the bare SAMPLE watermark — nothing else is printed
+    in it. Such a text asks for nothing, so a red flag quoting it is no sign of a fake or scam
+    paper or screen (``analysis/classify.py``, ``analysis/scam.py``,
+    ``analysis/troubleshoot_pipeline.py``)."""
     words = banner_words(text or "")
     if not words:
         return False
-    if words == "sample" or (len(words.split()) >= 3 and f" {words} " in f" {_FOOTER_WORDS} "):
+    if words == "sample" or (
+        len(words.split()) >= 3 and any(f" {words} " in f" {f} " for f in _FOOTER_WORDS)
+    ):
         return True
-    # The whole footer with a transcription slip ("demonstation") still counts.
-    ratio = SequenceMatcher(None, words, _FOOTER_WORDS, autojunk=False).ratio()
-    return ratio >= SAMPLE_BANNER_RATIO
+    # A whole footer with a transcription slip ("demonstation") still counts.
+    return any(
+        SequenceMatcher(None, words, footer, autojunk=False).ratio() >= SAMPLE_BANNER_RATIO
+        for footer in _FOOTER_WORDS
+    )
 
 
 class FixtureError(Exception):
@@ -312,6 +319,7 @@ __all__ = [
     "DEFAULT_FIXTURE_ID",
     "SAMPLE_BANNER_RATIO",
     "SAMPLE_FOOTER",
+    "SAMPLE_FOOTERS",
     "SAMPLE_SCREEN_FOOTER",
     "ClerkCard",
     "Fixture",

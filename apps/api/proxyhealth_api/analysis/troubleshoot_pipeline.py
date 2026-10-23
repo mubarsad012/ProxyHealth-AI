@@ -2,15 +2,19 @@
 
 Order: upload validation + redaction (in the thread pool) → one ``troubleshoot`` call (pro,
 ``medium``) → quote checks against the model's own ``screen_text`` (``error_text_quoted``, each
-step's ``ui_target_as_written``, red-flag quotes) → contact scrubber → scam scorer (regexes over
-the screen, model hints, credential request) → emergency lexicon (``screen_text`` + ``user_goal``,
-plus the model's ``crisis`` tag) → injection detection (flag + warning; a screenshot has no block
-boxes to mask, so no re-run) → phrasing lint (steps, flags, summary, meaning, cautions) →
-printed forms (a date or number the screen shows keeps its spelling; other digits Western,
-``prose_dates.as_printed``, AI_PROMPTS §5.0 rule 7) → tags (``scam_report`` / ``crisis`` first) →
-disclaimers and warnings. A sample screenshot never sends
-the typed goal to the provider. The deadline, urgency and clerk/resource steps of AI_PROMPTS §11
-do not apply to a screen. Nothing here writes to disk or logs content (ARCHITECTURE §7).
+step's ``ui_target_as_written``, red-flag quotes) → the analysis flag screens (a payment flag whose
+quote asks for no payment is dropped, a repeated flag shows once, ``scam.screen_model_flags``; on
+a sample screenshot no flag rests on its SAMPLE footer) → contact scrubber → scam scorer (regexes
+over the screen except a sample's footer, model hints, credential request) → emergency lexicon
+(``screen_text`` + ``user_goal``, plus the model's ``crisis`` tag) → injection detection (flag +
+warning; a screenshot has no block boxes to mask, so no re-run) → phrasing lint (steps, flags,
+summary, meaning, cautions; scam-aware like the analysis, TAXONOMY §6.4) → printed forms (a date
+or number the screen shows keeps its spelling; other digits Western, ``prose_dates.as_printed``,
+AI_PROMPTS §5.0 rule 7) → tags (``scam_report`` / ``crisis`` first; a sample screenshot's
+sensitive tags need code evidence) → disclaimers and warnings. A sample screenshot never sends the
+typed goal to the provider; its prompt carries the §5.8.1 screen note instead. The deadline,
+urgency and clerk/resource steps of AI_PROMPTS §11 do not apply to a screen. Nothing here writes
+to disk or logs content (ARCHITECTURE §7).
 """
 
 from __future__ import annotations
@@ -68,6 +72,7 @@ from proxyhealth_api.contracts.troubleshoot import (
     TroubleshootResult,
     TroubleshootStep,
 )
+from proxyhealth_api.demo.fixtures import is_sample_banner
 
 # AI_PROMPTS §11.11: a screen that asks for any of these is a credential/payment request.
 CREDENTIAL_RE = re.compile(
@@ -113,25 +118,35 @@ def on_screen(text: str | None, corpus: str) -> bool:
     return bool(text and text.strip()) and verify.find_quote(text or "", corpus).found
 
 
-def screen_flags(flags: Sequence[RedFlagOut], corpus: str) -> tuple[list[RedFlag], int]:
-    """Model red flags whose quote is on the screen (others dropped, D-09); (kept, dropped)."""
-    kept: list[RedFlag] = []
+def screen_flags(
+    flags: Sequence[RedFlagOut], corpus: str, *, sample: bool = False
+) -> tuple[list[RedFlag], int]:
+    """Model red flags that may show and score; (kept, dropped).
+
+    A flag whose quote is not on the screen is dropped (D-09). Then the analysis screens apply
+    (DOCUMENT_TAXONOMY §6.1, ``scam.screen_model_flags``): a payment flag whose quote asks for no
+    payment — anti-fraud boilerplate ("SSA will never ask you to pay with gift cards"), a SAMPLE
+    footer, an agency's own ``.gov`` payment portal — is dropped, and a repeated flag (same kind,
+    same quote) shows once. On a ``sample`` screenshot a flag of any kind quoting its SAMPLE
+    footer ("Not a real website.") is dropped as well (§6.3, ``demo.fixtures.is_sample_banner``).
+    """
+    on_it: list[RedFlag] = []
     dropped = 0
     for f in flags:
         if not on_screen(f.source_quote, corpus):
             dropped += 1
             continue
-        if f.kind is RedFlagKind.scam_payment_method and scam.is_anti_fraud_quote(f.source_quote):
-            dropped += 1  # "SSA will never ask you to pay with gift cards" is not a demand
-            continue
-        kept.append(
+        on_it.append(
             RedFlag(
                 kind=f.kind, text=f.text, source_quote=f.source_quote, span_ids=[], page=None,
                 severity=Severity.high if f.kind in _HIGH_KINDS else Severity.medium,
                 fixed_copy_key=None, verified=True,
             )  # fmt: skip
         )
-    return kept, dropped
+    screened = scam.screen_model_flags(verify.VerifiedRedFlags(flags=on_it))
+    dropped += screened.facts_rejected
+    kept = [f for f in screened.flags if not (sample and is_sample_banner(f.source_quote))]
+    return kept, dropped + len(screened.flags) - len(kept)
 
 
 async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> TroubleshootResult:
@@ -139,6 +154,9 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     deadline_at = deps.ai.request_deadline()
     media = await offload(screen_media, req, deps)  # decode + redaction off the event loop
     uploads.check_inline_budget([media], deps.settings)
+    # A sample screenshot (its PNG was sent, never the client's bytes): its SAMPLE footer is no
+    # part of the screen, and its language is known.
+    sample = fixture_for(deps, req.demo_sample_id, "screenshot") if req.demo_sample_id else None
     target = req.target_language
     t = translator(deps, target)
     today = local_today(deps.clock())
@@ -149,6 +167,7 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
         # A sample screenshot skips the consent gate, so nothing the reader typed may reach the
         # provider with it: the typed goal stays on the server (emergency lexicon only).
         "user_goal": prompt.untrusted(None if req.demo_sample_id else req.user_goal, 300),
+        "sample_note": prompt.sample_note(sample is not None, screen=True),
     }
     hints = hints_for(
         demo_sample_id=req.demo_sample_id, target_language=target, mode=req.mode.value
@@ -163,16 +182,17 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     screen_text = clean_screen_text(out.screen_text)
     corpus = "\n".join(screen_text)
     error_quoted = out.error_text_quoted if on_screen(out.error_text_quoted, corpus) else None
-    model_flags, _ = screen_flags(out.red_flags, corpus)
+    model_flags, _ = screen_flags(out.red_flags, corpus, sample=sample is not None)
     asks = out.asks_for_credentials_or_payment or bool(CREDENTIAL_RE.search(corpus))
 
     # Contact scrubber: only contacts printed on the screen may survive.
     scrubber = contacts_filter.make_scrubber("", deps.resources.names(), t, extra_texts=screen_text)
 
     # Scam scorer over what the screen shows (the typed goal is the reader's words, not the
-    # screen's, so it never scores as a signal).
+    # screen's, so it never scores as a signal; nor does a sample screenshot's SAMPLE footer).
+    scored = [line for line in screen_text if sample is None or not is_sample_banner(line)]
     scam_out = scam.score_scam(
-        scam.segments_from_lines(screen_text), document_type=None, model_flags=model_flags,
+        scam.segments_from_lines(scored), document_type=None, model_flags=model_flags,
         model_signals=out.scam_signals, credential_request=asks,
         resource_hosts=resource_hosts(deps), t=t,
     )  # fmt: skip
@@ -208,9 +228,10 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     printed = prose_dates.printed_forms(corpus)
 
     async def clean(text: str) -> str:
+        # §6.4: on a possible/likely scam the rewrite template names no paper contact.
         text = await phrase(
             scrubber.scrub(text), t=t, language=target, category=None, rewrite=rewrite,
-            stats=stats,
+            stats=stats, scam_risk=scam_out.scam_risk,
         )  # fmt: skip
         return prose_dates.as_printed(text, printed, target)
 
@@ -228,9 +249,16 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     meaning = await clean(out.error_meaning)
     # Cautions are model prose like the steps: contact filter and phrasing lint (TAXONOMY §8).
     cautions = [c for c in [await clean(c) for c in out.cautions[:MAX_CAUTIONS]] if c.strip()]
+    # A sample screenshot is synthetic and its prompt carries nothing the reader typed, so a
+    # crisis/poison/DV/trafficking/scam_report tag there needs the code evidence the analysis asks
+    # for (``gate_sensitive``; the screen's own language judges the abuse context). A real
+    # screenshot keeps the model's tags: there the model may be the only one that read the danger
+    # (D-14), and the model's ``crisis`` tag already opens the emergency card above.
     tags = tagging.finalize_tags(
         out.resource_tags, document_type=DocumentType.unknown, readable=True,
         scam_risk=scam_out.scam_risk, emergency=emerg.safety.emergency, red_flags=flags,
+        gate_sensitive=sample is not None, printed_text=corpus,
+        language=sample.manifest.language_of_document if sample is not None else None,
     ).tags  # fmt: skip
 
     warnings += [*outcome.warnings, *scrubber.warnings(), *stats.warnings]

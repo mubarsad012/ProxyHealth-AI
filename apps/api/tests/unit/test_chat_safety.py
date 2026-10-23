@@ -19,11 +19,21 @@ from pydantic import BaseModel
 from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.ai.provider import StructuredResult, Task, Usage
 from proxyhealth_api.analysis import chat_pipeline as cp
+from proxyhealth_api.analysis import phrasing
 from proxyhealth_api.analysis.pipeline import PipelineDeps, run_analysis, translator
-from proxyhealth_api.contracts.analysis import AnalyzeRequest
+from proxyhealth_api.contracts.analysis import AnalyzeRequest, RedFlag
 from proxyhealth_api.contracts.chat import AnalysisContext, ChatAnswer, ChatMessage, ChatRequest
 from proxyhealth_api.contracts.common import PageText, TextBlock
-from proxyhealth_api.contracts.enums import Provider, ReferTo, RefusalKind, ResourceTag
+from proxyhealth_api.contracts.enums import (
+    DocumentCategory,
+    Provider,
+    RedFlagKind,
+    ReferTo,
+    RefusalKind,
+    ResourceTag,
+    ScamRisk,
+    Severity,
+)
 from proxyhealth_api.contracts.model_out import ChatModelOut
 from proxyhealth_api.errors import ApiError
 from tests.golden._fixtures_wp7 import STORE, CountingMock, build_deps, fixture
@@ -34,19 +44,23 @@ Script = Callable[[dict[str, Any]], BaseModel | StructuredResult | None]
 
 
 class ScriptedChat(CountingMock):
-    """Reports as ``gemini``; ``chat`` returns what ``script`` builds (else the mock)."""
+    """Reports as ``gemini``; ``chat`` returns what ``script`` builds (else the mock), and
+    ``phrasing_rewrite`` what ``rewrite`` builds when one is given."""
 
     name = Provider.gemini
 
-    def __init__(self, script: Script, deps: PipelineDeps) -> None:
+    def __init__(self, script: Script, deps: PipelineDeps, rewrite: Script | None = None) -> None:
         super().__init__(STORE, deps.settings)
         self.script = script
+        self.rewrite_script = rewrite  # ``rewrite`` is the mock's own method
         self.seen: list[dict[str, Any]] = []
 
     async def generate_structured(self, **kwargs: Any) -> StructuredResult:
         self.seen.append(kwargs)
-        if kwargs["task"] is Task.chat:
-            value = self.script(kwargs)
+        scripted = {Task.chat: self.script, Task.phrasing_rewrite: self.rewrite_script}
+        script = scripted.get(kwargs["task"])
+        if script is not None:
+            value = script(kwargs)
             if isinstance(value, StructuredResult):
                 return value
             if value is not None:
@@ -84,10 +98,11 @@ async def ask(
     lang: str = "en",
     script: Script = lambda kw: plain_answer(),
     analysis: AnalysisContext | None = None,
+    rewrite: Script | None = None,
     **extra: Any,
 ) -> tuple[ChatAnswer, ScriptedChat]:
     deps, ctx = await context(tmp_path, lang)
-    provider = ScriptedChat(script, deps)
+    provider = ScriptedChat(script, deps, rewrite)
     deps.ai = AIService(provider, None, deps.settings)
     req = ChatRequest(analysis=analysis or ctx, question=question, target_language=lang, **extra)
     return await cp.run_chat(req, deps), provider
@@ -273,3 +288,182 @@ async def test_chat_answer_keeps_the_printed_date(
         tmp_path, "When is it due?", lang=lang, script=lambda kw: plain_answer(model_answer)
     )
     assert ans.answer == expected
+
+
+# ---------------------------------------------------------------------------- scam (TAXONOMY §6.4)
+
+SCAM = "scam_gift_card_letter"
+
+
+async def analysed(tmp_path: Path, fid: str, lang: str = "en") -> tuple[PipelineDeps, Any]:
+    deps, _ = build_deps(fixture(fid), tmp_path)
+    req = AnalyzeRequest(pages=[], target_language=lang, client_platform="web", demo_sample_id=fid)
+    return deps, await run_analysis(req, deps)
+
+
+def as_context(result: Any) -> AnalysisContext:
+    return AnalysisContext.model_validate({k: getattr(result, k) for k in CONTEXT_FIELDS})
+
+
+async def scam_context(tmp_path: Path, category: DocumentCategory) -> AnalysisContext:
+    """The likely-scam sample's context as the client re-sends it, filed under ``category`` (a
+    tax, benefits or school impersonation; the sample itself is an immigration paper)."""
+    _, result = await analysed(tmp_path, SCAM)
+    assert result.scam_risk is ScamRisk.likely
+    return as_context(result).model_copy(update={"category": category})
+
+
+def answered(
+    answer: str, refusal: RefusalKind = RefusalKind.none, refer: ReferTo = ReferTo.none
+) -> Script:
+    out = plain_answer(answer).model_copy(
+        update={"refusal_kind": refusal, "refer_to_professional": refer,
+                "grounded_span_ids": ["p1b6"]}
+    )  # fmt: skip
+    return lambda kw: out
+
+
+@pytest.mark.parametrize("category", list(DocumentCategory))
+def test_no_scam_referral_points_back_at_the_paper(category: DocumentCategory) -> None:
+    # The phrasing.yaml maps chat relies on: on a scam no category refers to the sender.
+    for risk in (ScamRisk.possible, ScamRisk.likely):
+        assert phrasing.refer_to_for(category, scam_risk=risk) not in cp.PAPER_CONTACT_REFERRALS
+
+
+@pytest.mark.parametrize(
+    ("category", "script"),
+    [
+        # review/chat_scam.py: on a likely scam filed under tax, a hedged "pay today" answer, an
+        # explicit refusal and the model's own sender referral all came back ``sender``.
+        (DocumentCategory.tax, answered("You should pay the amount today.")),
+        (DocumentCategory.tax, answered("I cannot tell you whether to pay.",
+                                        RefusalKind.filing_advice)),
+        (DocumentCategory.tax, answered("I cannot tell you whether to pay.",
+                                        RefusalKind.filing_advice, ReferTo.sender)),
+        (DocumentCategory.benefits, answered("I cannot tell you whether to pay.",
+                                             RefusalKind.filing_advice)),
+        (DocumentCategory.benefits, answered("The letter asks for $950.", refer=ReferTo.sender)),
+        (DocumentCategory.school, answered("The letter asks for $950.",
+                                           refer=ReferTo.benefits_office)),
+    ],
+)  # fmt: skip
+async def test_chat_never_refers_a_scam_reader_to_the_sender(
+    category: DocumentCategory, script: Script, tmp_path: Path
+) -> None:
+    ctx = await scam_context(tmp_path, category)
+    ans, _ = await ask(
+        tmp_path, "Should I pay this?", script=script, analysis=ctx, rewrite=blocked
+    )  # the fast tier is unavailable: a flagged sentence gets the fixed hedge
+    assert ans.refer_to_professional is ReferTo.lawyer_or_accredited_rep
+
+
+async def test_a_hedged_scam_answer_is_refused(tmp_path: Path) -> None:
+    ctx = await scam_context(tmp_path, DocumentCategory.tax)
+    ans, _ = await ask(
+        tmp_path, "Should I pay this?", script=answered("You should pay the amount today."),
+        analysis=ctx, rewrite=blocked,
+    )  # fmt: skip
+    assert ans.refusal_kind is RefusalKind.filing_advice
+    assert ans.refer_to_professional is ReferTo.lawyer_or_accredited_rep
+    assert "pay the amount today" not in ans.answer
+
+
+async def test_the_scam_rewrite_template_names_no_sender(tmp_path: Path) -> None:
+    # A benefits paper's rewrite professional is "the office that sent this paper"; on a scam it
+    # is the lawyer wording, as on the analysis card (phrasing.yaml scam_professional_by_category).
+    ctx = await scam_context(tmp_path, DocumentCategory.benefits)
+    _, provider = await ask(
+        tmp_path, "Should I pay this?", script=answered("You should pay the amount today."),
+        analysis=ctx,
+    )  # fmt: skip
+    rewrites = [c for c in provider.seen if c["task"] is Task.phrasing_rewrite]
+    assert rewrites, "the flagged sentence went to the rewriter"
+    for call in rewrites:
+        text = "\n".join(p.text or "" for p in call["parts"])
+        assert "Professional wording to use, exactly: a licensed lawyer\n" in text
+        assert "the office that sent this paper" not in text
+
+
+@pytest.mark.parametrize(
+    ("script", "refer"),
+    [
+        (answered("I cannot tell you whether you qualify.", RefusalKind.eligibility),
+         ReferTo.benefits_office),
+        (answered("The paper asks you to confirm your address.", refer=ReferTo.sender),
+         ReferTo.sender),
+    ],
+)  # fmt: skip
+async def test_a_genuine_paper_keeps_its_sender_referral(
+    script: Script, refer: ReferTo, tmp_path: Path
+) -> None:
+    # The Medicaid sample scores no scam: the office that sent it is the one to ask.
+    ans, _ = await ask(tmp_path, "Do I qualify?", script=script)
+    assert ans.refer_to_professional is refer
+
+
+async def test_context_scam_risk_agrees_with_every_sample_analysis(tmp_path: Path) -> None:
+    # Every sample paper in every recorded language: the scam letter is a scam in all four; the
+    # Inova bill's "FINAL NOTICE" urgency flag (model words, medium) and the fixed cards (jury,
+    # NTA, pay-or-quit, I-797C) are not.
+    derived: dict[str, ScamRisk] = {}
+    for fx in STORE.all():
+        if fx.kind != "document":
+            continue
+        for lang in fx.languages:
+            deps, result = await analysed(tmp_path, fx.id, lang)
+            reasons = cp.scorer_reason_texts(translator(deps, lang), translator(deps, "en"))
+            risk = cp.context_scam_risk(as_context(result), reasons)
+            assert (risk is ScamRisk.none) is (result.scam_risk is ScamRisk.none), (fx.id, lang)
+            derived[f"{fx.id}/{lang}"] = risk
+    assert derived[f"{SCAM}/prs"] is ScamRisk.possible
+    assert derived["inova_final_notice/en"] is ScamRisk.none
+
+
+def red_flag(kind: RedFlagKind, text: str, severity: Severity, key: str | None = None) -> RedFlag:
+    return RedFlag(kind=kind, text=text, source_quote="Pay today.", span_ids=["p1b2"], page=1,
+                   severity=severity, fixed_copy_key=key, verified=True)  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ([], ScamRisk.none),
+        # A model urgency flag in its own words weighs 1 in the scorer: below ``possible``.
+        ([red_flag(RedFlagKind.urgency_pressure, "It rushes you.", Severity.medium)],
+         ScamRisk.none),
+        # A fixed card is never scam evidence.
+        ([red_flag(RedFlagKind.not_a_court_order, "Not a court order.", Severity.high,
+                   "fixed.not_a_court_order")], ScamRisk.none),
+        # (a) the kinds the analysis itself takes as scam evidence, at any severity.
+        ([red_flag(RedFlagKind.scam_payment_method, "Asks for a wire.", Severity.medium)],
+         ScamRisk.possible),
+        ([red_flag(RedFlagKind.notario, "A notario.", Severity.high)], ScamRisk.possible),
+        # (b) a high scorer kind: only the scorer marks urgency or contact flags high (likely).
+        ([red_flag(RedFlagKind.urgency_pressure, "It rushes you.", Severity.high)],
+         ScamRisk.possible),
+        ([red_flag(RedFlagKind.unusual_contact, "Asks for ID numbers.", Severity.high)],
+         ScamRisk.possible),
+        # (c) the scorer's own flag text: "Threatens arrest" alone scores ``possible`` (medium).
+        ([red_flag(RedFlagKind.urgency_pressure, "Threatens  arrest", Severity.medium)],
+         ScamRisk.possible),
+    ],
+)  # fmt: skip
+async def test_context_scam_risk_reads_the_red_flags(
+    flags: list[RedFlag], expected: ScamRisk, tmp_path: Path
+) -> None:
+    deps, ctx = await context(tmp_path)
+    reasons = cp.scorer_reason_texts(translator(deps, "en"))
+    risk = cp.context_scam_risk(ctx.model_copy(update={"red_flags": flags}), reasons)
+    assert risk is expected
+
+
+async def test_the_scorer_text_counts_in_the_reader_language(tmp_path: Path) -> None:
+    deps, ctx = await context(tmp_path, "es")
+    es = translator(deps, "es")
+    flags = [red_flag(RedFlagKind.urgency_pressure, es("scam.arrest_threat"), Severity.medium)]
+    assert es("scam.arrest_threat") != translator(deps, "en")("scam.arrest_threat")
+    scam_ctx = ctx.model_copy(update={"red_flags": flags})
+    assert cp.context_scam_risk(scam_ctx, cp.scorer_reason_texts(es)) is ScamRisk.possible
+    assert cp.context_scam_risk(
+        scam_ctx, cp.scorer_reason_texts(translator(deps, "en"))
+    ) is ScamRisk.none

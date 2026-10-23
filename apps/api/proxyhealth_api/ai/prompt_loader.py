@@ -16,7 +16,8 @@ through ``untrusted()``, which wraps it in fixed marker strings the prompts desc
 Nothing here logs or stores prompt text.
 
 Two pieces of text are added only under a condition (§5.8): ``{sample_note}`` carries
-``user/sample_note.md`` for a known sample paper and is empty otherwise, and ``system()`` appends
+``user/sample_note.md`` for a known sample paper (``user/sample_screen_note.md`` for a sample
+screenshot) and is empty otherwise, and ``system()`` appends
 a provider addendum (``compat_analyze.md``) to the ``analyze_single`` and ``explain`` system
 prompts on ``openai_compat`` only, so the Gemini and mock prompts never change. Because that
 addendum shows a worked example, ``drop_example_echoes()`` removes any model block that repeats
@@ -49,6 +50,7 @@ USER_TEXT_END = "<<<USER_TEXT_END>>>"
 NONE_TEXT = "(none)"
 PREAMBLE = "preamble.md"
 SAMPLE_NOTE = "user/sample_note.md"
+SAMPLE_SCREEN_NOTE = "user/sample_screen_note.md"
 
 # AI_PROMPTS §3 "System prompt" column (the pipeline's ``TASK_PROMPT`` mirrors this map).
 SYSTEM_PROMPT: Mapping[Task, str] = {
@@ -183,12 +185,15 @@ def user(task: Task, **vars: str) -> str:
     return render(USER_PROMPT[task], **vars)
 
 
-def sample_note(sample: bool) -> str:
-    """AI_PROMPTS §2 ``{sample_note}``: the §5.8.1 note for a known sample paper, else ``""``.
+def sample_note(sample: bool, *, screen: bool = False) -> str:
+    """AI_PROMPTS §2 ``{sample_note}``: the §5.8.1 note for a known sample paper (``screen``: the
+    note for a sample screenshot, task ``troubleshoot``), else ``""``.
 
     The placeholder is the last line of its templates, so an empty note leaves a real upload's
     user prompt byte-identical to the template without it."""
-    return render(SAMPLE_NOTE) if sample else ""
+    if not sample:
+        return ""
+    return render(SAMPLE_SCREEN_NOTE if screen else SAMPLE_NOTE)
 
 
 def _echo_key(text: str) -> str:
@@ -276,7 +281,7 @@ def catalog_vars() -> dict[str, str]:
 
 @functools.cache
 def prompts_version() -> str:
-    """``2026-10-22.2`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
+    """``2026-10-22.3`` from ``ai/prompts/VERSION`` (``prompts_version = <v>``)."""
     raw = VERSION_FILE.read_text(encoding="utf-8").strip()
     m = re.fullmatch(r"prompts_version = (\d{4}-\d{2}-\d{2}\.\d+)", raw)
     if m is None:
@@ -303,6 +308,7 @@ __all__ = [
     "PROMPTS_DIR",
     "PROVIDER_ADDENDUM",
     "SAMPLE_NOTE",
+    "SAMPLE_SCREEN_NOTE",
     "SCAM_SIGNAL_KEYS",
     "SYSTEM_PROMPT",
     "USER_PROMPT",

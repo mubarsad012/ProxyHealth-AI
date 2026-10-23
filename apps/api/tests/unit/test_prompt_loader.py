@@ -14,7 +14,7 @@ from proxyhealth_api.analysis.scam import load_config
 from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import DocumentType, Provider, RedFlagKind, ResourceTag
 from proxyhealth_api.contracts.model_out import DemandOut
-from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER
+from proxyhealth_api.demo.fixtures import SAMPLE_FOOTER, SAMPLE_SCREEN_FOOTER
 
 API = Path(__file__).resolve().parents[2]
 
@@ -93,7 +93,7 @@ def test_scam_signal_keys_are_the_scam_yaml_reason_keys() -> None:
 
 
 def test_prompts_version_format() -> None:
-    assert pl.prompts_version() == "2026-10-22.2"
+    assert pl.prompts_version() == "2026-10-22.3"
 
 
 # ---------------------------------------------------------------- §5.8 conditional additions
@@ -116,10 +116,13 @@ def test_provider_addendum_only_on_openai_compat_analyze_and_explain(task: Task)
 
 
 def test_sample_note_is_empty_for_real_uploads() -> None:
-    assert pl.sample_note(False) == ""
+    assert pl.sample_note(False) == "" and pl.sample_note(False, screen=True) == ""
     note = pl.sample_note(True)
     assert note == pl.load(pl.SAMPLE_NOTE).rstrip("\n")
     assert note.startswith("This paper is a sample made for a demonstration.")
+    screen = pl.sample_note(True, screen=True)
+    assert screen == pl.load(pl.SAMPLE_SCREEN_NOTE).rstrip("\n")
+    assert screen.startswith("This screenshot is a sample made for a demonstration.")
 
 
 @pytest.mark.parametrize(
@@ -137,6 +140,15 @@ def test_empty_sample_note_leaves_the_user_prompt_unchanged(name: str, end: str)
     assert sample == f"{real}\n\n{pl.sample_note(True)}"
 
 
+def test_empty_screen_note_leaves_the_troubleshoot_prompt_unchanged() -> None:
+    name = "user/troubleshoot_user.md"
+    vars_ = _dummy(name)
+    real = pl.render(name, **{**vars_, "sample_note": pl.sample_note(False, screen=True)})
+    sample = pl.render(name, **{**vars_, "sample_note": pl.sample_note(True, screen=True)})
+    assert real.endswith("return the `TroubleshootModelOut` JSON.") and not real.endswith("\n")
+    assert sample == f"{real}\n\n{pl.sample_note(True, screen=True)}"
+
+
 def test_sample_note_quotes_the_footer_the_fixture_script_prints() -> None:
     # The note names the footer every sample page prints. Since package B the one definition is
     # ``demo.fixtures.SAMPLE_FOOTER`` (scripts/make_fixtures.py imports it), so a changed footer
@@ -146,9 +158,14 @@ def test_sample_note_quotes_the_footer_the_fixture_script_prints() -> None:
     assert m.group(1) == SAMPLE_FOOTER
     script = (API / "scripts" / "make_fixtures.py").read_text("utf-8")
     assert "FOOTER_TEXT = SAMPLE_FOOTER" in script
+    # The same for the screen note and the footer of every sample screenshot.
+    m = re.search(r'"(SAMPLE — [^"]+)"', pl.sample_note(True, screen=True))
+    assert m is not None
+    assert m.group(1) == SAMPLE_SCREEN_FOOTER
+    assert "SCREEN_FOOTER_TEXT = SAMPLE_SCREEN_FOOTER" in script
 
 
-@pytest.mark.parametrize("name", ["compat_analyze.md", pl.SAMPLE_NOTE])
+@pytest.mark.parametrize("name", ["compat_analyze.md", pl.SAMPLE_NOTE, pl.SAMPLE_SCREEN_NOTE])
 def test_conditional_text_brings_no_contact_and_no_reader_value(name: str) -> None:
     # Rule 3: no phone number, web or e-mail address. The worked example is printed on no paper;
     # in analyze_single an echo of it is stopped by the §5.8.2 echo guard (tests below), since
