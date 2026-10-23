@@ -15,7 +15,10 @@ copy never passes through here; quotes never do either. Plan steps also pass §8
 "Before that date,") and ``ensure_professional`` (a referral when the step names nobody, in
 English or the step's own language). On a paper scored ``possible`` or ``likely`` scam no
 referral or rewrite professional points back at the paper's own contact (TAXONOMY §6.4;
-``scam_refer_to_by_category``, ``scam_professional_by_category``).
+``scam_refer_to_by_category``, ``scam_professional_by_category``), "office" alone names no
+professional (``scam_sender_words``), and no plan step points at a contact the paper prints,
+written out or not ("Call the number on the letter"; ``scam_safe_step``,
+``scam_contact_pointers``).
 """
 
 from __future__ import annotations
@@ -30,12 +33,14 @@ from typing import Any
 
 import yaml
 
-from proxyhealth_api.analysis.contacts_filter import new_contacts
+from proxyhealth_api.analysis import scam
+from proxyhealth_api.analysis.contacts_filter import find_contacts, new_contacts
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.verify import normalize
 from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
+    PlanStepKind,
     ReferTo,
     RefusalKind,
     ScamRisk,
@@ -113,6 +118,19 @@ class PhrasingConfig:
     # ``professional_by_category`` where those point back at the paper's own contact.
     scam_refer_to_by_category: Mapping[str, str] = field(default_factory=dict)
     scam_professional_by_category: Mapping[str, str] = field(default_factory=dict)
+    # §6.4: ``professional_words`` that on such a paper name only its own sender ("office"),
+    # English (``scam_sender_words``) and per language (``languages.<tag>.scam_sender_words``).
+    scam_sender_words: tuple[str, ...] = ()
+    scam_sender_words_by_language: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    # §6.4: a step clause sending the reader to a contact the paper prints without writing it out
+    # ("the number on the letter"), unless the clause holds a ``scam_pointer_safe`` word.
+    scam_contact_pointers: tuple[re.Pattern[str], ...] = ()
+    scam_pointer_safe: re.Pattern[str] | None = None
+    scam_pointer_breaks: re.Pattern[str] | None = None
+
+
+def _optional_pattern(raw: Any) -> re.Pattern[str] | None:
+    return _compile(str(raw)) if raw else None
 
 
 def _compile(p: str) -> re.Pattern[str]:
@@ -140,6 +158,7 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
     reviewed: dict[str, str | None] = {}
     attribution: dict[str, re.Pattern[str]] = {}
     pro_words: dict[str, tuple[str, ...]] = {}
+    sender_words: dict[str, tuple[str, ...]] = {}
     rep_patterns: dict[str, tuple[re.Pattern[str], ...]] = {}
     connectors: dict[str, frozenset[str]] = {}
     for tag, raw in (data.get("languages") or {}).items():
@@ -147,6 +166,9 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
             attribution[str(tag)] = _compile(str(raw["attribution_regex"]))
         pro_words[str(tag)] = tuple(
             _fold(w) for w in _words(raw.get("professional_words"), f"{tag}.professional_words")
+        )
+        sender_words[str(tag)] = tuple(
+            _fold(w) for w in _words(raw.get("scam_sender_words"), f"{tag}.scam_sender_words")
         )
         rep_patterns[str(tag)] = tuple(
             _compile(str(p)) for p in raw.get("accredited_rep_patterns") or []
@@ -193,6 +215,15 @@ def parse_config(data: Mapping[str, Any]) -> PhrasingConfig:
         title_connectors_by_language=connectors,
         scam_refer_to_by_category=dict(data.get("scam_refer_to_by_category") or {}),
         scam_professional_by_category=dict(data.get("scam_professional_by_category") or {}),
+        scam_sender_words=tuple(
+            w.lower() for w in _words(data.get("scam_sender_words"), "scam_sender_words")
+        ),
+        scam_sender_words_by_language=sender_words,
+        scam_contact_pointers=tuple(
+            _compile(str(p)) for p in data.get("scam_contact_pointers") or []
+        ),
+        scam_pointer_safe=_optional_pattern(data.get("scam_pointer_safe")),
+        scam_pointer_breaks=_optional_pattern(data.get("scam_pointer_breaks")),
     )
 
 
@@ -494,22 +525,40 @@ def _is_latin(word: str) -> bool:
     return all(ord(ch) < 0x0250 for ch in word)
 
 
+def _names_word(low: str, w: str) -> bool:
+    return bool(re.search(rf"\b{re.escape(w)}", low)) if _is_latin(w) else w in low
+
+
 def names_professional(
-    step_text: str, cfg: PhrasingConfig | None = None, language: str | None = None
+    step_text: str,
+    cfg: PhrasingConfig | None = None,
+    language: str | None = None,
+    *,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> bool:
     """True when a ``professional`` plan step already names who can help (§8.4): an English
     ``professional_words`` entry, or one of the step language's own (``abogado``, ``محامٍ``,
     ``وکیل``). Latin-script words match at a word start; other scripts anywhere in the text,
-    because a preposition may be joined to the word ("لمحامٍ")."""
+    because a preposition may be joined to the word ("لمحامٍ"). On a possible or likely scam the
+    ``scam_sender_words`` ("office", "oficina") do not count: they name the paper's own sender."""
     c = cfg or load_config()
     low = _fold(step_text)
-    if any(re.search(rf"\b{re.escape(w)}", low) for w in c.professional_words):
-        return True
-    section = _section(language, c)
-    for w in c.professional_words_by_language.get(section or "", ()):
-        if (re.search(rf"\b{re.escape(w)}", low) if _is_latin(w) else w in low):
-            return True
-    return False
+    section = _section(language, c) or ""
+    words = [*c.professional_words, *c.professional_words_by_language.get(section, ())]
+    if _is_scam(scam_risk):
+        sender = {*c.scam_sender_words, *c.scam_sender_words_by_language.get(section, ())}
+        words = [w for w in words if w not in sender]
+    return any(_names_word(low, w) for w in words)
+
+
+def names_sender(step_text: str, cfg: PhrasingConfig | None = None, language: str | None = None
+                 ) -> bool:  # fmt: skip
+    """True when the text holds a ``scam_sender_words`` entry (English or the step language's)."""
+    c = cfg or load_config()
+    low = _fold(step_text)
+    section = _section(language, c) or ""
+    words = [*c.scam_sender_words, *c.scam_sender_words_by_language.get(section, ())]
+    return any(_names_word(low, w) for w in words)
 
 
 def ensure_professional(
@@ -525,16 +574,78 @@ def ensure_professional(
     nobody ("a tax professional", "a free tax-help site" count as naming one); leave steps that
     already name a professional — in English or in ``language``, the step's own — or already
     carry the referral unchanged. On a possible or likely scam the referral never points back at
-    the paper's own contact (``refer_to_for``)."""
-    if names_professional(step_text, cfg, language):
+    the paper's own contact (``refer_to_for``), and a step whose only "professional" is the
+    paper's own office ("The office that sent this paper can tell you more") becomes that
+    referral instead of keeping its pointer to the sender (TAXONOMY §6.4)."""
+    if names_professional(step_text, cfg, language, scam_risk=scam_risk):
         return step_text
     referral = t(f"chat.refer.{refer_to_for(category, cfg, scam_risk=scam_risk).value}")
     if normalize(referral) in normalize(step_text):
         return step_text
+    if _is_scam(scam_risk) and names_sender(step_text, cfg, language):
+        return referral
     base = step_text.rstrip()
     if base and not base.endswith((".", "!", "?", "。", "؟", "।")):
         base += "."
     return f"{base} {referral}".strip()
+
+
+# Contacts a plan step may point the reader at (after the contact scrubber only the paper's own
+# are left): a phone number, a web or e-mail address, a street address.
+_PAPER_CONTACT_KINDS = frozenset({"phone", "url", "email", "address"})
+
+
+def points_at_paper_contact(text: str, cfg: PhrasingConfig | None = None) -> bool:
+    """``text`` holds a phone number, web or e-mail address or street address — a ``.gov``/``.mil``
+    web or e-mail address excepted (the real agency's own, whoever printed it) — or a clause that
+    sends the reader to one without writing it out (``refers_to_paper_contact``)."""
+    gov = scam.load_config().gov_tlds
+    for c in find_contacts(text, include_orgs=False):
+        if c.kind not in _PAPER_CONTACT_KINDS:
+            continue
+        if c.kind in ("url", "email") and scam.is_gov_host(scam.host_of(c.text), gov):
+            continue
+        return True
+    return refers_to_paper_contact(text, cfg)
+
+
+def refers_to_paper_contact(text: str, cfg: PhrasingConfig | None = None) -> bool:
+    """A clause of ``text`` matches a ``scam_contact_pointers`` pattern ("Call the number on the
+    letter", "Ask the office that sent this paper") and holds no ``scam_pointer_safe`` word ("Do
+    not call the number on this letter", "Report the website on the letter")."""
+    c = cfg or load_config()
+    if not c.scam_contact_pointers:
+        return False
+    for sentence in split_sentences(normalize(text)):
+        clauses = c.scam_pointer_breaks.split(sentence) if c.scam_pointer_breaks else [sentence]
+        for clause in (x for x in clauses if x and x.strip()):
+            if c.scam_pointer_safe is not None and c.scam_pointer_safe.search(clause):
+                continue
+            if any(p.search(clause) for p in c.scam_contact_pointers):
+                return True
+    return False
+
+
+def scam_safe_step(
+    text: str,
+    kind: PlanStepKind,
+    *,
+    category: DocumentCategory | None,
+    t: Translator,
+    scam_risk: ScamRisk,
+    cfg: PhrasingConfig | None = None,
+) -> str | None:
+    """TAXONOMY §6.4 on a possible or likely scam: a plan step of any kind whose (scrubbed) text
+    points the reader at a contact the paper prints ("Check whether the letter is real by calling
+    (202) 555-0147", "Call the number on the letter") is dropped (``None``); a ``professional``
+    step becomes the scam referral
+    (``chat.refer.<ReferTo>``, ``refer_to_for``: Get help, never the sender). Any other step, and
+    every step of a paper scored ``none``, is returned unchanged."""
+    if not _is_scam(scam_risk) or not points_at_paper_contact(text, cfg):
+        return text
+    if kind is PlanStepKind.professional:
+        return t(f"chat.refer.{refer_to_for(category, cfg, scam_risk=scam_risk).value}")
+    return None
 
 
 def names_accredited_rep(
@@ -629,12 +740,16 @@ __all__ = [
     "load_config",
     "names_accredited_rep",
     "names_professional",
+    "names_sender",
     "optional_prose",
     "parse_config",
+    "points_at_paper_contact",
+    "refers_to_paper_contact",
     "professional_for",
     "refer_to_for",
     "refusal_kind_for",
     "remove_dramatize",
+    "scam_safe_step",
     "split_sentences",
     "title_connectors",
 ]

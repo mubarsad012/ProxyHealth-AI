@@ -30,9 +30,15 @@ rejected exactly as before.
   unless that line holds form blanks (``___``: signature lines, not a sentence).
 
 A repaired demand has ``confidence`` capped at ``medium`` and its ``verification_note`` ends in
-``" (repaired: R1, R2)"`` (fixed codes, no content). Demands only: red flags are never repaired —
-the dropped model flags of the sweep all quote the SAMPLE footer (§11.2). Pure functions; the SSN
-and ID masks (§11.1) apply before any comparison; nothing is logged.
+``" (repaired: R1, R2)"`` (fixed codes, no content).
+
+Red flags get **R1 only**, and only the scam kinds (``scam.MODEL_SCAM_KINDS``): a flag has no
+value to quote, so a ``source_quote`` holding exactly one block id becomes that block's whole
+printed text (``repair_red_flag``). Never when the flag's ``span_ids`` cite another block, the id
+names no block, the block is unclear or empty, or it holds any of the SAMPLE footer's words (the
+dropped model flags of the sweep all cited the footer: those stay rejected). The flag then goes
+through ``verify_red_flags`` and the scam screens exactly like one that quoted the block itself.
+Pure functions; the SSN and ID masks (§11.1) apply before any comparison; nothing is logged.
 
 Cost: the R0 check is the very ``verify_span`` call ``verify.demand_from_out`` makes (same masked
 fields, same confidence), so a demand the repair leaves alone is searched once —
@@ -46,13 +52,14 @@ import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 
-from proxyhealth_api.analysis import contacts_filter, phrasing, prose_dates, verify
+from proxyhealth_api.analysis import contacts_filter, phrasing, prose_dates, scam, verify
 from proxyhealth_api.analysis.transcript import Transcript
 from proxyhealth_api.analysis.verify import VerifiedDemands
 from proxyhealth_api.contracts.analysis import Demand
 from proxyhealth_api.contracts.common import TextBlock
 from proxyhealth_api.contracts.enums import Confidence, DemandKind
-from proxyhealth_api.contracts.model_out import DemandOut
+from proxyhealth_api.contracts.model_out import DemandOut, RedFlagOut
+from proxyhealth_api.demo.fixtures import banner_words, is_sample_banner
 
 R1_ID_QUOTE = "R1"
 R2_NARROWED = "R2"
@@ -312,8 +319,44 @@ def annotate(demand: Demand, codes: Sequence[str]) -> Demand:
 
 
 def repair_demands(demands: Iterable[DemandOut], transcript: Transcript) -> RepairedDemands:
-    """R0–R5 over every model demand (never red flags); see the module docstring."""
+    """R0–R5 over every model demand (red flags: ``repair_red_flags``); see the module docstring."""
     return RepairedDemands([repair_demand(d, transcript) for d in demands])
+
+
+# Words of the SAMPLE footer (``demo.fixtures.SAMPLE_FOOTER``): a block holding any of them is never
+# the quote of a repaired red flag.
+_FOOTER_PIECES = ("synthetic document", "made for demonstration", "not a real letter")
+
+
+def _holds_sample_footer(text: str) -> bool:
+    words = f" {banner_words(text)} "
+    return (
+        is_sample_banner(text) or any(is_sample_banner(line) for line in text.splitlines())
+        or any(f" {piece} " in words for piece in _FOOTER_PIECES)
+    )  # fmt: skip
+
+
+def repair_red_flag(f: RedFlagOut, t: Transcript) -> RedFlagOut:
+    """Red-flag R1 (module docstring): a scam-kind flag whose ``source_quote`` is exactly one
+    block id ("p1b2", "[p1b2]") quotes that block's whole printed text instead; anything else is
+    returned as the input object."""
+    if f.kind not in scam.MODEL_SCAM_KINDS or f.text.strip() == verify.MULTIPLE_DOCUMENTS_SENTINEL:
+        return f
+    cited = quote_ids(f.source_quote or "")
+    if not cited or len({t.resolve(i) for i in cited}) != 1:
+        return f
+    block = t.block(cited[0])
+    if block is None or any(t.resolve(s) != block.id for s in f.span_ids):
+        return f
+    if block.is_unclear or not block.text.strip() or _holds_sample_footer(block.text):
+        return f
+    return f.model_copy(update={"source_quote": block.text, "span_ids": [block.id],
+                                "page": block.page})  # fmt: skip
+
+
+def repair_red_flags(flags: Iterable[RedFlagOut], transcript: Transcript) -> list[RedFlagOut]:
+    """``repair_red_flag`` over the model's red flags, in order."""
+    return [repair_red_flag(f, transcript) for f in flags]
 
 
 __all__ = [
@@ -331,5 +374,7 @@ __all__ = [
     "quote_ids",
     "repair_demand",
     "repair_demands",
+    "repair_red_flag",
+    "repair_red_flags",
     "whole_word_prefix",
 ]

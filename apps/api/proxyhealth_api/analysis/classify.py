@@ -26,9 +26,12 @@ with ``document_type_confidence=high`` (§4.10: the model must not be pushed to 
 ruled out) or flagged ``[multiple_documents]``, and sets the confidence to ``medium``. The
 phrases are English (a no-op on other papers); form numbers work in any language. A corrected
 type is a label only: the scam scorer still reads the model's own type, so a correction never
-lowers ``scam_risk`` (pipeline). A type the code chose never survives a likely scam:
-``after_scam`` puts the model's type back before the §6.5 re-type, and any re-type leaves
-``document_type_confidence=low``.
+lowers ``scam_risk`` (pipeline). A type the code chose never survives a likely scam, nor an
+agency type (§6.5 ``agency_document_types``) a possible one: ``after_scam`` puts the model's type
+back before the §6.5 re-type, and any re-type leaves ``document_type_confidence=low``. The
+model's own scam hints (``is_likely_scam``, ``scam_signals``) never decide a type (D-13): a small
+model calls genuine papers fake, and an agency type carries the floors and verify line of a real
+one.
 
 Also here: ``category_for`` (the §2 master table gives every specific type one category; only
 ``other_notice`` keeps the model's best fit), ``unreadable_reading`` (§3.11: an unreadable paper
@@ -372,6 +375,11 @@ def _multiple_documents(out: AnalysisModelOut) -> bool:
     return any(f.text.strip() == MULTIPLE_DOCUMENTS_SENTINEL for f in out.red_flags)
 
 
+def _is_agency_type(document_type: DocumentType) -> bool:
+    """A §6.5 agency paper type (``scam.yaml`` ``agency_document_types``: USCIS, ICE, IRS, SSA)."""
+    return document_type in scam.load_config().agency_document_types
+
+
 def check_document_type(out: AnalysisModelOut, paper: Transcript) -> TypeCheck:
     """§3 rule 16: the model's type, or the one a printed header form label or a page-1 heading
     (``other_notice``/``unknown`` only) decides — see the module docstring. Readable papers
@@ -416,9 +424,14 @@ def after_scam(
     out: AnalysisModelOut, check: TypeCheck, retyped: DocumentType, scam_risk: ScamRisk
 ) -> tuple[AnalysisModelOut, DocumentType]:
     """After the scorer (``retyped`` = ``scam.retype_for_scam(out.document_type, …)``): a type
-    the code chose never survives a likely scam — the model's own type and category come back,
-    then the §6.5 re-type applies to them — and a re-typed paper is low confidence (§6.5)."""
-    if check.rule is not None and scam_risk is ScamRisk.likely:
+    the code chose never survives a likely scam, nor an agency type (§6.5) a possible one — the
+    model's own type and category come back (no agency card, pins or type tags crowd the
+    scam-report help out), then the §6.5 re-type applies to them — and a re-typed paper is low
+    confidence (§6.5)."""
+    if check.rule is not None and (
+        scam_risk is ScamRisk.likely
+        or (scam_risk is ScamRisk.possible and _is_agency_type(check.document_type))
+    ):
         retyped = scam.retype_for_scam(check.model_type, scam_risk)
         confidence = Confidence.low if retyped is not check.model_type else check.model_confidence
         category = category_for(check.model_type, check.model_category)
@@ -467,9 +480,12 @@ def printed_form_numbers(form_numbers: Sequence[str], full_text: str) -> list[st
 # A sample paper's plan step that turns the footer's claim into a condition ("Ask the office that
 # sent this if it is a real letter", "If the paper says it is a sample, …") is about the footer,
 # not the paper — unless it also warns about a scam ("A real letter from USCIS never asks for
-# gift cards" carries no condition and stays anyway).
+# gift cards" carries no condition and stays anyway). On a paper the scorer calls a possible or
+# likely scam (the footer itself is never scored), "Ask USCIS whether this is a real letter before
+# you pay" is the right advice: there only a step quoting the footer's own words goes.
 _FOOTER_CLAIM_RE = re.compile(r"\b(if|whether)\b.*\b(real letter|a sample|synthetic)\b")
 _SCAM_WARNING_RE = re.compile(r"\b(scams?|scammers?|fraud\w*|gift cards?|never)\b")
+_FOOTER_WORDS_RE = re.compile(r"\b(samples?|synthetic|demonstration|demo)\b")
 
 
 def _words(text: str) -> str:
@@ -492,19 +508,27 @@ def drop_banner_flags(flags: Sequence[RedFlag], banner_ids: Collection[str]) -> 
 
 
 def drop_banner_steps(
-    steps: Sequence[PlanStepOut], paper: Transcript, banner_ids: Collection[str]
+    steps: Sequence[PlanStepOut],
+    paper: Transcript,
+    banner_ids: Collection[str],
+    *,
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> list[PlanStepOut]:
     """Model plan steps of a sample paper minus those about the SAMPLE footer: the step cites only
     the footer's block ("If the paper says it is a sample, do not pay or go to court"), or makes
     the footer's claim its condition ("Ask the office … if it is a real letter") without warning
-    about a scam."""
+    about a scam — on a possible/likely scam (``scam_risk``, scored without the footer) only when
+    it also names the footer's own words ("sample", "synthetic", "demonstration")."""
     kept: list[PlanStepOut] = []
     for step in steps:
         cited = paper.existing(step.span_ids)
         if cited and set(cited) <= set(banner_ids):
             continue
         words = _words(step.text)
-        if _FOOTER_CLAIM_RE.search(words) and not _SCAM_WARNING_RE.search(words):
+        if (
+            _FOOTER_CLAIM_RE.search(words) and not _SCAM_WARNING_RE.search(words)
+            and (scam_risk is ScamRisk.none or _FOOTER_WORDS_RE.search(words))
+        ):  # fmt: skip
             continue
         kept.append(step)
     return kept

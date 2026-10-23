@@ -12,7 +12,7 @@ import { interpolate } from '@/i18n/store';
 import type { TFunction } from '@/i18n/useT';
 import { daysUntil } from '@/lib/dates';
 
-import { isSampleResult } from './disclaimers';
+import { isSampleResult, isScamPaper } from './disclaimers';
 
 /** Plain sentence for read-aloud / quick copies: word + headline + days line. */
 export function urgencySpeech(u: Urgency, t: TFunction): string {
@@ -40,7 +40,17 @@ export function printedPhoneHref(d: Demand): string | null {
   return `tel:${digits}`;
 }
 
+/** `printedPhoneHref` on `a`'s paper — never on a possible/likely scam, whose printed number is
+ *  the scammer's (DOCUMENT_TAXONOMY §6.4): no "Call (number from your paper)" there. */
+export function paperPhoneHref(a: Pick<AnalysisResult, 'scam_risk'>, d: Demand): string | null {
+  return isScamPaper(a) ? null : printedPhoneHref(d);
+}
+
+/** The urgency banner's "Verify this date" fallback when the server set no `verify_resource_id`:
+ *  the paper's first printed phone — never on a possible/likely scam (§6.4; the server then sets
+ *  the scam card's reporting line, `urgency.py` step 9). */
 export function firstPrintedPhone(a: AnalysisResult): string | null {
+  if (isScamPaper(a)) return null;
   for (const d of a.demands) {
     const href = printedPhoneHref(d);
     if (href) return href;

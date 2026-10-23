@@ -4,8 +4,9 @@ Order (AI_PROMPTS §11 as built — §14 item 15 there): upload validation → r
 rotation, masks) → model reading (``single``, or ``two_call`` on ``SchemaFallbackNeeded`` /
 ``ANALYSIS_MODE``) → transcript assembly + quality (unreadable → stop, one call only) → injection
 detection and one masked re-run → span verification → contact scrubber → scam scorer (a likely
-scam is re-typed before any date or floor is applied) → deadline rules → the one ``tag`` call
-when tagging needs it → emergency lexicon → urgency → phrasing lint/rewrite → dates in prose
+scam is re-typed before any date or floor is applied) → deadline rules → emergency lexicon → the
+one ``tag`` call when the gated tags need it (its emergency hint folded in) → urgency → phrasing
+lint/rewrite → dates in prose
 checked against the paper (``prose_dates``) → tags, resources, clerk card, fixed notices →
 disclaimers and warnings → ``AnalysisResult``. Decoding, redaction and PDF rasterization run in
 the thread pool (``offload``).
@@ -61,7 +62,7 @@ from proxyhealth_api.analysis import (
     urgency,
     verify,
 )
-from proxyhealth_api.analysis.demand_repair import repair_demands
+from proxyhealth_api.analysis.demand_repair import repair_demands, repair_red_flags
 from proxyhealth_api.analysis.i18n import Translator, translator_from
 from proxyhealth_api.contracts.analysis import (
     AnalysisResult,
@@ -832,6 +833,25 @@ def printed_institutions(
     return out
 
 
+PAPER_CONTACT_STEPS = frozenset({PlanStepKind.call, PlanStepKind.submit_online, PlanStepKind.mail})
+
+
+def paper_emergency(
+    paper: transcript.Transcript,
+    out: AnalysisModelOut,
+    *,
+    detected: str,
+    target: str,
+    model_flag: bool,
+) -> emergency.EmergencyOutcome:
+    """§11.7 over the transcript, the model's ``emergency_terms_found`` and ``model_flag`` (the
+    ``tag`` call's emergency hint, or a real upload's model ``crisis`` tag — D-14)."""
+    return emergency.detect_emergency(
+        [b.text for b in paper.blocks], detected_language=detected, target_language=target,
+        model_terms=out.emergency_terms_found, model_flag=model_flag,
+    )  # fmt: skip
+
+
 def plan_steps_from(
     steps: Sequence[PlanStepOut],
     paper: transcript.Transcript,
@@ -841,17 +861,14 @@ def plan_steps_from(
 ) -> list[PlanStep]:
     """Model plan steps → contract steps (tags validated, span/demand ids checked, ids unique).
 
-    With a likely scam, ``call``/``submit_online`` steps aimed at the paper's own contact (no
-    DB tag to route them to a checked resource) are dropped (DOCUMENT_TAXONOMY §6.4)."""
+    With a possible or likely scam, ``call``/``submit_online``/``mail`` steps aimed at the paper's
+    own contact (no DB tag to route them to a checked resource) are dropped (DOCUMENT_TAXONOMY
+    §6.4); ``phrasing.scam_safe_step`` then checks every step's text for a printed contact."""
     out: list[PlanStep] = []
     seen: set[str] = set()
     for step in steps:
         tags = resource_tags(step.resource_tags)
-        if (
-            drop_paper_contact_steps
-            and step.kind in (PlanStepKind.call, PlanStepKind.submit_online)
-            and not tags
-        ):
+        if drop_paper_contact_steps and step.kind in PAPER_CONTACT_STEPS and not tags:
             continue
         sid = step.id if step.id and step.id not in seen else f"s{len(out) + 1}"
         while sid in seen:
@@ -1100,9 +1117,9 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
                   document_type=type_check.document_type.value)  # fmt: skip
 
     # §11.2 span verification.
-    repaired = repair_demands(out.demands, paper)  # demands only: red flags are never repaired
+    repaired = repair_demands(out.demands, paper)  # red flags: R1 only (repair_red_flags)
     checked = repaired.verify(paper)
-    flags_checked = verify.verify_red_flags(out.red_flags, paper)
+    flags_checked = verify.verify_red_flags(repair_red_flags(out.red_flags, paper), paper)
     # An agency's anti-fraud line ("USCIS will never ask you to pay with gift cards") quoted as a
     # payment red flag is boilerplate, not a demand: it neither scores nor shows.
     flags_checked.flags = [
@@ -1117,9 +1134,6 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     banner = classify.sample_banner_ids(paper) if sample else frozenset[str]()
     if sample:
         flags_checked.flags = classify.drop_banner_flags(flags_checked.flags, banner)
-        out = out.model_copy(
-            update={"plan_steps": classify.drop_banner_steps(out.plan_steps, paper, banner)}
-        )
     if checked.page_edge_crop:
         warnings.append(WarningCode.page_edge_crop)
     summary_ids = verify.verify_summary_span_ids(out.summary_span_ids, paper)
@@ -1143,9 +1157,14 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         resource_hosts=resource_hosts(deps), t=t, skip_ids=banner,
     )  # fmt: skip
     document_type = scam.retype_for_scam(out.document_type, scam_out.scam_risk)
-    # A code-corrected type never survives a likely scam; a re-typed paper is low confidence.
+    # A code-corrected type never survives a possible/likely scam; a re-type is low confidence.
     out, document_type = classify.after_scam(out, type_check, document_type, scam_out.scam_risk)
     code_flags.extend(scam_out.red_flags)
+    # A payment flag naming no method on a paper scored none neither shows nor counts (§6.1).
+    flags_checked = scam.settle_payment_flags(flags_checked, scam_out)
+    if sample:  # steps about the SAMPLE footer go ("is this a real letter?" stays on a scam)
+        out = out.model_copy(update={"plan_steps": classify.drop_banner_steps(
+            out.plan_steps, paper, banner, scam_risk=scam_out.scam_risk)})  # fmt: skip
 
     # §11.4 deadline rules.
     # ``Preferences.date_format`` is a display preference only: printed dates are read in the
@@ -1161,33 +1180,36 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         checked.verified, checked.sources, ctx, paper, span_aliases=repaired.span_aliases(checked)
     )
 
-    # §11.10 (part) tags; the one ``tag`` call runs now so its emergency hint reaches §11.7.
+    # Emergency lexicon (§11.7; a real upload's model ``crisis`` tag is a backstop, D-14), then
+    # §11.10 (part) tags with the final gates (D-13/D-14), so a model list the gates empty still
+    # gets the one ``tag`` call; its emergency hint reaches §11.7, then urgency reads the flag.
     geo = geo_hints(out)
     forms = printed_forms(out.form_numbers, paper.full_text)
+    emerg = paper_emergency(paper, out, detected=detected, target=req.target_language,
+                            model_flag=tagging.model_crisis(out.resource_tags, sample=sample))
     tag_call_tags: list[str] | None = None
-    first_tags = tagging.finalize_tags(
-        out.resource_tags, document_type=document_type, category=out.category,
-        form_numbers=forms, readable=True,
+    tags_now = functools.partial(
+        tagging.finalize_tags, out.resource_tags, document_type=document_type,
+        category=out.category, form_numbers=forms, readable=True, scam_risk=scam_out.scam_risk,
+        red_flags=flags_checked.flags, gate_sensitive=True, printed_text=paper.full_text,
+        language=detected, sample=sample,
+        model_scam=out.is_likely_scam or bool(out.scam_signals),  # its own verdict (real uploads)
     )  # fmt: skip
-    tag_out: TaggingModelOut | None = None
-    if first_tags.needs_tag_call:
+    if tags_now(emergency=emerg.safety.emergency).needs_tag_call:
         tag_out = await run_tag_call(
             deps, tag_summary_text(out, document_type, demands, flags_checked.flags, geo),
             document_type=document_type, demo_sample_id=req.demo_sample_id,
             deadline_at=deadline_at,
         )  # fmt: skip
         tag_call_tags = list(tag_out.tags) if tag_out is not None else []
-
-    # Emergency lexicon (§11.7), then urgency (it reads the emergency flag).
-    emerg = emergency.detect_emergency(
-        [b.text for b in paper.blocks], detected_language=detected,
-        target_language=req.target_language, model_terms=out.emergency_terms_found,
-        model_flag=bool(tag_out and tag_out.emergency),
-    )  # fmt: skip
+        if tag_out is not None and tag_out.emergency and not emerg.safety.emergency:
+            emerg = paper_emergency(paper, out, detected=detected, target=req.target_language,
+                                    model_flag=True)  # fmt: skip
+    tags = tags_now(emergency=emerg.safety.emergency, tag_call_tags=tag_call_tags).tags
     warnings.extend(emerg.warnings)
     urg = urgency.compute_urgency(
         document_type, out.category, demands, emergency=emerg.safety.emergency,
-        today=ctx.today, t=t, unverified=checked.unverified,
+        today=ctx.today, t=t, unverified=checked.unverified, scam_risk=scam_out.scam_risk,
     )  # fmt: skip
     code_flags.extend(urg.red_flags)
     # openai_compat: a paper already in the reader's language is its own translation.
@@ -1199,7 +1221,7 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         rc, out, outcome, reading.mode, paper=paper, quality=quality, warnings=warnings,
         detected=detected, checked=checked, model_flags=flags_checked, summary_ids=summary_ids,
         scrubber=scrubber, scrub_en=scrub_en, scam_out=scam_out, document_type=document_type,
-        demands=demands, geo=geo, forms=forms, tag_call_tags=tag_call_tags, safety=emerg.safety,
+        demands=demands, geo=geo, forms=forms, tags=tags, safety=emerg.safety,
         urgency_value=urg.urgency, code_flags=code_flags, injection_masked=scan.found,
         today=ctx.today, resources_today=deadline_rules.local_today(now, req.state),
         deadline_at=deadline_at,
@@ -1226,7 +1248,7 @@ async def finish_analysis(
     demands: list[Demand],
     geo: GeoHints,
     forms: list[str],
-    tag_call_tags: list[str] | None,
+    tags: list[ResourceTag],
     safety: Safety,
     urgency_value: Urgency,
     code_flags: list[RedFlag],
@@ -1319,13 +1341,20 @@ async def finish_analysis(
             flags.append(f.model_copy(update={"text": await clean(f.text)}))
     demand_ids = {d.id for d in final_demands} | {d.id for d in unverified}
     steps: list[PlanStep] = []
+    scam_paper = scam_out.scam_risk is not ScamRisk.none
     for step in plan_steps_from(out.plan_steps, paper, demand_ids,
-                                drop_paper_contact_steps=scam_out.is_likely_scam):  # fmt: skip
+                                drop_paper_contact_steps=scam_paper):  # fmt: skip
         if step.kind is not PlanStepKind.professional and step.demand_id is None:
             if (kept := optional(step.text)) is None:
                 continue
             step = step.model_copy(update={"text": kept})
-        text = await clean(step.text)
+        # §6.4: on a possible/likely scam no step points at a contact the paper prints.
+        cleaned = await clean(step.text)
+        text = phrasing.scam_safe_step(cleaned, step.kind, category=category, t=t,
+                                       scam_risk=scam_out.scam_risk)  # fmt: skip
+        if text is None:
+            continue
+        stats.rewrites += int(text != cleaned)
         # §8.4: a DOJ-accredited representative only where one fits; no copied "Before that date,"
         # §6.4: on a possible/likely scam no referral sends the reader back to the paper's contact
         text, replaced = phrasing.fit_professional_step(
@@ -1345,7 +1374,10 @@ async def finish_analysis(
         if scrubber.scrub(g.term_as_written) == g.term_as_written
         and (kept := optional(g.explanation)) is not None
     ]  # fmt: skip
-    questions = [q for q in [await clean(q) for q in out.questions_to_ask] if q.strip()]
+    # Questions "to ask the office that sent this paper": none on a possible/likely scam (§6.4).
+    questions = [] if scam_paper else [
+        q for q in [await clean(q) for q in out.questions_to_ask] if q.strip()
+    ]  # fmt: skip
     # The sender line and the translation are model output too (D-10): an invented name or
     # contact in the sender drops the line (as the clerk card does); the translation keeps
     # translated organisation names but loses any phone, web or e-mail address the paper does not
@@ -1360,13 +1392,7 @@ async def finish_analysis(
         for p in (q.model_copy(update={"text": paper.mask(q.text)}) for q in out.translated_pages)
     ]  # fmt: skip
 
-    # §11.10 tags, resources, clerk card, fixed notices.
-    tags = tagging.finalize_tags(
-        out.resource_tags, document_type=document_type, category=category, form_numbers=forms,
-        readable=True, scam_risk=scam_out.scam_risk, emergency=safety.emergency,
-        red_flags=flags, tag_call_tags=tag_call_tags, gate_sensitive=True,
-        printed_text=paper.full_text, language=detected,
-    ).tags  # fmt: skip
+    # §11.10 resources (tags: ``run_analysis``), clerk card, fixed notices.
     institutions = printed_institutions(out.institutions_as_written, scrubber)
     preview: list[ResourceMatch] = []
     if req.state and tags:

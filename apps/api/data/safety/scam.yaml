@@ -11,7 +11,9 @@
 # and no other contact (an agency's own payment portal).
 # `negation: true` signals skip a match inside a negated or anti-fraud sentence (`negation_cues`):
 # agency boilerplate such as "USCIS will never ask you to pay with gift cards" is not a demand. A
-# `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match.
+# `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match;
+# a `framed` pair (Dari, Pashto: verb last) needs its "never" word before the match and its negated
+# ask/accept verb after it, with no `breaks` word on either side.
 # `model_payment`: a verified model `scam_payment_method` flag whose quote names none of the four
 # methods counts as signal `model_payment_method` (weight 2) unless the quote asks for no payment:
 # anti-fraud boilerplate, the SAMPLE footer of a demo paper, or an agency's own .gov payment portal
@@ -79,16 +81,30 @@ negation_cues:
       - "\\b(evite|cuidado con|prot[eé]jase de|denuncie) (las |los )?(estafas?|fraudes?)\\b"
     ar:
       - "(لن|لا|أبدا|ابدا|أبداً|ابداً)(?:\\s+\\S+){0,4}?\\s+(نطلب|يطلب|تطلب|نقبل|يقبل|تقبل)"
+    # Dari / Pashto, like en/es/ar: "never" counts only with a negated ask/request/accept verb a
+    # few words after it ("هرگز از شما نمی‌خواهد که با کارت تحفه …"). A bare "never" is no cue:
+    # "هرگز این نامه را به کسی نشان ندهید و … با کارت گوگل پلی پرداخت کنید" is a demand.
     prs:
-      - "(هرگز|هیچ ?وقت|هیچ‌وقت)"
+      - "(هرگز|هیچ ?وقت|هیچ‌وقت)(?:\\s+\\S+){0,5}?\\s+(نمی[\\s\\u200c]*(خواه|پذیر)|نخواه|(درخواست|طلب|مطالبه|قبول)[\\s\\u200c]*(نمی|نخواه))"
     ps:
-      - "(هېڅکله|هیڅکله|هېڅ وخت)"
+      - "(هېڅکله|هیڅکله|هېڅ وخت)(?:\\s+\\S+){0,5}?\\s+(نه[\\s\\u200c]*(غواړ|غوښتل|من(ي|و|ئ)|اخل)|غوښتنه[\\s\\u200c]*نه)"
   after:
     en:
       - "\\b(is|are|it's|that's|this is) (always |a sign of )?(an? )?(scam|scammer|fraud|fraudster|impostor|imposter)s?\\b"
     es:
       - "\\b(es|son) (siempre )?(una? )?(estafa|estafador|fraude|impostor)(es|a|as)?\\b"
-  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b"
+  # Dari and Pashto put the verb last: "ICE، USCIS، SSA و IRS هرگز پول را از راه تیلفون، کارت تحفه،
+  # حواله یا برنامه نمی‌خواهند". `before` = the "never" word within 10 words before the match,
+  # `after` = the negated ask/request/accept verb within 8 words after it (anchored at the match);
+  # both in the same sentence and no `breaks` word on either side.
+  framed:
+    prs:
+      - before: "(هرگز|هیچ ?وقت|هیچ‌وقت)(?=(?:\\s+\\S+){0,10}\\s*$)"
+        after: "^\\s*(?:\\S+\\s+){0,8}?(نمی[\\s\\u200c]*(خواه|پذیر)|نخواه|(درخواست|طلب|مطالبه|قبول)[\\s\\u200c]*(نمی|نخواه))"
+    ps:
+      - before: "(هېڅکله|هیڅکله|هېڅ وخت)(?=(?:\\s+\\S+){0,10}\\s*$)"
+        after: "^\\s*(?:\\S+\\s+){0,8}?(نه[\\s\\u200c]*(غواړ|غوښتل|من(ي|و|ئ)|اخل)|غوښتنه[\\s\\u200c]*نه)"
+  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto|فقط|تنها|بلکه|ولی|یوازې|بلکې)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b|\\b((پرداخت|ارسال|خریداری|واریز)[\\s\\u200c]*(کنید|نمایید)|بپردازید|بفرستید|بخرید|ورکړئ|ولېږئ|ولیږئ|واخلئ|تادیه[\\s\\u200c]*کړئ)\\b"
 model_payment:
   portal:
     en:

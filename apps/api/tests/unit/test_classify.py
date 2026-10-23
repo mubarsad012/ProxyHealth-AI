@@ -377,6 +377,48 @@ def test_a_scam_retype_is_low_confidence_and_a_reverted_agency_type_is_retyped()
     assert doc_type is DT.other_notice and final.document_type_confidence is Confidence.low
 
 
+I797C_FAKE = lines(
+    "Form I-797C, Notice of Action", "Receipt Notice", "U.S. Citizenship and Immigration Services",
+    "Your I-765 case is on hold. Check status at www.uscis-case-help.example.com",
+)
+NTA = lines("Form I-862", "Notice to Appear", "Executive Office for Immigration Review",
+            "You are ordered to appear before an immigration judge.")  # fmt: skip
+
+
+def test_a_code_upgraded_agency_type_never_survives_a_possible_scam() -> None:
+    """Integration review, issue 17: a printed fake I-797C label upgraded a model-suspected scam
+    (scored possible) to uscis_receipt, adding the agency's fixed card and pins and pushing the
+    scam-report help out of the preview. A court type keeps its label (§6.5)."""
+    out, paper = reading(I797C_FAKE, DT.other_notice, Confidence.medium, DC.immigration)
+    type_check = cl.check_document_type(out, paper)
+    upgraded = cl.apply_type_check(out, type_check)
+    assert upgraded.document_type is DT.uscis_receipt
+    final, doc_type = cl.after_scam(upgraded, type_check, upgraded.document_type, ScamRisk.possible)
+    assert doc_type is DT.other_notice and final.document_type is DT.other_notice
+    assert final.document_type_confidence is Confidence.medium and final.category is DC.immigration
+    kept, doc_type = cl.after_scam(upgraded, type_check, upgraded.document_type, ScamRisk.none)
+    assert doc_type is DT.uscis_receipt and kept == upgraded
+    nta, paper = reading(NTA, DT.other_notice, Confidence.medium, DC.immigration)
+    nta_check = cl.check_document_type(nta, paper)
+    court = cl.apply_type_check(nta, nta_check)
+    assert court.document_type is DT.nta
+    assert cl.after_scam(court, nta_check, court.document_type, ScamRisk.possible)[1] is DT.nta
+
+
+def test_the_models_scam_hints_never_decide_a_type() -> None:
+    """D-13: ``is_likely_scam`` / ``scam_signals`` are hints. A small model called genuine papers
+    fake in the sweep; on a real USCIS paper the label's type (its floors and verify line) stays
+    unless the code scorer finds a possible or likely scam (``after_scam``)."""
+    out, paper = reading(I797C_FAKE, DT.other_notice, Confidence.medium, DC.immigration)
+    suspect = out.model_copy(update={"is_likely_scam": True, "scam_signals": ["impersonation"]})
+    type_check = cl.check_document_type(suspect, paper)
+    assert (type_check.document_type, type_check.rule) == (DT.uscis_receipt, "form")
+    upgraded = cl.apply_type_check(suspect, type_check)
+    assert cl.after_scam(upgraded, type_check, upgraded.document_type, ScamRisk.none)[1] is (
+        DT.uscis_receipt
+    )
+
+
 def test_unreadable_reading_is_unknown_other() -> None:
     out, _ = reading(lines("blur"), DT.other_notice, Confidence.medium, DC.tax)
     got = cl.unreadable_reading(out)
@@ -484,3 +526,18 @@ def test_scam_advice_that_mentions_a_real_letter_stays() -> None:
              step("If this is a real letter, report the gift card request as a scam.", []),
              step("If the paper is real, talk to a licensed lawyer about your ticket.", [])]
     assert cl.drop_banner_steps(steps, paper, banner) == steps
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+def test_on_a_scam_sample_asking_whether_the_letter_is_real_stays(risk: ScamRisk) -> None:
+    """Integration review, issue 18: on the in-app scam demo, "Ask USCIS whether this is a real
+    letter before you pay" was dropped as the footer's claim. On a paper scored possible/likely
+    (the footer itself is never scored) only a step naming the footer's own words goes."""
+    paper = assemble_transcript([*lines("Notice", "Pay with Google Play cards."), FOOTER_BLOCK],
+                                pages_received=1)  # fmt: skip
+    banner = cl.sample_banner_ids(paper)
+    ask = step("Ask USCIS whether this is a real letter before you pay.", ["p1b1"])
+    sample = step("If the paper says it is a sample, do not pay.", [])
+    footer_only = step("Read the line at the bottom.", ["p1b9"])
+    assert cl.drop_banner_steps([ask, sample, footer_only], paper, banner, scam_risk=risk) == [ask]
+    assert cl.drop_banner_steps([ask, sample, footer_only], paper, banner) == []

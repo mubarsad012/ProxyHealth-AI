@@ -6,12 +6,17 @@ plus form-specific tags follow the model's own (an empty list is just those); wh
 empty and the paper is readable the pipeline may run task ``tag`` once
 (``TagOutcome.needs_tag_call``). ``crisis`` goes first when the emergency lexicon fired, then
 ``scam_report`` when ``scam_risk == likely``. Emergency and scam status are code decisions
-(D-13, D-14), so on the final call (``gate_sensitive=True``) a model ``crisis`` / ``poison`` tag
-needs ``emergency``; a ``domestic_violence`` / ``trafficking`` tag needs ``emergency`` or a
-printed abuse context (a protective order, VAWA, a U/T visa, I-914/I-918/I-360 …; a language
-without a cue list keeps it); any of them stands when it is one of the type's own primary tags.
-``scam_report`` needs ``scam_risk != none`` or a verified scam red flag. Resources themselves
-only ever come from the vetted DB through the matcher.
+(D-13, D-14), so the gated calls (``gate_sensitive=True``: the pass that decides on the ``tag``
+call and the final one) check the model's sensitive tags against code evidence: a
+``domestic_violence`` / ``trafficking`` tag needs ``emergency`` or a printed abuse context (a
+protective order, VAWA, a U/T visa, I-914/I-918/I-360 …; a language without a cue list keeps it);
+``scam_report`` needs ``scam_risk != none``, a verified scam red flag or — on a real upload — the
+model's own scam verdict (``model_scam``: ``is_likely_scam`` or ``scam_signals``). A model
+``crisis`` / ``poison`` tag is never dropped on a real upload (D-14: a drafted lexicon misses
+wording; ``model_crisis`` also feeds the model's ``crisis`` tag to the emergency check, as chat and
+troubleshoot do); only on a sample paper (``sample``), whose junk tags the small-model sweep found,
+does it need ``emergency``. Any of them stands when it is one of the type's own primary tags.
+Resources themselves only ever come from the vetted DB through the matcher.
 """
 
 from __future__ import annotations
@@ -98,8 +103,9 @@ FORM_TAGS: Mapping[str, ResourceTag] = {
 SCAM_FLAG_KINDS = frozenset(
     {RedFlagKind.scam_payment_method, RedFlagKind.impersonation, RedFlagKind.notario}
 )
-# Tags whose resources (crisis lines, poison help) answer an immediate danger: only an emergency
-# the code detected may bring them (D-14).
+# Tags whose resources (crisis lines, poison help) answer an immediate danger. On a real upload the
+# model's own stand (D-14: false negatives are not acceptable); on a sample paper only an emergency
+# the code detected may bring them.
 DANGER_TAGS = frozenset({RT.crisis, RT.poison})
 # DV and trafficking help also serves a paper about abuse that prints no emergency term (a
 # protective order, a VAWA self-petition, a U/T-visa form): such a tag needs an emergency or a
@@ -138,13 +144,23 @@ def prints_abuse_context(text: str, language: str | None) -> bool:
     return any(p.search(norm) for p in ABUSE_CONTEXT.values())
 
 
+def model_crisis(model_tags: Iterable[str], *, sample: bool) -> bool:
+    """The model tagged ``crisis`` on a real upload: the backstop for words no emergency list
+    holds, fed to ``emergency.detect_emergency(model_flag=…)`` as chat and troubleshoot do
+    (D-14). Never on a sample paper — a small model's junk tag there is no emergency."""
+    return not sample and any(_tag_key(t) == RT.crisis.value for t in model_tags)
+
+
+def _tag_key(raw: str) -> str:
+    return re.sub(r"[\s-]+", "_", str(raw).strip().lower())
+
+
 def validate_tags(raw: Iterable[str]) -> list[ResourceTag]:
     """Keep only ``ResourceTag`` values (case/space-insensitive), de-duplicated, at most 6."""
     valid = {t.value: t for t in ResourceTag}
     out: list[ResourceTag] = []
     for item in raw:
-        key = re.sub(r"[\s-]+", "_", str(item).strip().lower())
-        tag = valid.get(key)
+        tag = valid.get(_tag_key(item))
         if tag is not None and tag not in out:
             out.append(tag)
         if len(out) == MAX_TAGS:
@@ -211,20 +227,24 @@ def finalize_tags(
     gate_sensitive: bool = False,
     printed_text: str = "",
     language: str | None = None,
+    sample: bool = False,
+    model_scam: bool = False,
 ) -> TagOutcome:
     """AI_PROMPTS §11.10 tagging. Call once with the model's tags; if ``needs_tag_call`` comes
     back true and the pipeline ran task ``tag``, call again passing ``tag_call_tags``.
 
-    The type's primary tags the model left out follow its own. ``gate_sensitive`` (the final
-    call, once ``scam_risk``, ``emergency`` and the verified ``red_flags`` are known) drops model
-    and tag-call ``crisis``/``poison`` tags without an emergency, ``domestic_violence``/
-    ``trafficking`` tags without an emergency or an abuse context in ``printed_text`` (the
-    transcript, in the paper's ``language``; ``prints_abuse_context``), and ``scam_report``
-    without scam evidence."""
+    The type's primary tags the model left out follow its own. ``gate_sensitive`` (both pipeline
+    calls: the one deciding on the ``tag`` call with the emergency known before it, and the final
+    one) drops model and tag-call ``domestic_violence``/``trafficking`` tags without an emergency
+    or an abuse context in ``printed_text`` (the transcript, in the paper's ``language``;
+    ``prints_abuse_context``), ``scam_report`` without scam evidence (``scam_risk``, a verified
+    scam flag, or on a real upload ``model_scam``), and — on a ``sample`` paper only —
+    ``crisis``/``poison`` tags without an emergency."""
     flags = list(red_flags)
     primary = primary_tags(document_type, category, form_numbers)
     scam_flag = any(f.verified and f.kind in SCAM_FLAG_KINDS for f in flags)
     abuse = emergency or not gate_sensitive or prints_abuse_context(printed_text, language)
+    scam_evidence = scam_risk is not ScamRisk.none or scam_flag or (model_scam and not sample)
 
     def backed(tags: list[ResourceTag]) -> list[ResourceTag]:
         if not gate_sensitive:
@@ -232,8 +252,8 @@ def finalize_tags(
         return [
             t for t in tags
             if t in primary or not (
-                (t in DANGER_TAGS and not emergency) or (t in ABUSE_TAGS and not abuse)
-                or (t is RT.scam_report and scam_risk is ScamRisk.none and not scam_flag)
+                (t in DANGER_TAGS and sample and not emergency) or (t in ABUSE_TAGS and not abuse)
+                or (t is RT.scam_report and not scam_evidence)
             )
         ]  # fmt: skip
 
@@ -271,6 +291,7 @@ __all__ = [
     "TagOutcome",
     "finalize_tags",
     "form_tags",
+    "model_crisis",
     "primary_tags",
     "prints_abuse_context",
     "validate_tags",

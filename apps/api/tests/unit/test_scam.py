@@ -544,3 +544,95 @@ def test_score_transcript_skips_the_banner_blocks() -> None:
     assert "gift_card" in sc.score_transcript(t, document_type=DT.other_notice).hits
     skipped = sc.score_transcript(t, document_type=DT.other_notice, skip_ids={"p1b2"})
     assert skipped.hits == {}
+
+
+# --- integration review, issue 14: the Dari/Pashto "never" cue needs an ask/accept verb ---------
+# A bare هرگز ("never") read "Never show this letter to anyone and pay $300 with Google Play cards"
+# as anti-fraud boilerplate: the regex went silent and the model's payment flag was dropped. Like
+# en/es/ar, the cue now needs a negated ask/request/accept verb — before the payment term or, the
+# verb being last in Dari and Pashto, after it (``negation_cues.framed``).
+
+DARI_DEMAND = (
+    "هرگز این نامه را به کسی نشان ندهید و امروز ۳۰۰ دالر را با کارت های گوگل پلی پرداخت کنید، "
+    "وگرنه برق شما قطع می‌شود."
+)
+PASHTO_DEMAND = "هېڅکله دا لیک چا ته مه ښایئ او نن ورځ د ګوګل پلې کارت په واسطه ۳۰۰ ډالر تادیه کړئ."
+
+
+# The packs' own anti-fraud sentence (``scam.card.likely``: "ICE, USCIS, SSA and the IRS never
+# demand payment by phone, gift card, wire, or app"), as an agency might print it.
+DARI_ANTI_FRAUD = (
+    "ICE، USCIS، SSA و IRS هرگز پول را از راه تیلفون، کارت تحفه، حواله یا برنامه نمی‌خواهند."
+)
+PASHTO_ANTI_FRAUD = (
+    "ICE، USCIS، SSA او IRS هېڅکله د تلیفون، ډالۍ کارت، حوالې یا اپ له لارې پیسې نه غواړي."
+)
+
+
+@pytest.mark.parametrize("line", [DARI_DEMAND, PASHTO_DEMAND])
+def test_a_never_word_without_an_ask_verb_is_no_anti_fraud_cue(line: str) -> None:
+    assert not sc.is_anti_fraud_quote(line)
+    for sender, risk in ((SK.federal_agency, ScamRisk.likely), (SK.utility, ScamRisk.possible)):
+        out = sc.score_scam(segs("Notice", line), document_type=DT.other_notice,
+                            sender_kind=sender, sender_as_written="Agency")  # fmt: skip
+        assert "gift_card" in out.fired and out.scam_risk is risk, (sender, out.fired)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        DARI_ANTI_FRAUD,
+        PASHTO_ANTI_FRAUD,
+        "اداره مهاجرت هرگز از شما نمی‌خواهد که با کارت هدیه پرداخت کنید.",
+        "اداره مهاجرت هرگز پرداخت با کارت هدیه را قبول نمی‌کند.",
+    ],
+)
+def test_dari_and_pashto_anti_fraud_lines_stay_negated(line: str) -> None:
+    assert sc.is_anti_fraud_quote(line), line
+    out = sc.score_scam(segs("Official notice", line), document_type=DT.uscis_rfe,
+                        sender_kind=SK.federal_agency, sender_as_written="USCIS")  # fmt: skip
+    assert out.scam_risk is ScamRisk.none and out.fired == [], out.fired
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "ما هرگز پول نقد نمی‌خواهیم، فقط کارت هدیه گوگل پلی بخرید.",  # "never cash, only gift cards"
+        "هرگز این نامه را نشان ندهید، با کارت هدیه پرداخت کنید، ما پول نقد قبول نمی‌کنیم.",
+    ],
+)
+def test_a_break_word_ends_the_dari_cue(line: str) -> None:
+    out = sc.score_scam(segs(line), document_type=DT.other_notice, sender_kind=SK.federal_agency)
+    assert "gift_card" in out.fired and out.scam_risk is ScamRisk.likely
+
+
+# --- integration review, issue 11: a payment flag naming no method on a paper scored none --------
+
+
+def test_settle_payment_flags_drops_a_methodless_flag_on_a_paper_scored_none() -> None:
+    """va_pay_or_quit_14d replay: the landlord's own payment line flagged as a scam payment method
+    (weight 1, risk none) was shown first with a danger icon and backed a scam_report tag."""
+    line = "Pay at the leasing office or call (703) 555-0175 with questions."
+    flag, other = payment_flag(line), model_flag(RedFlagKind.contradiction, "Rent: $1,650.00")
+    checked = VerifiedRedFlags(flags=[flag, other], facts_checked=2, facts_rejected=0)
+    out = sc.score_scam(segs(line), document_type=DT.pay_or_quit, sender_kind=SK.landlord,
+                        sender_as_written="Oak Hollow Property Management LLC",
+                        model_flags=checked.flags)  # fmt: skip
+    assert out.scam_risk is ScamRisk.none
+    settled = sc.settle_payment_flags(checked, out)
+    assert settled.flags == [other] and (settled.facts_checked, settled.facts_rejected) == (2, 1)
+
+
+def test_settle_payment_flags_keeps_named_methods_and_scam_papers() -> None:
+    gift = payment_flag("Pay with Google Play gift cards.")
+    cash = payment_flag("Send the $500 penalty in cash to our office today.")
+    checked = VerifiedRedFlags(flags=[gift, cash], facts_checked=2, facts_rejected=0)
+    none = sc.score_scam([], document_type=DT.other_notice, sender_kind=SK.landlord)
+    assert sc.settle_payment_flags(checked, none).flags == [gift], "a named method stays"
+    likely = sc.score_scam([], document_type=DT.other_notice, sender_kind=SK.federal_agency,
+                           model_flags=[cash])  # fmt: skip
+    assert likely.scam_risk is ScamRisk.likely
+    assert sc.settle_payment_flags(checked, likely) is checked
+    assert sc.names_payment_method("Pague con tarjetas de regalo.")
+    assert not sc.names_payment_method("We will never ask you to pay with gift cards.")
+    assert not sc.names_payment_method(None)

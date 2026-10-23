@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from proxyhealth_api.analysis import urgency as u
-from proxyhealth_api.contracts.analysis import DateInfo, Demand
+from proxyhealth_api.contracts.analysis import DateInfo, Demand, Urgency
 from proxyhealth_api.contracts.enums import (
     Confidence,
     DateKind,
@@ -16,6 +16,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
     RedFlagKind,
+    ScamRisk,
     UrgencyLevel,
 )
 from proxyhealth_api.settings import DATA_DIR
@@ -360,3 +361,59 @@ def test_carried_date_drives_when_not_lower(days: int, level: UrgencyLevel) -> N
     alone = run(DT.insurance_denial, CAT.medical, carried(98, "response_due"))
     assert alone.urgency.headline_key == "urgency.info.date_later"
     assert alone.urgency.driving_demand_id == "d9"
+
+
+# --- integration review, issue 12: a scam's verify CTA never falls back to its own phone ---------
+# A small model's block-id contact demand on scam_gift_card_letter verified after repair; the
+# re-typed other_notice had no agency line, so the client's "Verify this date" dialled the first
+# printed phone — the scammer's. On a possible/likely scam the scam card's line takes its place.
+
+
+def contact(phone: str = "(202) 555-0147") -> Demand:
+    d = dated(None, "contact", demand_id="c1", value=phone)
+    return d.model_copy(update={"kind": DemandKind.contact, "date": None,
+                                "source_quote": f"Call Officer Sample at {phone}."})  # fmt: skip
+
+
+def scam_run(
+    doc: DocumentType, cat: DocumentCategory, *demands: Demand, risk: ScamRisk,
+    unverified: list[Demand] | None = None, emergency: bool = False,
+) -> Urgency:  # fmt: skip
+    return u.compute_urgency(doc, cat, list(demands), emergency=emergency, today=TODAY, t=en_t(),
+                             unverified=unverified or [], scam_risk=risk).urgency  # fmt: skip
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+def test_a_scam_banner_never_leaves_the_verify_target_empty(risk: ScamRisk) -> None:
+    pay = dated(3, "payment_due")
+    assert scam_run(DT.other_notice, CAT.immigration, pay, contact(), risk=risk
+                    ).verify_resource_id == u.VERIFY_SCAM_DHS  # fmt: skip
+    assert scam_run(DT.utility_shutoff, CAT.housing, pay, risk=risk
+                    ).verify_resource_id == u.VERIFY_SCAM_FTC  # fmt: skip
+    # No date drives it, but a printed contact demand would be the client's fallback.
+    assert scam_run(DT.other_notice, CAT.tax, contact(), risk=risk
+                    ).verify_resource_id == u.VERIFY_SCAM_FTC  # fmt: skip
+    assert scam_run(DT.other_notice, CAT.tax, contact(), risk=risk, emergency=True
+                    ).verify_resource_id == u.VERIFY_SCAM_FTC  # fmt: skip
+    assert scam_run(DT.other_notice, CAT.court, risk=risk,
+                    unverified=[_unverified(None, "hearing_date")]
+                    ).verify_resource_id == u.VERIFY_SCAM_DHS  # fmt: skip
+    # The agency's own line stays (a possible-scam RFE, a court paper never re-typed, §6.5).
+    assert scam_run(DT.uscis_rfe, CAT.immigration, dated(3, "response_due"), contact(),
+                    risk=risk).verify_resource_id == u.VERIFY_USCIS  # fmt: skip
+    assert scam_run(DT.nta, CAT.court, dated(3, "hearing_date"), risk=risk
+                    ).verify_resource_id == u.VERIFY_EOIR  # fmt: skip
+
+
+def test_no_scam_no_change_and_nothing_to_verify_stays_empty() -> None:
+    pay = dated(3, "payment_due")
+    real = scam_run(DT.other_notice, CAT.immigration, pay, contact(), risk=ScamRisk.none)
+    assert real.verify_resource_id is None, "a real paper's printed phone is fine"
+    quiet = scam_run(DT.other_notice, CAT.immigration, risk=ScamRisk.likely)
+    assert quiet.verify_resource_id is None and quiet.headline_key == u.KEY_INFO_NO_ACTION
+    unverified_contact = contact().model_copy(update={"verified": False})
+    assert scam_run(DT.other_notice, CAT.other, unverified_contact, risk=ScamRisk.likely
+                    ).verify_resource_id is None  # fmt: skip
+    for rid in (u.VERIFY_SCAM_DHS, u.VERIFY_SCAM_FTC):
+        meta = yaml.safe_load((DATA_DIR / "resources" / "_meta.yaml").read_text("utf-8"))
+        assert rid in meta["well_known_ids"]["fallback_scam"]

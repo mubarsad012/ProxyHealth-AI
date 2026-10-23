@@ -11,7 +11,7 @@ import { digitGroupedForSpeech } from '@/features/emergency/EmergencyCard';
 import type { SpeechItem } from '@/features/speech/sequential';
 import type { TFunction } from '@/i18n/useT';
 
-import { disclaimerKey } from './disclaimers';
+import { disclaimerKey, footerKeys } from './disclaimers';
 import { redFlagIsFixedCopy, redFlagText, sortRedFlags } from './cards/SafetyCards';
 import { localizeUrgencyDate } from './estimatedDate';
 import { urgencySpeech } from './urgencyCopy';
@@ -89,6 +89,6 @@ export function hearItItems(a: AnalysisResult, t: TFunction, uiTag: string, emer
       ]),
     );
   }
-  items.push({ id: 'footer', lang: ui, text: `${t('footer.ai_generated')} ${t('footer.verify_with_sender')}` });
+  items.push({ id: 'footer', lang: ui, text: footerKeys(a).map((k) => t(k)).join(' ') });
   return items;
 }
