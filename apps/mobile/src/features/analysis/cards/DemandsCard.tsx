@@ -3,7 +3,8 @@
 // by `DateInfo.kind` (an estimate leads with "About {date} (estimate)" from the server's written-out
 // `localized_line`, plus the pack-digit line — `estimatedDate.ts`), the anchored fact row, "Remind
 // me" only when `reminder_eligible`, and "Call (number from your paper)" only for a contact number
-// printed on the page.
+// printed on the page — never on a possible/likely scam, where "Confirm with the sender" / "Ask the
+// sender" are left out too (DOCUMENT_TAXONOMY §6.4: the sender is the scammer).
 
 import { StyleSheet, View } from 'react-native';
 
@@ -23,7 +24,8 @@ import { extraDateLine } from '@/lib/dates';
 import { useSettings } from '@/store/settings';
 
 import { ESTIMATE_ABOUT_KEY, estimatedDigitsLine, estimateReadable } from '../estimatedDate';
-import { printedPhoneHref } from '../urgencyCopy';
+import { isScamPaper } from '../disclaimers';
+import { paperPhoneHref } from '../urgencyCopy';
 import { DEMAND_ICONS, FactRow, type ResultCardProps, type ResultHandlers, SourceText } from './shared';
 
 export function roleWord(role: string | null, t: TFunction): string | null {
@@ -37,7 +39,7 @@ export function canRemind(d: Demand): boolean {
   return d.verified && d.reminder_eligible;
 }
 
-function DateLines({ d, handlers, lang }: { d: Demand; handlers: ResultHandlers; lang: string }) {
+function DateLines({ d, handlers, lang, scam }: { d: Demand; handlers: ResultHandlers; lang: string; scam: boolean }) {
   const t = useT();
   const meta = usePackMeta();
   const order = useSettings((s) => s.preferences.dateFormat);
@@ -68,7 +70,7 @@ function DateLines({ d, handlers, lang }: { d: Demand; handlers: ResultHandlers;
             color="textMuted"
           />
         ) : null}
-        <AppText weight="bold">{t('demand.confirm_with_sender')}</AppText>
+        {scam ? null : <AppText weight="bold">{t('demand.confirm_with_sender')}</AppText>}
         {date.rule_source_url ? (
           <AppText
             color="link"
@@ -83,7 +85,7 @@ function DateLines({ d, handlers, lang }: { d: Demand; handlers: ResultHandlers;
     );
   }
   if (date.kind === 'unresolved') {
-    return <AppText weight="bold">{t('demand.ask_sender_date')}</AppText>;
+    return scam ? null : <AppText weight="bold">{t('demand.ask_sender_date')}</AppText>;
   }
   const extra = extraDateLine(date, meta.digitSystem, order);
   return (
@@ -106,7 +108,7 @@ export function DemandRow({ analysis, pages, handlers, demand: d }: DemandRowPro
   const { colors } = useTheme();
   const dir = useDirection();
   const role = roleWord(d.role, t);
-  const phone = printedPhoneHref(d);
+  const phone = paperPhoneHref(analysis, d);
   return (
     <View testID={`demand-${d.id}`} style={[styles.row, { borderTopColor: colors.divider }]}>
       <View style={[styles.head, { flexDirection: dir.row }]}>
@@ -123,7 +125,7 @@ export function DemandRow({ analysis, pages, handlers, demand: d }: DemandRowPro
       <SourceText lang={analysis.detected_language} dir="ltr" variant="bodyLarge" weight="bold">
         {d.value_verbatim}
       </SourceText>
-      <DateLines d={d} handlers={handlers} lang={analysis.detected_language} />
+      <DateLines d={d} handlers={handlers} lang={analysis.detected_language} scam={isScamPaper(analysis)} />
       {d.documents.length ? (
         <View style={styles.lines}>
           {d.documents.map((doc, i) => (

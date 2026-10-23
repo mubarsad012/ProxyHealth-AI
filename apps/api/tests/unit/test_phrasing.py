@@ -14,11 +14,13 @@ from proxyhealth_api.analysis.i18n import MappingTranslator
 from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
+    PlanStepKind,
     ReferTo,
     RefusalKind,
     ScamRisk,
     WarningCode,
 )
+from proxyhealth_api.demo.fixtures import FixtureStore
 from proxyhealth_api.settings import DATA_DIR
 from tests.unit._fixtures_wp2 import en_t
 
@@ -751,3 +753,143 @@ def test_skip_duty_spares_qualifiers_and_attributed_conditions(sentence: str) ->
 def test_an_unattributed_condition_to_skip_is_still_caught(sentence: str) -> None:
     assert "skip_duty_conditional" in ph.lint_sentence(sentence, category=C.civic), sentence
     assert ph.hedge_key(["skip_duty_conditional"]) == "chat.refusal.filing_advice"
+
+
+# --- integration review, issue 16: no plan step sends a scam's reader to the paper's contact -----
+# scam_gift_card_letter with small-model steps: "The office that sent this paper can tell you more.
+# Call Officer Daniel Sample at (202) 555-0147." (professional) and "Check whether the letter is
+# real by calling (202) 555-0147." (verify) both survived on a likely scam.
+
+OFFICE_STEP = "The office that sent this paper can tell you more."
+CALL_SCAMMER = f"{OFFICE_STEP} Call Officer Daniel Sample at (202) 555-0147."
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+@pytest.mark.parametrize(
+    "text",
+    [
+        CALL_SCAMMER,
+        "Check whether the letter is real by calling (202) 555-0147.",
+        "Confirm the payment at www.uscis-payments.com before Friday.",
+        "Write to enforcement.office@example.com to ask for more time.",
+        "Bring the cash to 1200 Main Street, Suite 4, Fairfax, VA 22030.",
+    ],
+)
+def test_a_scam_step_pointing_at_a_printed_contact_goes(text: str, risk: ScamRisk) -> None:
+    t = en_t()
+    referral = t("chat.refer.lawyer_or_accredited_rep")
+    for kind in PlanStepKind:
+        got = ph.scam_safe_step(text, kind, category=C.immigration, t=t, scam_risk=risk)
+        assert got == (referral if kind is PlanStepKind.professional else None), (kind, got)
+    kept = ph.scam_safe_step(text, PlanStepKind.verify, category=C.immigration, t=t,
+                             scam_risk=ScamRisk.none)  # fmt: skip
+    assert kept == text, "a real paper keeps its contacts"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Do not pay. Check with the real agency through Get help.",
+        "Check your case status at www.uscis.gov/casestatus or e-mail help@uscis.gov.",
+        "Keep the letter and the envelope.",
+    ],
+)
+def test_a_scam_step_without_a_paper_contact_stays(text: str) -> None:
+    for kind in (PlanStepKind.verify, PlanStepKind.professional, PlanStepKind.gather):
+        assert ph.scam_safe_step(text, kind, category=C.immigration, t=en_t(),
+                                 scam_risk=ScamRisk.likely) == text  # fmt: skip
+
+
+@pytest.mark.parametrize("risk", [ScamRisk.possible, ScamRisk.likely])
+def test_office_alone_is_no_professional_on_a_scam_paper(risk: ScamRisk) -> None:
+    t = en_t()
+    assert ph.names_professional(OFFICE_STEP) and not ph.names_professional(OFFICE_STEP,
+                                                                            scam_risk=risk)
+    referral = t("chat.refer.lawyer_or_accredited_rep")
+    assert ph.ensure_professional(OFFICE_STEP, C.immigration, t, scam_risk=risk) == referral
+    assert ph.ensure_professional(OFFICE_STEP, C.tax, t, scam_risk=risk) == referral
+    assert not ph.names_professional("La oficina que envió esta carta le puede decir más.",
+                                     language="es", scam_risk=risk)  # fmt: skip
+    named = "A licensed lawyer or the real USCIS office can tell you more."
+    assert ph.names_professional(named, scam_risk=risk)
+    assert ph.ensure_professional(named, C.immigration, t, scam_risk=risk) == named
+    # Without a scam score the office still counts, as before.
+    assert ph.ensure_professional(OFFICE_STEP, C.benefits, t) == OFFICE_STEP
+
+
+# A step may send the reader to the scammer without writing the contact out: "Call the number on
+# the letter" goes like "(202) 555-0147" — but the warning itself ("Do not call the number on this
+# letter", the fixture's own step) and "Report the website on the letter" stay.
+
+POINTERS = [
+    "Call the number on the letter to check if it is real.",
+    "Check whether the letter is real by calling the phone number on this paper.",
+    "Ask the office that sent this paper whether it is real.",
+    "If you are not sure, call the number on the letter.",
+    "Do not pay; instead, call the number on the letter.",
+    "Do not pay and call the number on the letter.",
+    "Call the sender back today.",
+    "Llame al número de la carta para confirmar.",
+    "Pregunte a la oficina que le envió esta carta.",
+    # G1 review (g1adv/attack.py): steps the first pointer list let through on a likely scam.
+    "Call them back to confirm the amount.",
+    "Use the number listed at the top to check.",
+    "Write down the agent's name and the phone number printed on it, then call to check.",
+    "Reply to the email address shown before the date.",
+    "Go to the website printed at the bottom to check your case.",
+    "Ask Agent Brown for more time.",
+    "Talk to the officer who signed it.",
+    "Comuníquese con el remitente.",
+    "Pregunte al oficial García si puede pagar después.",
+    "Llámelos hoy para confirmar.",
+    "Visite el sitio web que aparece en la carta.",
+]
+WARNINGS = [
+    "Do not pay and do not call the number on this letter. Check with the real agency through "
+    "Get help.",
+    "Never call the number on this letter.",
+    "Don't use the website on the letter.",
+    "Report the website on the letter to the FTC.",
+    "Call USCIS using the number on its official website, not the number on the letter.",
+    "Ask USCIS whether this is a real letter before you pay.",
+    "Write down the case number from the letter.",
+    "Write down the case number printed on the notice.",
+    "Check that your address printed on the letter is correct.",
+    "Do not call them back.",
+    "Report Agent Brown to the FTC.",
+    "Ask a lawyer or an Enrolled Agent for help.",
+    "No pague y no llame al número de esta carta. Consulte con la agencia real por medio de "
+    "Obtener ayuda.",
+]
+
+
+@pytest.mark.parametrize("text", POINTERS)
+def test_a_scam_step_pointing_at_the_papers_contact_in_words_goes(text: str) -> None:
+    assert ph.refers_to_paper_contact(text) and ph.points_at_paper_contact(text)
+    t = en_t()
+    for risk in (ScamRisk.possible, ScamRisk.likely):
+        assert ph.scam_safe_step(text, PlanStepKind.verify, category=C.immigration, t=t,
+                                 scam_risk=risk) is None  # fmt: skip
+        referral = ph.scam_safe_step(text, PlanStepKind.professional, category=C.tax, t=t,
+                                     scam_risk=risk)  # fmt: skip
+        assert referral == t("chat.refer.lawyer_or_accredited_rep")
+    assert ph.scam_safe_step(text, PlanStepKind.verify, category=C.immigration, t=t,
+                             scam_risk=ScamRisk.none) == text  # fmt: skip
+
+
+@pytest.mark.parametrize("text", WARNINGS)
+def test_a_scam_warning_about_the_papers_contact_stays(text: str) -> None:
+    assert not ph.refers_to_paper_contact(text), text
+    assert ph.scam_safe_step(text, PlanStepKind.verify, category=C.immigration, t=en_t(),
+                             scam_risk=ScamRisk.likely) == text  # fmt: skip
+
+
+def test_the_scam_fixture_steps_survive_the_pointer_check() -> None:
+    """scam_gift_card_letter in every language: its steps warn about the number and stay."""
+    fx = FixtureStore.load(DATA_DIR / "fixtures").get("scam_gift_card_letter")
+    assert fx is not None
+    for lang in fx.languages:
+        out = fx.analysis_out(lang)
+        assert out is not None
+        for step in out.plan_steps:
+            assert not ph.points_at_paper_contact(step.text), (lang, step.text)

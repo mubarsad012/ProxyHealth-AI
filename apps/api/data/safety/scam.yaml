@@ -11,7 +11,11 @@
 # and no other contact (an agency's own payment portal).
 # `negation: true` signals skip a match inside a negated or anti-fraud sentence (`negation_cues`):
 # agency boilerplate such as "USCIS will never ask you to pay with gift cards" is not a demand. A
-# `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match.
+# `before` cue counts unless a `breaks` word ("only", ", pay …") stands between it and the match;
+# a `framed` cue needs its `before` pattern before the match and its `after` pattern after it
+# (either may be absent), with no `breaks` word and no `clause` word (a positive verb of that
+# language) between the cue and the match on either side; on the `after` side only the text
+# before the `verb` group is checked.
 # `model_payment`: a verified model `scam_payment_method` flag whose quote names none of the four
 # methods counts as signal `model_payment_method` (weight 2) unless the quote asks for no payment:
 # anti-fraud boilerplate, the SAMPLE footer of a demo paper, or an agency's own .gov payment portal
@@ -79,16 +83,53 @@ negation_cues:
       - "\\b(evite|cuidado con|prot[eé]jase de|denuncie) (las |los )?(estafas?|fraudes?)\\b"
     ar:
       - "(لن|لا|أبدا|ابدا|أبداً|ابداً)(?:\\s+\\S+){0,4}?\\s+(نطلب|يطلب|تطلب|نقبل|يقبل|تقبل)"
-    prs:
-      - "(هرگز|هیچ ?وقت|هیچ‌وقت)"
-    ps:
-      - "(هېڅکله|هیڅکله|هېڅ وخت)"
+    # Dari / Pashto: `framed` below (a bare "never" is no cue: "هرگز این نامه را به کسی نشان ندهید
+    # و … با کارت گوگل پلی پرداخت کنید" is a demand).
   after:
     en:
       - "\\b(is|are|it's|that's|this is) (always |a sign of )?(an? )?(scam|scammer|fraud|fraudster|impostor|imposter)s?\\b"
     es:
       - "\\b(es|son) (siempre )?(una? )?(estafa|estafador|fraude|impostor)(es|a|as)?\\b"
-  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b"
+  # Paired cues (`analysis/scam.py` `FramedCue`).
+  # en/es: the prohibitive "Never pay with gift cards" / "Nunca pague con tarjetas de regalo" — a
+  # negated pay/send/buy verb opening its clause, in a sentence with no "if/unless" before the match
+  # (never "If you do not pay with gift cards …", "If you are late and do not pay with gift cards …",
+  # "Do not pay late …"), at most 8 words before the match, with no "and/or pay|buy …", colon, dash or
+  # new clause after a comma (", we need …", ", buy …") between — a list ("Never pay with gift
+  # cards, wire transfers, or crypto") is fine — and no "only" right after it ("Do not pay by
+  # check, gift cards only").
+  # Dari/Pashto put the verb last: "ICE، USCIS، SSA و IRS هرگز پول را از راه تیلفون، کارت تحفه،
+  # حواله یا برنامه نمی‌خواهند" / "هرگز با کارت تحفه پول پرداخت نکنید" — the "never" word within 10
+  # words before the match and a negated ask/request/accept or pay/send/buy verb within 8 words
+  # after it; or "never" + a negated ask/accept verb before the match ("هرگز از شما نمی‌خواهد که با
+  # کارت تحفه …"); or Dari "نباید" ("must not") … pay verb. A positive verb between the cue and the
+  # match (`clause`: Dari second-person/imperative forms, "وگرنه"; Pashto second-person forms not
+  # after مه/نه, "که نه") ends the cue's scope: "هرگز دیر نکنید، کارت تحفه گوگل پلی تهیه کنید
+  # وگرنه درخواست را قبول نمی‌کنیم" is a demand. Negated verbs do not ("هرگز پول ندهید و کارت تحفه
+  # نخرید": "never … and do not …").
+  framed:
+    en:
+      - before: "^(?!.*\\b(?:if|unless|until|otherwise)\\b)(?:\\s*|.*?(?:[,:]\\s*|\\b(?:please|and|so)\\s+|\\b(?:you|we) (?:should|must)\\s+))(?:never|do not|don't|not)\\s+(?:ever\\s+)?(?:pay|send|buy|purchase|use|wire)\\b(?!\\s+(?:late|now|today|on time)\\b)(?!.*\\b(?:and|or|then|but)\\s+(?:pay|send|buy|purchase|use|get|wire)\\b)(?!.*,\\s*(?:we|you|they|i|he|she|it|this|that|there|our|your|send|go|call|bring|mail|give|get|use|buy|pay|purchase|load|text|e-?mail|keep|take|need)\\b)(?=(?:\\s+[^\\s:—–]+){0,8}\\s*$)"
+        after: "^(?!(?:\\s*\\S+){0,4}?\\s*(?:only|alone)\\b)"
+    es:
+      - before: "^(?!.*\\b(?:si|a menos que)\\b)(?:\\s*|.*?(?:[,:]\\s*|\\b(?:por favor|y)\\s+|\\bustede?s?\\s+(?:(?:debe|deber[ií]a)n?\\s+)?))(?:nunca|jam[aá]s|no)\\s+(?:(?:debe|deber[ií]a)\\s+)?(?:pague|paguen|pagar|env[ií]e|env[ií]en|enviar|compre|compren|comprar|use|usen|usar)\\b(?!\\s+(?:tarde|ahora|hoy|a tiempo)\\b)(?!.*\\b(?:y|o|luego|pero)\\s+(?:pague|paguen|env[ií]e|env[ií]en|compre|compren|use|usen|obtenga)\\b)(?!.*,\\s*(?:nosotros|usted|ustedes|ellos|yo|necesitamos|aceptamos|queremos|debe|tiene|vaya|llame|traiga|mande|lleve|compre|pague|env[ií]e|use|obtenga|solo|sólo)\\b)(?=(?:\\s+[^\\s:—–]+){0,8}\\s*$)"
+        after: "^(?!(?:\\s*\\S+){0,4}?\\s*(?:solo|sólo|solamente|únicamente)\\b)"
+    prs:
+      - before: "(هرگز|هیچ ?وقت|هیچ‌وقت)(?=(?:\\s+\\S+){0,10}\\s*$)"
+        after: "^\\s*(?:\\S+\\s+){0,8}?(?P<verb>نمی[\\s\\u200c]*(خواه|پذیر)|نخواه|(درخواست|طلب|مطالبه|قبول)[\\s\\u200c]*(نمی|نخواه)|(پرداخت|ارسال|خریداری|واریز|استفاده)[\\s\\u200c]*(نکنید|ننمایید)|نپردازید|نفرستید|نخرید|ندهید)"
+        clause: &prs_clause "(?<![\\w\\u200c])(?:ب\\w+ید|می[\\s\\u200c]*\\w+ید|ب?(?:کنید|نمایید|دهید|شوید|گیرید|باشید|کن)|وگرنه|ورنه)(?![\\w\\u200c])"
+      - before: "(هرگز|هیچ ?وقت|هیچ‌وقت)(?:\\s+\\S+){0,5}?\\s+(نمی[\\s\\u200c]*(خواه|پذیر)|نخواه|(درخواست|طلب|مطالبه|قبول)[\\s\\u200c]*(نمی|نخواه))\\S*"
+        clause: *prs_clause
+      - before: "(?<![\\w\\u200c])نباید(?=(?:\\s+\\S+){0,8}\\s*$)"
+        after: "^\\s*(?:\\S+\\s+){0,6}?(?P<verb>بپردازید|بفرستید|بخرید|(پرداخت|ارسال|خریداری|واریز|استفاده)[\\s\\u200c]*(کنید|نمایید))"
+        clause: *prs_clause
+    ps:
+      - before: "(هېڅکله|هیڅکله|هېڅ وخت)(?=(?:\\s+\\S+){0,10}\\s*$)"
+        after: "^\\s*(?:\\S+\\s+){0,8}?(?P<verb>نه[\\s\\u200c]*(غواړ|غوښتل|من(ي|و|ئ)|اخل)|غوښتنه[\\s\\u200c]*نه|(تادیه[\\s\\u200c]+)?مه[\\s\\u200c]+(ورکوئ|ورکړئ|لېږئ|لیږئ|ولېږئ|ولیږئ|استوئ|اخلئ|واخلئ|پېرئ|پیرئ|کاروئ)|تادیه[\\s\\u200c]+مه[\\s\\u200c]+(کوئ|کړئ)|ورنه[\\s\\u200c]*کړئ|نه[\\s\\u200c]+ور(کوئ|کړئ))"
+        clause: &ps_clause "(?<![\\w\\u200c])(?<!مه )(?<!نه )\\w+ئ(?![\\w\\u200c])|(?<![\\w\\u200c])که\\s+نه(?![\\w\\u200c])"
+      - before: "(هېڅکله|هیڅکله|هېڅ وخت)(?:\\s+\\S+){0,5}?\\s+(نه[\\s\\u200c]*(غواړ|غوښتل|من(ي|و|ئ)|اخل)|غوښتنه[\\s\\u200c]*نه)\\S*"
+        clause: *ps_clause
+  breaks: "\\b(only|just|instead|but|however|except|rather|solo|sólo|solamente|únicamente|sino|pero|excepto|فقط|تنها|بلکه|ولی|یوازې|بلکې)\\b|[,;:]\\s*(please |you must |you should |usted debe )?(pay|send|buy|purchase|use|get|pague|env[ií]e|compre|use|obtenga)\\b|\\b((پرداخت|ارسال|خریداری|واریز)[\\s\\u200c]*(کنید|نمایید)|بپردازید|بفرستید|بخرید|ورکړئ|ولېږئ|ولیږئ|واخلئ|تادیه[\\s\\u200c]*کړئ)\\b"
 model_payment:
   portal:
     en:

@@ -73,6 +73,38 @@ scam_refer_to_by_category:
   other: lawyer_or_accredited_rep
 scam_professional_by_category:
   benefits: "a licensed lawyer"
+# On such a paper these `professional_words` name only the paper's own sender ("The office that
+# sent this paper can tell you more"), not a professional: a `professional` step naming nothing
+# else becomes the scam referral above. A language section may add its own `scam_sender_words`.
+scam_sender_words:
+  - office
+  - agency
+# §6.4 on such a paper: a plan-step clause that sends the reader to a contact the paper prints
+# without writing it out ("Call the number on the letter to check", "Ask the office that sent this
+# paper") goes like one that writes it out (`phrasing.scam_safe_step`). A clause holding a
+# `scam_pointer_safe` word is the warning itself and stays ("Do not call the number on this letter",
+# "Report the website on the letter"). Steps split into sentences, sentences into clauses at
+# `scam_pointer_breaks` (so "If you are not sure, call the number on the letter" still goes).
+# Pointers: "the number on the letter", "the number listed at the top", "call them back", "Ask
+# Agent Brown" (a title and a capitalised name: the paper's own "officer"), "Comuníquese con el
+# remitente". Every pattern runs on every step; English and Spanish only (drafts) — a step in
+# another language is checked for written-out contacts only.
+scam_contact_pointers:
+  - "\\b(the|this|that|a|any|its) (phone |telephone |toll[- ]free )?(numbers?|phone|website|web ?site|web address|links?|e-?mail( address)?|address|qr code)\\b[^.!?;]{0,40}?\\b(on|in|from|of) (the|this|that|your|its) (letter|paper|notice|page|message|text|envelope|card|form|flyer)\\b"
+  - "\\b(call|phone|contact|text|e-?mail|write to|reply to|answer|visit|pay|ask|talk to|speak (to|with)|meet( with)?) (back )?(the |this |that )?(sender|officer|agent|caller|deputy|investigator|inspector|detective)\\b"
+  - "\\b(call|phone|contact|text|e-?mail|write to|reply to|answer|ask|talk to|speak (to|with)) (them|him|her)( back)?\\b"
+  - "(?<!case )(?<!receipt )(?<!account )(?<!alien )(?<!reference )(?<!confirmation )(?<!tracking )(?<!claim )(?<!file )(?<!notice )(?<!form )(?<!your )\\b(numbers?|phone|website|web ?site|web address|e-?mail( address)?|address|links?|qr code)\\b (listed|printed|shown|given|written|provided)\\b"
+  - "(?-i:\\b(Officer|Agent|Deputy|Sergeant|Detective|Inspector|Investigator|Oficial|Agente) [A-Z][a-z]+)"
+  - "\\b(the )?(office|agency|person|officer|company|agent|people) (that|who) (sent|wrote|signed|mailed) (you )?(it|this|the)\\b"
+  - "\\b(el|al|del|este|ese|un|cualquier) (n[uú]mero( de tel[eé]fono)?|tel[eé]fono|sitio web|p[aá]gina web|enlace|correo( electr[oó]nico)?|direcci[oó]n)\\b[^.!?;]{0,40}?\\b(de|en|del) (la|esta|esa|su|el|este|ese) (carta|papel|aviso|notificaci[oó]n|p[aá]gina|mensaje|sobre|formulario)\\b"
+  - "\\b(llame|llamar|contacte|contactar|escriba|responda|visite|pague) (a|al) (remitente|oficial|agente)\\b"
+  - "\\b(la )?(oficina|agencia|persona|compa[ñn][ií]a|empresa) que (le |te )?(envi[oó]|mand[oó]|escribi[oó]|firm[oó])\\b"
+  - "\\bcomun[ií]quese con (el|la) (remitente|oficial|agente|oficina|persona|compa[ñn][ií]a|empresa)\\b"
+  - "\\b(pregunte|hable|consulte)( con)? (al|el|la|a la) (oficial|agente|remitente)\\b"
+  - "\\b(ll[aá]me(le|les|lo|los|la|las)|cont[aá]cte(le|les|lo|los|la|las)|escr[ií]ba(le|les)|resp[oó]nda(le|les))\\b"
+  - "\\b(n[uú]mero|tel[eé]fono|sitio web|p[aá]gina web|enlace|correo( electr[oó]nico)?|direcci[oó]n) (que aparece|que se muestra|indicad[oa]|impres[oa]|escrit[oa])\\b"
+scam_pointer_safe: "\\b(not|never|no|nunca|jam[aá]s|report\\w*|denunci\\w*|reporte\\w*)\\b|n[’']t\\b"
+scam_pointer_breaks: "[;:,]|\\s+\\b(?:and|but|then|instead|or|y|pero|o|luego|sino|en cambio)\\b"
 hedge_key_by_family:
   eligibility: chat.refusal.eligibility
   outcome: chat.refusal.outcome
@@ -255,6 +287,7 @@ languages:
     # between the noun and the verb).
     attribution_regex: "\\b(el|la|este|esta|su) (papel|carta|aviso|formulario|factura|citaci[oó]n|orden|contrato|etiqueta|corte|juez|oficina|escuela|arrendador|aseguradora|plan)?(, [^,.;]{1,80},)? ?(dice|pide|indica|establece|ordena|advierte)\\b"
     professional_words: [abogad, representante, consejer, asesor, médic, enfermer, farmac, oficina, clínica, centro, agencia, defensor, profesional, preparador]
+    scam_sender_words: [oficina, agencia]
     accredited_rep_patterns:
       - "\\brepresentante acreditado"
     title_connectors: [y, o, a, el, la, los, las, un, una, de, del, al, para, por, sobre, su, sus, con, en, que, le, se]
@@ -296,6 +329,7 @@ languages:
   ar:
     reviewed_by: null
     professional_words: [محام, ممثل, مستشار, طبيب, ممرض, صيدل, مكتب, عيادة, مركز]
+    scam_sender_words: [مكتب]
     accredited_rep_patterns:
       - "ممثل\\S* معتمد"
       - "وزارة العدل"
@@ -303,6 +337,7 @@ languages:
   prs:
     reviewed_by: null
     professional_words: [وکیل, نماینده, مشاور, داکتر, نرس, دواساز, دفتر, کلینیک, مرکز]
+    scam_sender_words: [دفتر]
     accredited_rep_patterns:
       - "نماینده\\S* تأییدشده"
       - "وزارت عدلیه"
@@ -310,4 +345,5 @@ languages:
   ps:
     reviewed_by: null
     professional_words: [وکیل, استازی, سلاکار, ډاکټر, دفتر]
+    scam_sender_words: [دفتر]
     title_connectors: [او, یا, په, له, د, ته, سره, چې]

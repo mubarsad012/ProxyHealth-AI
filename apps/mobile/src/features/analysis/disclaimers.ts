@@ -102,3 +102,15 @@ function hasDates(a: AnalysisResult): boolean {
 }
 
 export const FOOTER_KEYS = ['footer.ai_generated', 'footer.verify_with_sender'] as const;
+
+/** A paper the server scored a possible or likely scam (an old stored result without the field
+ *  counts as none). DOCUMENT_TAXONOMY §6.4: then nothing sends the reader to the paper's own
+ *  contact — the sender is the scammer; the scam card says to check with the real office. */
+export function isScamPaper(a: Pick<AnalysisResult, 'scam_risk'>): boolean {
+  return a.scam_risk === 'likely' || a.scam_risk === 'possible';
+}
+
+/** S7 item 17 footer lines; a scam paper leaves out "Confirm dates and amounts with the sender". */
+export function footerKeys(a: Pick<AnalysisResult, 'scam_risk'>): readonly (typeof FOOTER_KEYS)[number][] {
+  return isScamPaper(a) ? FOOTER_KEYS.filter((k) => k !== 'footer.verify_with_sender') : FOOTER_KEYS;
+}

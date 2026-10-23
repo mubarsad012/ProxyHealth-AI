@@ -28,7 +28,12 @@ The model never sets a level. ``compute_urgency`` implements DOCUMENT_TAXONOMY �
 8. nothing found → ``info`` (``no_action`` only when neither list holds anything, else
    ``no_date``);
 9. ``verify_resource_id`` = ``uscis_contact`` (USCIS types) / ``eoir_hotline`` (EOIR types) when a
-   date drives the banner (a verified one, or the unverified one of step 7).
+   date drives the banner (a verified one, or the unverified one of step 7). On a ``possible`` /
+   ``likely`` scam (TAXONOMY §6.4/§6.5) a banner without such an agency line never leaves the
+   target empty when a date drives it or the paper prints a verified ``contact`` demand — an empty
+   target makes the client dial the paper's own first printed phone, the scammer's: it gets the
+   scam card's reporting line instead (``dhs_oig`` on immigration and court papers, else
+   ``ftc_reportfraud``; ``_meta.yaml`` ``well_known_ids.scam_card_phone`` / ``scam_card_url``).
 
 Copy keys are PRODUCT_SPEC §5.5 ``urgency.*``. Pure function with an injected ``today``.
 """
@@ -47,6 +52,7 @@ from proxyhealth_api.contracts.enums import (
     DocumentCategory,
     DocumentType,
     RedFlagKind,
+    ScamRisk,
     Severity,
     UrgencyLevel,
 )
@@ -68,6 +74,9 @@ DATED_KINDS = frozenset({DemandKind.deadline, DemandKind.relative_deadline, Dema
 
 VERIFY_USCIS = "uscis_contact"  # _meta.yaml well_known_ids.verify_uscis_date
 VERIFY_EOIR = "eoir_hotline"  # _meta.yaml well_known_ids.verify_court_date
+VERIFY_SCAM_DHS = "dhs_oig"  # _meta.yaml well_known_ids.scam_card_phone
+VERIFY_SCAM_FTC = "ftc_reportfraud"  # _meta.yaml well_known_ids.scam_card_url
+SCAM_DHS_CATEGORIES = frozenset({DocumentCategory.immigration, DocumentCategory.court})
 
 ANY_DRIVING = frozenset(
     {"hearing_date", "appointment", "payment_due", "response_due", "expiry", "move_date"}
@@ -394,24 +403,47 @@ def compute_urgency(
     today: date,
     t: Translator | None = None,
     unverified: Sequence[Demand] = (),
+    scam_risk: ScamRisk = ScamRisk.none,
 ) -> UrgencyOutcome:
     """DOCUMENT_TAXONOMY §5.1 over the **verified** ``demands`` (any ``verified=False`` item there
     is ignored). ``unverified`` is ``AnalysisResult.unverified``: a dated item there never drives
     a date, but lifts a dateless result to ``medium`` with its own headline (step 7) and keeps the
     banner from saying "Nothing to do right now". ``t`` renders the ``expired_date`` red flag
-    text; without it the key is used as text.
+    text; without it the key is used as text. ``scam_risk`` only picks the verify target (step 9).
 
     A carried date (step 2) never lowers the result: when one is present the ladder also runs
     without carried dates, and that result stands when it is strictly more severe (a far carried
     date would otherwise hide a nearer estimate, a past date or an unverified date)."""
     if emergency:
-        return UrgencyOutcome(_urgency(UrgencyLevel.emergency, KEY_EMERGENCY))
-    args = (document_type, category, demands)
-    full = _ladder(*args, today=today, t=t, unverified=unverified, carried=True)
-    if not any(d.verified and _is_carried(d) for d in demands):
-        return full
-    base = _ladder(*args, today=today, t=t, unverified=unverified, carried=False)
-    return base if level_rank(base.urgency.level) > level_rank(full.urgency.level) else full
+        outcome = UrgencyOutcome(_urgency(UrgencyLevel.emergency, KEY_EMERGENCY))
+    else:
+        args = (document_type, category, demands)
+        outcome = _ladder(*args, today=today, t=t, unverified=unverified, carried=True)
+        if any(d.verified and _is_carried(d) for d in demands):
+            base = _ladder(*args, today=today, t=t, unverified=unverified, carried=False)
+            if level_rank(base.urgency.level) > level_rank(outcome.urgency.level):
+                outcome = base
+    return _scam_verify_target(outcome, scam_risk, category, demands)
+
+
+def _scam_verify_target(
+    outcome: UrgencyOutcome,
+    scam_risk: ScamRisk,
+    category: DocumentCategory,
+    demands: Sequence[Demand],
+) -> UrgencyOutcome:
+    """Step 9 on a possible/likely scam: no empty verify target where the client would fall back
+    to the paper's own printed phone (a date drives the banner, or a verified ``contact`` demand
+    is printed) — the scam card's reporting line takes its place (TAXONOMY §6.4/§6.5)."""
+    u = outcome.urgency
+    if scam_risk is ScamRisk.none or u.verify_resource_id is not None:
+        return outcome
+    dated = u.driving_demand_id is not None or u.headline_key == KEY_UNVERIFIED_DATE
+    contact = any(d.verified and d.kind is DemandKind.contact for d in demands)
+    if not (dated or contact):
+        return outcome
+    target = VERIFY_SCAM_DHS if category in SCAM_DHS_CATEGORIES else VERIFY_SCAM_FTC
+    return UrgencyOutcome(u.model_copy(update={"verify_resource_id": target}), outcome.red_flags)
 
 
 __all__ = [
@@ -427,6 +459,8 @@ __all__ = [
     "PAST_WINDOW_DAYS",
     "USCIS_TYPES",
     "VERIFY_EOIR",
+    "VERIFY_SCAM_DHS",
+    "VERIFY_SCAM_FTC",
     "VERIFY_USCIS",
     "UrgencyOutcome",
     "compute_urgency",

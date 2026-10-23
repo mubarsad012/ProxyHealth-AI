@@ -14,6 +14,7 @@ from proxyhealth_api.contracts.enums import (
     ScamRisk,
     Severity,
 )
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, RedFlagOut
 from proxyhealth_api.demo.fixtures import FixtureStore
 from proxyhealth_api.settings import DATA_DIR
 
@@ -119,18 +120,38 @@ def test_unbacked_scam_report_falls_back_to_the_type() -> None:
 LABEL = "CVS Pharmacy\nTake 1 tablet by mouth twice daily\nRefills: 2"
 
 
-def test_emergency_tags_need_an_emergency() -> None:
+def test_emergency_tags_need_an_emergency_on_a_sample_paper() -> None:
+    """The sweep's junk tags came from sample papers: there crisis/poison need an emergency."""
     model = ["prescription_help", "crisis", "domestic_violence", "trafficking", "poison"]
     calm = tg.finalize_tags(model, document_type=DT.prescription_label, gate_sensitive=True,
-                            printed_text=LABEL, language="en")  # fmt: skip
+                            printed_text=LABEL, language="en", sample=True)  # fmt: skip
     assert calm.tags == [RT.prescription_help, RT.language_access]
     urgent = tg.finalize_tags(model, document_type=DT.prescription_label, emergency=True,
-                              gate_sensitive=True, printed_text=LABEL, language="en")  # fmt: skip
+                              gate_sensitive=True, printed_text=LABEL, language="en",
+                              sample=True)  # fmt: skip
     assert urgent.tags[0] is RT.crisis and RT.domestic_violence in urgent.tags
     assert len(urgent.tags) == tg.MAX_TAGS
     tag_call = tg.finalize_tags([], document_type=DT.unknown, tag_call_tags=["crisis", "food"],
-                                gate_sensitive=True)  # fmt: skip
+                                gate_sensitive=True, sample=True)  # fmt: skip
     assert tag_call.tags == [RT.food] and tag_call.source == "tag_call"
+
+
+def test_a_real_upload_keeps_the_models_crisis_and_poison_tags() -> None:
+    """Integration review, issue 13 (D-14): a drafted lexicon misses wording ("li vle touye tèt
+    li"), so on a real upload the model's crisis/poison tag is never dropped — DV/trafficking
+    still need an abuse context, as before."""
+    model = ["prescription_help", "crisis", "domestic_violence", "trafficking", "poison"]
+    real = tg.finalize_tags(model, document_type=DT.prescription_label, gate_sensitive=True,
+                            printed_text=LABEL, language="en")  # fmt: skip
+    assert real.tags == [RT.prescription_help, RT.crisis, RT.poison, RT.language_access]
+    school = tg.finalize_tags(["crisis"], document_type=DT.other_notice,
+                              category=DocumentCategory.school, gate_sensitive=True,
+                              printed_text="Pitit ou a te di li vle touye tèt li.",
+                              language="ht")  # fmt: skip
+    assert school.tags == [RT.crisis, RT.school_enrollment]
+    assert tg.model_crisis(["school_enrollment", "Crisis"], sample=False)
+    assert not tg.model_crisis(["crisis"], sample=True), "a sample's junk tag is no emergency"
+    assert not tg.model_crisis(["poison", "domestic_violence"], sample=False)
 
 
 PROTECTIVE_ORDER = (
@@ -147,7 +168,7 @@ def test_abuse_papers_keep_dv_and_trafficking_tags_without_an_emergency() -> Non
     model = ["court_notice", "domestic_violence", "crisis"]
     order = tg.finalize_tags(model, document_type=DT.other_notice, category=DocumentCategory.court,
                              gate_sensitive=True, printed_text=PROTECTIVE_ORDER,
-                             language="en")  # fmt: skip
+                             language="en", sample=True)  # fmt: skip
     assert order.tags == [RT.court_notice, RT.domestic_violence]
     for text in ("Form I-918, Petition for U Nonimmigrant Status", "Form I-914 T visa",
                  "VAWA self-petition (Form I-360)", "Victims of human trafficking",
@@ -157,7 +178,8 @@ def test_abuse_papers_keep_dv_and_trafficking_tags_without_an_emergency() -> Non
     # A language with no cue list (or none detected) keeps the model's DV/trafficking tags.
     assert tg.prints_abuse_context(LABEL, "vi") and tg.prints_abuse_context(LABEL, None)
     kept = tg.finalize_tags(["trafficking", "crisis"], document_type=DT.unknown,
-                            gate_sensitive=True, printed_text=LABEL, language="vi")  # fmt: skip
+                            gate_sensitive=True, printed_text=LABEL, language="vi",
+                            sample=True)  # fmt: skip
     assert kept.tags == [RT.trafficking]
 
 
@@ -191,3 +213,85 @@ def test_curated_fixture_tags_are_unchanged(fid: str, lang: str) -> None:
     if scam is ScamRisk.likely:
         model = [RT.scam_report, *[t for t in model if t is not RT.scam_report]]
     assert got.tags == model
+
+
+# --- integration review: the model's own scam verdict, and the gated first pass ----------------
+
+
+def test_a_real_upload_the_model_calls_a_scam_keeps_its_scam_report_tag() -> None:
+    """Issue 14: with no code evidence left (a block-id quote, a language without scam regexes),
+    the model's own verdict keeps its scam_report tag on a real upload — never on a sample, where
+    the SAMPLE footer made a small model call every paper fake. On that verdict alone the tag goes
+    behind the type's own (G1 review: a small model also calls genuine papers fake)."""
+
+    def tags(*, model_scam: bool, sample: bool = False) -> tg.TagOutcome:
+        return tg.finalize_tags(
+            ["scam_report"], document_type=DT.other_notice,
+            category=DocumentCategory.immigration, gate_sensitive=True, model_scam=model_scam,
+            sample=sample,
+        )  # fmt: skip
+
+    assert tags(model_scam=True).tags == [RT.immigration_legal_help, RT.scam_report]
+    sample = tags(model_scam=True, sample=True)
+    assert sample.tags == [RT.immigration_legal_help] and sample.source == "type"
+    assert RT.scam_report not in tags(model_scam=False).tags
+    # No type tags to put first: the verdict's tag is the list (and is not cut by the cap).
+    alone = tg.finalize_tags(["scam_report"], document_type=DT.other_notice,
+                             category=DocumentCategory.other, gate_sensitive=True,
+                             model_scam=True)  # fmt: skip
+    assert alone.tags == [RT.scam_report]
+    many = tg.finalize_tags(["scam_report", "food", "utility_shutoff", "benefits_navigation",
+                             "rent_assistance", "tax_notice"], document_type=DT.other_notice,
+                            category=DocumentCategory.other, gate_sensitive=True,
+                            model_scam=True)  # fmt: skip
+    assert many.tags[-1] is RT.scam_report and len(many.tags) == tg.MAX_TAGS
+    # Code evidence keeps the model's order (and a likely scam fronts the tag).
+    possible = tg.finalize_tags(["scam_report", "benefits_navigation"],
+                                document_type=DT.other_notice, category=DocumentCategory.benefits,
+                                gate_sensitive=True, scam_risk=ScamRisk.possible)  # fmt: skip
+    assert possible.tags[0] is RT.scam_report
+
+
+def _model_out(*, likely: bool, signals: list[str], kinds: list[RedFlagKind]) -> AnalysisModelOut:
+    flags = [RedFlagOut(kind=k, text="Flag.", source_quote="p1b1", span_ids=["p1b1"], page=1)
+             for k in kinds]  # fmt: skip
+    fixture = STORE.get("scam_gift_card_letter")
+    out = fixture.analysis_out("en") if fixture is not None else None
+    assert out is not None
+    return out.model_copy(update={"is_likely_scam": likely, "scam_signals": signals,
+                                  "red_flags": flags})  # fmt: skip
+
+
+def test_the_models_verdict_needs_one_of_its_own_scam_flags() -> None:
+    """G1 review: a genuine Fairfax SNAP interview notice the small model called a scam
+    (is_likely_scam, signals ['urgency_pressure'], no red flag, tags ['scam_report', …]) filled the
+    whole preview with scam-report help. A bare verdict is no evidence (D-13)."""
+    assert not tg.model_scam_verdict(
+        _model_out(likely=True, signals=["urgency_pressure"], kinds=[])
+    )
+    assert not tg.model_scam_verdict(
+        _model_out(likely=True, signals=[], kinds=[RedFlagKind.urgency_pressure])
+    )
+    assert not tg.model_scam_verdict(
+        _model_out(likely=False, signals=[], kinds=[RedFlagKind.scam_payment_method])
+    )
+    for kind in (RedFlagKind.scam_payment_method, RedFlagKind.impersonation, RedFlagKind.notario):
+        assert tg.model_scam_verdict(_model_out(likely=False, signals=["gift_card"], kinds=[kind]))
+        assert tg.model_scam_verdict(_model_out(likely=True, signals=[], kinds=[kind]))
+
+
+@pytest.mark.parametrize(
+    "model", [["crisis"], ["scam_report"], ["domestic_violence"], ["trafficking", "poison"]]
+)
+def test_a_list_the_gates_empty_still_gets_the_tag_call(model: list[str]) -> None:
+    """Issue 5: the pass that decides on the tag call is gated like the final one, so a model list
+    made only of sensitive tags without evidence asks for the call instead of ending empty."""
+    gated = tg.finalize_tags(model, document_type=DT.other_notice, category=DocumentCategory.other,
+                             gate_sensitive=True, printed_text="Your account is past due.",
+                             language="en", sample=True)  # fmt: skip
+    assert gated.tags == [] and gated.needs_tag_call
+    final = tg.finalize_tags(model, document_type=DT.other_notice, category=DocumentCategory.other,
+                             gate_sensitive=True, printed_text="Your account is past due.",
+                             language="en", sample=True,
+                             tag_call_tags=["benefits_navigation"])  # fmt: skip
+    assert final.tags == [RT.benefits_navigation] and final.source == "tag_call"

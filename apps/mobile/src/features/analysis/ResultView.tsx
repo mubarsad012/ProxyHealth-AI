@@ -28,7 +28,7 @@ import { PlanCard } from './cards/PlanCard';
 import { RedFlagsCard, ScamCard, WarningChips } from './cards/SafetyCards';
 import type { ResultHandlers } from './cards/shared';
 import { SummaryCard } from './cards/SummaryCard';
-import { disclaimerKey, FOOTER_KEYS, resultBanners, sampleAsOfNoteKey, type BannerSpec } from './disclaimers';
+import { disclaimerKey, footerKeys, resultBanners, sampleAsOfNoteKey, type BannerSpec } from './disclaimers';
 import { UnverifiedSection } from './unverifiedSection';
 import { useLocalizedUrgency } from './estimatedDate';
 import { drivingDemand, firstPrintedPhone } from './urgencyCopy';
@@ -156,7 +156,7 @@ export function ResultView({ analysis, pages, handlers, offline, chatUnavailable
         </View>
       ) : null}
       <View testID="result-footer" style={styles.footer}>
-        {FOOTER_KEYS.map((k) => (
+        {footerKeys(analysis).map((k) => (
           <AppText key={k} variant="caption" color="textMuted">
             {t(k)}
           </AppText>

@@ -25,4 +25,4 @@ export {
   STEP_TIMES_MS,
   useAnalyze,
 } from './useAnalyze';
-export { drivingDemand, firstPrintedPhone, printedPhoneHref, urgencySpeech } from './urgencyCopy';
+export { drivingDemand, firstPrintedPhone, paperPhoneHref, printedPhoneHref, urgencySpeech } from './urgencyCopy';

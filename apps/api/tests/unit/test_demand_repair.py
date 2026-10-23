@@ -21,6 +21,7 @@ from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.ai.provider import StructuredResult
 from proxyhealth_api.analysis import deadline_rules as dr
 from proxyhealth_api.analysis import demand_repair as rep
+from proxyhealth_api.analysis import scam as sc
 from proxyhealth_api.analysis import verify as v
 from proxyhealth_api.analysis.pipeline import run_analysis
 from proxyhealth_api.analysis.transcript import Transcript, assemble_transcript
@@ -34,7 +35,7 @@ from proxyhealth_api.contracts.enums import (
     RedFlagKind,
     ScamRisk,
 )
-from proxyhealth_api.contracts.model_out import AnalysisModelOut, DemandOut, ExplainOut
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, DemandOut, ExplainOut, RedFlagOut
 from proxyhealth_api.settings import DATA_DIR
 from tests.golden._fixtures_wp7 import STORE, CountingMock, build_deps, fixture
 from tests.unit._fixtures_wp2 import block, demand_out, en_t
@@ -695,10 +696,104 @@ async def test_pipeline_repairs_block_id_quotes(tmp_path: Path) -> None:
 
 
 async def test_red_flags_are_not_repaired(tmp_path: Path) -> None:
-    """A payment flag whose printed quote sits in another block stays dropped: repair is for
-    demands only (the sweep's dropped flags all quoted the SAMPLE footer)."""
+    """A payment flag whose printed quote sits in another block stays dropped: red flags get R1
+    only (an id-only quote), never R4's re-anchoring."""
     result = await _analyze(tmp_path, bad_flag=True)
     assert RedFlagKind.scam_payment_method not in {f.kind for f in result.red_flags}
     assert result.verification.facts_rejected == 1, "the flag, and no demand"
     assert result.scam_risk is ScamRisk.none
     assert all(d.verified for d in result.demands)
+
+
+# --- red flags: R1 only (integration review, issue 14) -------------------------------------------
+# A small model's scam flag citing "p1b2" was rejected, so in a language without scam regexes (vi)
+# a gift-card scam scored none. The repaired flag quotes the exact printed text of the one block it
+# cites — and never a block holding the SAMPLE footer (every block-id flag of the sweep did). Only
+# ``scam_payment_method`` flags: their signal passes the payment screens; impersonation and the
+# other kinds do not, so a junk block-id flag on an agency header stays rejected.
+
+GIFT_VI = (
+    "Bạn phải trả 500 đô la ngay hôm nay bằng thẻ quà tặng Google Play, nếu không bạn sẽ bị "
+    "trục xuất."
+)
+
+
+def scam_paper() -> Transcript:
+    return _t(
+        block("p1b1", "Sở Di trú Hoa Kỳ"),
+        block("p1b2", GIFT_VI),
+        block("p1b3", "USCIS will never ask you to pay with gift cards."),
+        block("p1b4", f"Pay with Google Play gift cards today.\n{FOOTER}"),
+        block("p1b5", FOOTER),
+        block("p1b6", "Not a real letter."),
+        block("p1b7", "Gọi ngay (202) 555-0147", unclear=True),
+    )
+
+
+def id_flag(quote: str, span_ids: list[str], kind: RedFlagKind = RedFlagKind.scam_payment_method,
+            text: str = "Asks for gift cards.") -> RedFlagOut:  # fmt: skip
+    return RedFlagOut(kind=kind, text=text, source_quote=quote, span_ids=span_ids, page=1)
+
+
+@pytest.mark.parametrize(
+    ("quote", "span_ids"), [("p1b2", ["p1b2"]), ("[p1b2]", ["p1b2"]), ("p1b2", []),
+                            ("[p1b2|unclear]", ["p1b2"])],
+)  # fmt: skip
+def test_flag_r1_quotes_the_one_cited_block(quote: str, span_ids: list[str]) -> None:
+    t = scam_paper()
+    f = id_flag(quote, span_ids)
+    fixed = rep.repair_red_flag(f, t)
+    assert (fixed.source_quote, fixed.span_ids, fixed.page) == (GIFT_VI, ["p1b2"], 1)
+    assert (fixed.kind, fixed.text) == (f.kind, f.text), "kind and text stay the model's"
+    checked = v.verify_red_flags([fixed], t)
+    assert [x.source_quote for x in checked.flags] == [GIFT_VI] and checked.facts_rejected == 0
+    assert v.verify_red_flags([f], t).facts_rejected == 1, "unrepaired, it was rejected"
+
+
+@pytest.mark.parametrize(
+    ("quote", "span_ids", "kind"),
+    [
+        ("p1b5", ["p1b5"], RedFlagKind.scam_payment_method),  # the SAMPLE footer
+        ("p1b5", ["p1b5"], RedFlagKind.impersonation),
+        ("p1b4", ["p1b4"], RedFlagKind.scam_payment_method),  # a block holding the footer too
+        ("p1b6", ["p1b6"], RedFlagKind.impersonation),  # a piece of the footer
+        ("p1b7", ["p1b7"], RedFlagKind.scam_payment_method),  # an unclear block
+        ("p1b2 p1b3", ["p1b2", "p1b3"], RedFlagKind.scam_payment_method),  # two blocks
+        ("p1b2", ["p1b3"], RedFlagKind.scam_payment_method),  # quote and span disagree
+        ("p1b2", ["p1b2", "p9b9"], RedFlagKind.scam_payment_method),  # an unknown span too
+        ("p9b9", ["p9b9"], RedFlagKind.scam_payment_method),  # no such block
+        ("p1b2", ["p1b2"], RedFlagKind.contradiction),  # not a scam kind
+        ("p1b2", ["p1b2"], RedFlagKind.other),
+        # Scam kinds without the payment screens: a junk block-id impersonation flag on a genuine
+        # agency header would score the real paper possible (G1 review).
+        ("p1b1", ["p1b1"], RedFlagKind.impersonation),
+        ("p1b2", ["p1b2"], RedFlagKind.urgency_pressure),
+        ("p1b2", ["p1b2"], RedFlagKind.notario),
+        ("p1b2", ["p1b2"], RedFlagKind.fee_for_free_form),
+        ("p1b2", ["p1b2"], RedFlagKind.guaranteed_result),
+        ("see p1b2", ["p1b2"], RedFlagKind.scam_payment_method),  # words of its own
+        ("", ["p1b2"], RedFlagKind.scam_payment_method),
+    ],
+)
+def test_flag_r1_never_repairs_anything_else(
+    quote: str, span_ids: list[str], kind: RedFlagKind
+) -> None:
+    t = scam_paper()
+    f = id_flag(quote, span_ids, kind)
+    assert rep.repair_red_flag(f, t) is f
+    assert v.verify_red_flags([f], t).flags == []
+
+
+def test_flag_r1_leaves_the_sentinel_and_quoted_flags_alone() -> None:
+    t = scam_paper()
+    sentinel = id_flag("p1b2", ["p1b2"], RedFlagKind.other, v.MULTIPLE_DOCUMENTS_SENTINEL)
+    quoted = id_flag(GIFT_VI, ["p1b2"])
+    assert rep.repair_red_flags([sentinel, quoted], t) == [sentinel, quoted]
+
+
+def test_a_repaired_anti_fraud_block_still_neither_shows_nor_scores() -> None:
+    """The screens run on the repaired quote exactly as on a typed one."""
+    fixed = rep.repair_red_flag(id_flag("p1b3", ["p1b3"]), scam_paper())
+    assert fixed.source_quote == "USCIS will never ask you to pay with gift cards."
+    assert sc.is_anti_fraud_quote(fixed.source_quote)
+    assert not sc.payment_flag_has_evidence(fixed.source_quote)
