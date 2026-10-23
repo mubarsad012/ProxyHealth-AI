@@ -14,7 +14,9 @@ irs.gov/payments") with no cash, money order, voucher, courier or agent named
 ``payment_app``'s guards read on that quote, except when the quote names such an in-hand payment.
 On a paper scored ``none`` it then neither shows nor counts as tag evidence
 (``settle_payment_flags``). Dari/Pashto put the verb last, so their anti-fraud cue is a "never"
-word before the payment term with a negated ask/accept verb on either side of it (``framed``).
+word before the payment term with a negated ask/accept/pay verb on either side of it, and a
+positive verb between them ends its scope (``framed``, ``FramedCue.clause``); English and Spanish
+also read a prohibitive "Never pay with gift cards" / "Nunca pague con tarjetas de regalo" there.
 Guards (sender kind, document type, negative regex on the hit block, a ``.gov`` payment portal
 printed in it) can lower a signal's weight to 0/1. ``score`` = Σ weights; ``likely`` when
 ``score ≥ 4`` or one of the ``likely_rules`` holds; ``possible`` when ``2 ≤ score < 4`` or a lone
@@ -127,10 +129,39 @@ class NegationCues:
     """Cue after the match in the same sentence ("… with gift cards is a scam")."""
     breaks: re.Pattern[str] | None = None
     """Words between a ``before`` cue and the match that end its scope ("… only gift cards")."""
-    framed: tuple[tuple[re.Pattern[str], re.Pattern[str]], ...] = ()
-    """(``before``, ``after``) pairs for verb-last languages (Dari, Pashto): the "never" word
-    before the match *and* the negated ask/accept verb after it ("هرگز … کارت تحفه … نمی‌خواهند"),
-    no ``breaks`` word on either side."""
+    framed: tuple[FramedCue, ...] = ()
+    """Paired cues (``FramedCue``): verb-last Dari/Pashto ("هرگز … کارت تحفه … نمی‌خواهند") and the
+    en/es prohibitive ("Never pay with gift cards")."""
+
+
+@dataclass(frozen=True)
+class FramedCue:
+    """One ``negation_cues.framed`` item: ``before`` must match in the sentence before the payment
+    term and ``after`` after it (either may be absent, not both), with no ``breaks`` word and no
+    ``clause`` word (a positive finite verb of the pair's language: "هرگز دیر نکنید، کارت تحفه
+    تهیه کنید") between the cue and the term on either side. On the ``after`` side only the text
+    before its ``verb`` group (the negated verb itself) is checked."""
+
+    before: re.Pattern[str] | None = None
+    after: re.Pattern[str] | None = None
+    clause: re.Pattern[str] | None = None
+
+    def unbroken(self, between: str, breaks: re.Pattern[str] | None) -> bool:
+        return not any(p is not None and p.search(between) for p in (breaks, self.clause))
+
+    def after_ok(self, after: str, breaks: re.Pattern[str] | None) -> bool:
+        if self.after is None:
+            return True
+        found = self.after.search(after)
+        if found is None:
+            return False
+        has_verb = "verb" in self.after.groupindex and found.group("verb") is not None
+        return self.unbroken(after[: found.start("verb") if has_verb else found.end()], breaks)
+
+    def before_ok(self, before: str, breaks: re.Pattern[str] | None) -> bool:
+        if self.before is None:
+            return True
+        return any(self.unbroken(before[m.end() :], breaks) for m in self.before.finditer(before))
 
 
 @dataclass(frozen=True)
@@ -196,14 +227,21 @@ def _guard(raw: Mapping[str, Any]) -> Guard:
     )
 
 
-def _framed(raw: Any) -> tuple[tuple[re.Pattern[str], re.Pattern[str]], ...]:
-    """``negation_cues.framed`` → (``before``, ``after``) pairs, every language's list."""
-    out: list[tuple[re.Pattern[str], re.Pattern[str]]] = []
+def _framed(raw: Any) -> tuple[FramedCue, ...]:
+    """``negation_cues.framed`` → ``FramedCue``s, every language's list."""
+    out: list[FramedCue] = []
+
+    def opt(value: Any) -> re.Pattern[str] | None:
+        return re.compile(str(value), re.IGNORECASE) if value else None
+
     if isinstance(raw, Mapping):
-        for items in raw.values():
+        for lang, items in raw.items():
             for pair in items or []:
-                out.append((re.compile(str(pair["before"]), re.IGNORECASE),
-                            re.compile(str(pair["after"]), re.IGNORECASE)))  # fmt: skip
+                cue = FramedCue(opt(pair.get("before")), opt(pair.get("after")),
+                                opt(pair.get("clause")))  # fmt: skip
+                if cue.before is None and cue.after is None:
+                    raise ValueError(f"scam.yaml negation_cues.framed.{lang}: before or after")
+                out.append(cue)
     return tuple(out)
 
 
@@ -366,29 +404,21 @@ def is_negated(text: str, start: int, end: int, cues: NegationCues) -> bool:
     """True when the match ``text[start:end]`` sits in a sentence that negates the request or
     describes fraud ("… will never ask you to pay with gift cards", "Nunca le pediremos pagos
     con tarjetas de regalo", "anyone who asks for gift cards is a scammer") — unless a scope
-    break ("only", "instead", "but") stands between the negating cue and the match. Verb-last
-    Dari/Pashto (``framed``): the "never" word before the match and the negated ask/accept verb
-    after it ("هرگز پول را از راه … کارت تحفه … نمی‌خواهند"), no break on either side."""
+    break ("only", "instead", "but") stands between the negating cue and the match. ``framed``
+    cues (``FramedCue``): verb-last Dari/Pashto, the "never" word before the match and the
+    negated ask/accept/pay verb after it ("هرگز پول را از راه … کارت تحفه … نمی‌خواهند"), and the
+    en/es prohibitive ("Never pay with gift cards"); no break or positive verb on either side."""
     head, tail = _sentence_bounds(text, start, end)
     before = text[head:start]
-
-    def unbroken(between: str) -> bool:
-        return cues.breaks is None or not cues.breaks.search(between)
-
+    breaks = cues.breaks
     for pattern in cues.before:
         for m in pattern.finditer(before):
-            if unbroken(before[m.end() :]):
+            if breaks is None or not breaks.search(before[m.end() :]):
                 return True
     after = text[end:tail]
     if any(p.search(after) for p in cues.after):
         return True
-    for never, verb in cues.framed:
-        found = verb.search(after)
-        if found is None or not unbroken(after[: found.end()]):
-            continue
-        if any(unbroken(before[m.end() :]) for m in never.finditer(before)):
-            return True
-    return False
+    return any(c.after_ok(after, breaks) and c.before_ok(before, breaks) for c in cues.framed)
 
 
 def _signal_match(sig: Signal, text: str, cues: NegationCues) -> bool:
@@ -821,6 +851,7 @@ def retype_for_scam(
 __all__ = [
     "MODEL_SCAM_KINDS",
     "SCAM_YAML",
+    "FramedCue",
     "Guard",
     "ScamConfig",
     "ScamOutcome",

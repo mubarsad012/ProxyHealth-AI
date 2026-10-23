@@ -708,7 +708,9 @@ async def test_red_flags_are_not_repaired(tmp_path: Path) -> None:
 # --- red flags: R1 only (integration review, issue 14) -------------------------------------------
 # A small model's scam flag citing "p1b2" was rejected, so in a language without scam regexes (vi)
 # a gift-card scam scored none. The repaired flag quotes the exact printed text of the one block it
-# cites — and never a block holding the SAMPLE footer (every block-id flag of the sweep did).
+# cites — and never a block holding the SAMPLE footer (every block-id flag of the sweep did). Only
+# ``scam_payment_method`` flags: their signal passes the payment screens; impersonation and the
+# other kinds do not, so a junk block-id flag on an agency header stays rejected.
 
 GIFT_VI = (
     "Bạn phải trả 500 đô la ngay hôm nay bằng thẻ quà tặng Google Play, nếu không bạn sẽ bị "
@@ -762,6 +764,13 @@ def test_flag_r1_quotes_the_one_cited_block(quote: str, span_ids: list[str]) -> 
         ("p9b9", ["p9b9"], RedFlagKind.scam_payment_method),  # no such block
         ("p1b2", ["p1b2"], RedFlagKind.contradiction),  # not a scam kind
         ("p1b2", ["p1b2"], RedFlagKind.other),
+        # Scam kinds without the payment screens: a junk block-id impersonation flag on a genuine
+        # agency header would score the real paper possible (G1 review).
+        ("p1b1", ["p1b1"], RedFlagKind.impersonation),
+        ("p1b2", ["p1b2"], RedFlagKind.urgency_pressure),
+        ("p1b2", ["p1b2"], RedFlagKind.notario),
+        ("p1b2", ["p1b2"], RedFlagKind.fee_for_free_form),
+        ("p1b2", ["p1b2"], RedFlagKind.guaranteed_result),
         ("see p1b2", ["p1b2"], RedFlagKind.scam_payment_method),  # words of its own
         ("", ["p1b2"], RedFlagKind.scam_payment_method),
     ],

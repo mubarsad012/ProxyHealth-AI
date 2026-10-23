@@ -11,7 +11,10 @@ call and the final one) check the model's sensitive tags against code evidence: 
 ``domestic_violence`` / ``trafficking`` tag needs ``emergency`` or a printed abuse context (a
 protective order, VAWA, a U/T visa, I-914/I-918/I-360 …; a language without a cue list keeps it);
 ``scam_report`` needs ``scam_risk != none``, a verified scam red flag or — on a real upload — the
-model's own scam verdict (``model_scam``: ``is_likely_scam`` or ``scam_signals``). A model
+model's own scam verdict backed by one of its own scam-kind red flags, verified or not
+(``model_scam_verdict``: ``is_likely_scam`` or ``scam_signals``, and a ``scam_payment_method`` /
+``impersonation`` / ``notario`` flag); on that verdict alone it goes behind the type's own tags,
+so a genuine paper a small model called fake keeps its own help first in the preview. A model
 ``crisis`` / ``poison`` tag is never dropped on a real upload (D-14: a drafted lexicon misses
 wording; ``model_crisis`` also feeds the model's ``crisis`` tag to the emergency check, as chat and
 troubleshoot do); only on a sample paper (``sample``), whose junk tags the small-model sweep found,
@@ -34,6 +37,7 @@ from proxyhealth_api.contracts.enums import (
     ResourceTag,
     ScamRisk,
 )
+from proxyhealth_api.contracts.model_out import AnalysisModelOut
 
 MAX_TAGS = 6
 DT = DocumentType
@@ -144,6 +148,17 @@ def prints_abuse_context(text: str, language: str | None) -> bool:
     return any(p.search(norm) for p in ABUSE_CONTEXT.values())
 
 
+def model_scam_verdict(out: AnalysisModelOut) -> bool:
+    """The model called the paper a scam (``is_likely_scam`` or ``scam_signals``) **and** raised a
+    ``SCAM_FLAG_KINDS`` red flag of its own, verified or not: on a real upload that keeps its
+    ``scam_report`` tag (``finalize_tags(model_scam=…)``) when code found no evidence. A bare
+    verdict is no evidence (D-13: a small model called genuine SNAP, traffic-court and pharmacy
+    papers fake)."""
+    return (out.is_likely_scam or bool(out.scam_signals)) and any(
+        f.kind in SCAM_FLAG_KINDS for f in out.red_flags
+    )
+
+
 def model_crisis(model_tags: Iterable[str], *, sample: bool) -> bool:
     """The model tagged ``crisis`` on a real upload: the backstop for words no emergency list
     holds, fed to ``emergency.detect_emergency(model_flag=…)`` as chat and troubleshoot do
@@ -238,13 +253,15 @@ def finalize_tags(
     one) drops model and tag-call ``domestic_violence``/``trafficking`` tags without an emergency
     or an abuse context in ``printed_text`` (the transcript, in the paper's ``language``;
     ``prints_abuse_context``), ``scam_report`` without scam evidence (``scam_risk``, a verified
-    scam flag, or on a real upload ``model_scam``), and — on a ``sample`` paper only —
-    ``crisis``/``poison`` tags without an emergency."""
+    scam flag, or on a real upload ``model_scam`` — ``model_scam_verdict`` — which then places it
+    behind the type's own tags), and — on a ``sample`` paper only — ``crisis``/``poison`` tags
+    without an emergency."""
     flags = list(red_flags)
     primary = primary_tags(document_type, category, form_numbers)
     scam_flag = any(f.verified and f.kind in SCAM_FLAG_KINDS for f in flags)
     abuse = emergency or not gate_sensitive or prints_abuse_context(printed_text, language)
-    scam_evidence = scam_risk is not ScamRisk.none or scam_flag or (model_scam and not sample)
+    code_scam = scam_risk is not ScamRisk.none or scam_flag
+    scam_evidence = code_scam or (model_scam and not sample)
 
     def backed(tags: list[ResourceTag]) -> list[ResourceTag]:
         if not gate_sensitive:
@@ -272,6 +289,10 @@ def finalize_tags(
         for tag in CATEGORY_TAGS.get(category, ()):
             if tag not in tags:
                 tags.append(tag)
+    if gate_sensitive and not code_scam and RT.scam_report in tags:
+        # The model's own verdict only: kept, but behind the type's own help (never cut by the cap).
+        tags = [t for t in tags if t is not RT.scam_report]
+        tags.insert(min(len(tags), MAX_TAGS - 1), RT.scam_report)
     if scam_risk is ScamRisk.likely:
         tags = _front(tags, RT.scam_report)
     if emergency:
@@ -292,6 +313,7 @@ __all__ = [
     "finalize_tags",
     "form_tags",
     "model_crisis",
+    "model_scam_verdict",
     "primary_tags",
     "prints_abuse_context",
     "validate_tags",

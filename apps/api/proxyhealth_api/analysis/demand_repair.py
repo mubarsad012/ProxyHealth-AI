@@ -32,12 +32,17 @@ rejected exactly as before.
 A repaired demand has ``confidence`` capped at ``medium`` and its ``verification_note`` ends in
 ``" (repaired: R1, R2)"`` (fixed codes, no content).
 
-Red flags get **R1 only**, and only the scam kinds (``scam.MODEL_SCAM_KINDS``): a flag has no
-value to quote, so a ``source_quote`` holding exactly one block id becomes that block's whole
-printed text (``repair_red_flag``). Never when the flag's ``span_ids`` cite another block, the id
-names no block, the block is unclear or empty, or it holds any of the SAMPLE footer's words (the
-dropped model flags of the sweep all cited the footer: those stay rejected). The flag then goes
-through ``verify_red_flags`` and the scam screens exactly like one that quoted the block itself.
+Red flags get **R1 only**, and only ``scam_payment_method`` flags: a flag has no value to quote,
+so a ``source_quote`` holding exactly one block id becomes that block's whole printed text
+(``repair_red_flag``). Never when the flag's ``span_ids`` cite another block, the id names no
+block, the block is unclear or empty, or it holds any of the SAMPLE footer's words (the dropped
+model flags of the sweep all cited the footer: those stay rejected). The flag then goes through
+``verify_red_flags`` and the payment screens (anti-fraud boilerplate, the footer, an agency's own
+``.gov`` portal, a named method on a paper scored none) exactly like one that quoted the block
+itself. Other scam kinds (``impersonation``, ``urgency_pressure``, ``notario`` …) are never
+repaired: their signals have no such screens, so a small model's block-id flag on a genuine
+agency header ("U.S. Citizenship and Immigration Services") would score a real paper ``possible``
+and strip its plan (DOCUMENT_TAXONOMY §6.4).
 Pure functions; the SSN and ID masks (§11.1) apply before any comparison; nothing is logged.
 
 Cost: the R0 check is the very ``verify_span`` call ``verify.demand_from_out`` makes (same masked
@@ -52,12 +57,12 @@ import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 
-from proxyhealth_api.analysis import contacts_filter, phrasing, prose_dates, scam, verify
+from proxyhealth_api.analysis import contacts_filter, phrasing, prose_dates, verify
 from proxyhealth_api.analysis.transcript import Transcript
 from proxyhealth_api.analysis.verify import VerifiedDemands
 from proxyhealth_api.contracts.analysis import Demand
 from proxyhealth_api.contracts.common import TextBlock
-from proxyhealth_api.contracts.enums import Confidence, DemandKind
+from proxyhealth_api.contracts.enums import Confidence, DemandKind, RedFlagKind
 from proxyhealth_api.contracts.model_out import DemandOut, RedFlagOut
 from proxyhealth_api.demo.fixtures import banner_words, is_sample_banner
 
@@ -323,6 +328,8 @@ def repair_demands(demands: Iterable[DemandOut], transcript: Transcript) -> Repa
     return RepairedDemands([repair_demand(d, transcript) for d in demands])
 
 
+# The one red-flag kind R1 repairs (module docstring): its signal passes the payment screens.
+REPAIRABLE_FLAG_KINDS = frozenset({RedFlagKind.scam_payment_method})
 # Words of the SAMPLE footer (``demo.fixtures.SAMPLE_FOOTER``): a block holding any of them is never
 # the quote of a repaired red flag.
 _FOOTER_PIECES = ("synthetic document", "made for demonstration", "not a real letter")
@@ -337,10 +344,10 @@ def _holds_sample_footer(text: str) -> bool:
 
 
 def repair_red_flag(f: RedFlagOut, t: Transcript) -> RedFlagOut:
-    """Red-flag R1 (module docstring): a scam-kind flag whose ``source_quote`` is exactly one
-    block id ("p1b2", "[p1b2]") quotes that block's whole printed text instead; anything else is
-    returned as the input object."""
-    if f.kind not in scam.MODEL_SCAM_KINDS or f.text.strip() == verify.MULTIPLE_DOCUMENTS_SENTINEL:
+    """Red-flag R1 (module docstring): a ``scam_payment_method`` flag whose ``source_quote`` is
+    exactly one block id ("p1b2", "[p1b2]") quotes that block's whole printed text instead;
+    anything else is returned as the input object."""
+    if f.kind not in REPAIRABLE_FLAG_KINDS or f.text.strip() == verify.MULTIPLE_DOCUMENTS_SENTINEL:
         return f
     cited = quote_ids(f.source_quote or "")
     if not cited or len({t.resolve(i) for i in cited}) != 1:
@@ -362,6 +369,7 @@ def repair_red_flags(flags: Iterable[RedFlagOut], transcript: Transcript) -> lis
 __all__ = [
     "MIN_PREFIX_CHARS",
     "QUOTE_CAP",
+    "REPAIRABLE_FLAG_KINDS",
     "R1_ID_QUOTE",
     "R2_NARROWED",
     "R3_COMPLETED",

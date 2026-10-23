@@ -14,6 +14,7 @@ from proxyhealth_api.contracts.enums import (
     ScamRisk,
     Severity,
 )
+from proxyhealth_api.contracts.model_out import AnalysisModelOut, RedFlagOut
 from proxyhealth_api.demo.fixtures import FixtureStore
 from proxyhealth_api.settings import DATA_DIR
 
@@ -220,7 +221,8 @@ def test_curated_fixture_tags_are_unchanged(fid: str, lang: str) -> None:
 def test_a_real_upload_the_model_calls_a_scam_keeps_its_scam_report_tag() -> None:
     """Issue 14: with no code evidence left (a block-id quote, a language without scam regexes),
     the model's own verdict keeps its scam_report tag on a real upload — never on a sample, where
-    the SAMPLE footer made a small model call every paper fake."""
+    the SAMPLE footer made a small model call every paper fake. On that verdict alone the tag goes
+    behind the type's own (G1 review: a small model also calls genuine papers fake)."""
 
     def tags(*, model_scam: bool, sample: bool = False) -> tg.TagOutcome:
         return tg.finalize_tags(
@@ -229,10 +231,53 @@ def test_a_real_upload_the_model_calls_a_scam_keeps_its_scam_report_tag() -> Non
             sample=sample,
         )  # fmt: skip
 
-    assert tags(model_scam=True).tags == [RT.scam_report, RT.immigration_legal_help]
+    assert tags(model_scam=True).tags == [RT.immigration_legal_help, RT.scam_report]
     sample = tags(model_scam=True, sample=True)
     assert sample.tags == [RT.immigration_legal_help] and sample.source == "type"
     assert RT.scam_report not in tags(model_scam=False).tags
+    # No type tags to put first: the verdict's tag is the list (and is not cut by the cap).
+    alone = tg.finalize_tags(["scam_report"], document_type=DT.other_notice,
+                             category=DocumentCategory.other, gate_sensitive=True,
+                             model_scam=True)  # fmt: skip
+    assert alone.tags == [RT.scam_report]
+    many = tg.finalize_tags(["scam_report", "food", "utility_shutoff", "benefits_navigation",
+                             "rent_assistance", "tax_notice"], document_type=DT.other_notice,
+                            category=DocumentCategory.other, gate_sensitive=True,
+                            model_scam=True)  # fmt: skip
+    assert many.tags[-1] is RT.scam_report and len(many.tags) == tg.MAX_TAGS
+    # Code evidence keeps the model's order (and a likely scam fronts the tag).
+    possible = tg.finalize_tags(["scam_report", "benefits_navigation"],
+                                document_type=DT.other_notice, category=DocumentCategory.benefits,
+                                gate_sensitive=True, scam_risk=ScamRisk.possible)  # fmt: skip
+    assert possible.tags[0] is RT.scam_report
+
+
+def _model_out(*, likely: bool, signals: list[str], kinds: list[RedFlagKind]) -> AnalysisModelOut:
+    flags = [RedFlagOut(kind=k, text="Flag.", source_quote="p1b1", span_ids=["p1b1"], page=1)
+             for k in kinds]  # fmt: skip
+    fixture = STORE.get("scam_gift_card_letter")
+    out = fixture.analysis_out("en") if fixture is not None else None
+    assert out is not None
+    return out.model_copy(update={"is_likely_scam": likely, "scam_signals": signals,
+                                  "red_flags": flags})  # fmt: skip
+
+
+def test_the_models_verdict_needs_one_of_its_own_scam_flags() -> None:
+    """G1 review: a genuine Fairfax SNAP interview notice the small model called a scam
+    (is_likely_scam, signals ['urgency_pressure'], no red flag, tags ['scam_report', …]) filled the
+    whole preview with scam-report help. A bare verdict is no evidence (D-13)."""
+    assert not tg.model_scam_verdict(
+        _model_out(likely=True, signals=["urgency_pressure"], kinds=[])
+    )
+    assert not tg.model_scam_verdict(
+        _model_out(likely=True, signals=[], kinds=[RedFlagKind.urgency_pressure])
+    )
+    assert not tg.model_scam_verdict(
+        _model_out(likely=False, signals=[], kinds=[RedFlagKind.scam_payment_method])
+    )
+    for kind in (RedFlagKind.scam_payment_method, RedFlagKind.impersonation, RedFlagKind.notario):
+        assert tg.model_scam_verdict(_model_out(likely=False, signals=["gift_card"], kinds=[kind]))
+        assert tg.model_scam_verdict(_model_out(likely=True, signals=[], kinds=[kind]))
 
 
 @pytest.mark.parametrize(

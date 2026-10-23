@@ -831,6 +831,18 @@ POINTERS = [
     "Call the sender back today.",
     "Llame al número de la carta para confirmar.",
     "Pregunte a la oficina que le envió esta carta.",
+    # G1 review (g1adv/attack.py): steps the first pointer list let through on a likely scam.
+    "Call them back to confirm the amount.",
+    "Use the number listed at the top to check.",
+    "Write down the agent's name and the phone number printed on it, then call to check.",
+    "Reply to the email address shown before the date.",
+    "Go to the website printed at the bottom to check your case.",
+    "Ask Agent Brown for more time.",
+    "Talk to the officer who signed it.",
+    "Comuníquese con el remitente.",
+    "Pregunte al oficial García si puede pagar después.",
+    "Llámelos hoy para confirmar.",
+    "Visite el sitio web que aparece en la carta.",
 ]
 WARNINGS = [
     "Do not pay and do not call the number on this letter. Check with the real agency through "
@@ -841,6 +853,11 @@ WARNINGS = [
     "Call USCIS using the number on its official website, not the number on the letter.",
     "Ask USCIS whether this is a real letter before you pay.",
     "Write down the case number from the letter.",
+    "Write down the case number printed on the notice.",
+    "Check that your address printed on the letter is correct.",
+    "Do not call them back.",
+    "Report Agent Brown to the FTC.",
+    "Ask a lawyer or an Enrolled Agent for help.",
     "No pague y no llame al número de esta carta. Consulte con la agencia real por medio de "
     "Obtener ayuda.",
 ]

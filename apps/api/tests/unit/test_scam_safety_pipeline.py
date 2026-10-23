@@ -403,3 +403,102 @@ async def test_a_methodless_payment_flag_on_a_real_bill_neither_shows_nor_tags(
     assert RedFlagKind.scam_payment_method not in {f.kind for f in result.red_flags}
     assert RT.scam_report not in result.resource_tags
     assert result.verification.facts_rejected >= 1
+
+
+# --- G1 review: false scam evidence on genuine papers -------------------------------------------
+
+RFE = [
+    "U.S. Citizenship and Immigration Services", "Request for Evidence", "Form I-485",
+    "Submit the evidence listed below by January 12, 2027.",
+    "Mail your response to the address on this notice: USCIS, P.O. Box 660867, Dallas, TX 75266.",
+    "Call the USCIS Contact Center at 800-375-5283 with questions.",
+]  # fmt: skip
+
+
+def rfe_out(flags: list[RedFlagOut]) -> AnalysisModelOut:
+    out = variant(RFE, dtype=DT.uscis_rfe, category=DC.immigration, sender=SK.federal_agency,
+                  flags=flags, tags=["immigration_legal_help"], forms=["I-485"],
+                  confidence=Confidence.high)  # fmt: skip
+    due = DemandOut(
+        id="d1", kind=DemandKind.deadline, text="Send the evidence.", value_verbatim="January 12, "
+        "2027", source_quote=RFE[3], span_ids=["p1b4"], page=1, date_text="January 12, 2027",
+        time_text=None, relative_rule_text=None, anchor_span_id=None, amount_text=None,
+        currency=None, documents=[], role="response_due", confidence=Confidence.high,
+        ambiguity_note=None,
+    )  # fmt: skip
+    return out.model_copy(update={
+        "demands": [due], "questions_to_ask": ["What evidence do I need?"],
+        "plan_steps": [
+            step("s1", "Mail your response to USCIS, P.O. Box 660867, Dallas, TX 75266 before "
+                       "January 12, 2027.", PlanStepKind.mail, "p1b5"),
+            step("s2", "Call the USCIS Contact Center at 800-375-5283 if you have questions.",
+                 PlanStepKind.call, "p1b6"),
+            step("s3", "Ask the office that sent this paper what evidence they need.",
+                 PlanStepKind.verify, "p1b4"),
+        ],
+    })  # fmt: skip
+
+
+async def test_a_block_id_impersonation_flag_on_a_genuine_rfe_is_no_scam(tmp_path: Path) -> None:
+    """g1adv/legit2.py: red-flag R1 repaired a junk impersonation flag citing the USCIS header
+    ("p1b1"); the genuine RFE scored possible and lost every plan step and its question. Only
+    payment flags are repaired now; the others stay rejected, as before the repair."""
+    for kind, span in ((RedFlagKind.impersonation, "p1b1"),
+                       (RedFlagKind.urgency_pressure, "p1b4"),
+                       (RedFlagKind.notario, "p1b3")):  # fmt: skip
+        flag = RedFlagOut(kind=kind, text="Looks fake.", source_quote=span, span_ids=[span], page=1)
+        result, _ = await analyze(tmp_path, rfe_out([flag]))
+        assert result.scam_risk is ScamRisk.none and result.red_flags == [], kind
+        assert result.document_type is DT.uscis_rfe and result.verification.facts_rejected >= 1
+        assert [s.id for s in result.plan_steps] == ["s1", "s2", "s3"], kind
+        assert result.questions_to_ask == ["What evidence do I need?"]
+        assert result.urgency.verify_resource_id == "uscis_contact"
+
+
+SNAP = [
+    "Fairfax County Department of Family Services", "SNAP Interview Notice",
+    "Your phone interview is on November 3, 2026 at 10:00 AM.",
+    "We will call you at the number on file.",
+]  # fmt: skip
+SCAM_HELP = {"dhs_oig", "uscis_scams", "ftc_immigrant_scams", "ftc_reportfraud", "ssa_scams",
+             "irs_scams"}  # fmt: skip
+
+
+async def test_a_bare_model_scam_verdict_does_not_take_over_a_genuine_papers_help(
+    tmp_path: Path,
+) -> None:
+    """g1adv/legit.py L6: the small model called a genuine SNAP notice a scam (is_likely_scam,
+    signals ['urgency_pressure'], no red flag) and listed scam_report first; the preview became
+    dhs_oig/uscis_scams/ftc_immigrant_scams. A verdict alone is no evidence (D-13); with a scam
+    flag of its own (here unverifiable) the tag stays, behind the type's own help."""
+    bare = variant(SNAP, dtype=DT.snap_notice, category=DC.benefits, sender=SK.local_agency,
+                   likely=True, signals=["urgency_pressure"],
+                   tags=["scam_report", "benefits_navigation"],
+                   confidence=Confidence.high)  # fmt: skip
+    result, _ = await analyze(tmp_path, bare)
+    assert result.scam_risk is ScamRisk.none and RT.scam_report not in result.resource_tags
+    assert not SCAM_HELP & set(preview(result)), preview(result)
+    flagged = bare.model_copy(update={"red_flags": [RedFlagOut(
+        kind=RedFlagKind.impersonation, text="Pretends to be the county.",
+        source_quote="Department of Social Services fraud unit", span_ids=["p1b1"], page=1,
+    )]})  # fmt: skip
+    result, _ = await analyze(tmp_path, flagged)
+    assert result.scam_risk is ScamRisk.none and result.resource_tags[-1] is RT.scam_report
+    assert result.resource_tags[0] is not RT.scam_report
+    assert preview(result) and preview(result)[0] not in SCAM_HELP, preview(result)
+
+
+async def test_a_genuine_dari_receipt_saying_never_pay_by_gift_card_is_no_scam(
+    tmp_path: Path,
+) -> None:
+    """g1adv/legit.py L1: "هرگز با کارت تحفه یا حواله پول پرداخت نکنید" ("never pay by gift card or
+    money transfer") on a genuine USCIS receipt scored likely and re-typed it to other_notice once
+    the bare "never" cue was gone."""
+    texts = ["اداره خدمات شهروندی و مهاجرت ایالات متحده", "رسید درخواست I-765",
+             "ما درخواست شما را دریافت کردیم.", "هرگز با کارت تحفه یا حواله پول پرداخت نکنید."]
+    out = variant(texts, dtype=DT.uscis_receipt, category=DC.immigration,
+                  sender=SK.federal_agency, lang="prs", tags=["immigration_legal_help"],
+                  confidence=Confidence.high)  # fmt: skip
+    result, _ = await analyze(tmp_path, out)
+    assert result.scam_risk is ScamRisk.none and result.document_type is DT.uscis_receipt
+    assert RT.scam_report not in result.resource_tags

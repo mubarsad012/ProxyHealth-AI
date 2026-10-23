@@ -1193,7 +1193,7 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         category=out.category, form_numbers=forms, readable=True, scam_risk=scam_out.scam_risk,
         red_flags=flags_checked.flags, gate_sensitive=True, printed_text=paper.full_text,
         language=detected, sample=sample,
-        model_scam=out.is_likely_scam or bool(out.scam_signals),  # its own verdict (real uploads)
+        model_scam=tagging.model_scam_verdict(out),  # its own verdict + flag (real uploads)
     )  # fmt: skip
     if tags_now(emergency=emerg.safety.emergency).needs_tag_call:
         tag_out = await run_tag_call(

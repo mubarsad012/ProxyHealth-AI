@@ -606,6 +606,85 @@ def test_a_break_word_ends_the_dari_cue(line: str) -> None:
     assert "gift_card" in out.fired and out.scam_risk is ScamRisk.likely
 
 
+# --- G1 review: prohibitive "never pay with gift cards" lines, and positive verbs end the cue ----
+# Removing the bare "never" cue left a genuine agency's "هرگز با کارت تحفه … پرداخت نکنید" ("never
+# pay by gift card") scored likely (English/Spanish "Never pay with gift cards." already were), and
+# the framed cue still read a "never" governing another verb ("never be late, get gift cards …
+# or we won't accept") as anti-fraud boilerplate.
+
+PROHIBITIVE_ANTI_FRAUD = [
+    "Never pay with gift cards.",
+    "You should never pay with gift cards or wire transfers.",
+    "Please do not pay with gift cards, wire transfers, or cryptocurrency.",
+    "Never pay with gift cards, wire transfers, prepaid cards, or cryptocurrency.",
+    "Important: never send money by Western Union.",
+    "Do not buy gift cards to pay a government agency.",
+    "Pay by check or money order, and never pay with gift cards.",
+    "Para pagar, nunca use tarjetas de regalo.",
+    "Nunca pague con tarjetas de regalo.",
+    "No envíe dinero por Western Union.",
+    "Usted nunca debe pagar con tarjetas de regalo.",
+    "هرگز با کارت تحفه یا حواله پول پرداخت نکنید.",
+    "هرگز پول ندهید و کارت تحفه نخرید.",  # "never … and do not …": negated verbs keep the scope
+    "شما هرگز نباید با کارت تحفه پول بپردازید.",
+    "اداره مهاجرت هرگز تماس نمی‌گیرد و با کارت تحفه پول نمی‌خواهد.",
+    "هېڅکله د ډالۍ کارت سره پیسې مه ورکوئ.",
+    "هېڅکله د ډالۍ کارت سره تادیه مه کوئ.",
+]
+
+
+@pytest.mark.parametrize("line", PROHIBITIVE_ANTI_FRAUD)
+def test_a_prohibitive_never_pay_line_is_anti_fraud(line: str) -> None:
+    assert sc.is_anti_fraud_quote(line), line
+    out = sc.score_scam(segs("Official notice", line), document_type=DT.uscis_receipt,
+                        sender_kind=SK.federal_agency, sender_as_written="USCIS")  # fmt: skip
+    assert out.scam_risk is ScamRisk.none and out.fired == [], out.fired
+    assert sc.retype_for_scam(DT.uscis_receipt, out.scam_risk) is DT.uscis_receipt
+
+
+SCAMS_NEAR_A_NEGATION = [
+    # The reviewer's bypasses: "never" governs another verb; a positive verb follows the method.
+    "هرگز دیر نکنید، کارت تحفه گوگل پلی تهیه کنید وگرنه درخواست را قبول نمی‌کنیم.",
+    "هرگز به کسی نگویید و کارت تحفه را امروز آماده کنید، ما بهانه نمی‌پذیریم.",
+    "هېڅکله ناوخته مه کوئ، د ډالۍ کارت چمتو کړئ، که نه موږ ستاسو غوښتنه نه منو.",
+    "Never be late, get Google Play gift cards or we will not accept your application.",
+    "ما هرگز نمی‌خواهیم دیر کنید، کارت تحفه بخرید.",
+    "نباید دیر کنید، با کارت تحفه بپردازید.",
+    "نباید به کسی بگویید و با کارت تحفه بپردازید.",
+    "اگر با کارت تحفه پرداخت نکنید، اخراج می‌شوید.",  # "if you do not pay …": a threat
+    # A prohibitive that does not govern the method.
+    "If you still do not pay with gift cards today you will be arrested.",
+    "If you are late and do not pay with gift cards, you will be arrested.",
+    "A menos que llame hoy, y no pague con tarjetas de regalo, será arrestado.",
+    "Do not pay late with gift cards or you will be arrested.",
+    "Do not pay by check, pay with Google Play gift cards.",
+    "Do not pay by check, Google Play gift cards only.",
+    "Do not pay online, gift cards are the only way.",
+    "Don't pay with a check, we need iTunes cards today.",
+    "Do not pay with cash, we only accept gift cards.",
+    "Do not pay the IRS directly with a check: Google Play gift cards.",
+    "Don't pay with cash; buy gift cards.",
+    "Never show this letter to anyone and pay with Google Play gift cards.",
+    "No pague con cheque, pague con tarjetas de regalo.",
+    "No pague con cheque, necesitamos tarjetas de regalo hoy.",
+    "No pague tarde con tarjetas de regalo o será arrestado.",
+    "Si no paga con tarjetas de regalo hoy, será arrestado.",
+]
+
+
+@pytest.mark.parametrize("line", SCAMS_NEAR_A_NEGATION)
+def test_a_demand_beside_a_never_word_still_scores(line: str) -> None:
+    assert not sc.is_anti_fraud_quote(line), line
+    out = sc.score_scam(segs("Notice", line), document_type=DT.other_notice,
+                        sender_kind=SK.federal_agency, sender_as_written="Agency")  # fmt: skip
+    assert "gift_card" in out.fired and out.scam_risk is ScamRisk.likely, out.fired
+
+
+def test_a_framed_cue_needs_a_before_or_an_after_pattern() -> None:
+    with pytest.raises(ValueError, match="before or after"):
+        sc._framed({"prs": [{"clause": "x"}]})
+
+
 # --- integration review, issue 11: a payment flag naming no method on a paper scored none --------
 
 
