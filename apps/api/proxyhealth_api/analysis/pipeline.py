@@ -93,7 +93,6 @@ from proxyhealth_api.contracts.enums import (
     PackTier,
     PlanStepKind,
     Provider,
-    RedFlagKind,
     ResourceTag,
     ScamRisk,
     SenderKind,
@@ -693,7 +692,17 @@ async def masked_rerun(
     pages with black boxes burned over those blocks; otherwise (two-call mode, a PDF, a block
     without a box) → ``explain`` again with those blocks rendered as the fixed mask text. The
     re-run's explaining fields replace the first answer's; the blocks stay the original
-    transcript so the reader still sees what was printed."""
+    transcript so the reader still sees what was printed. On a loopback ``openai_compat``
+    endpoint each re-run call starts only with enough of the deadline left
+    (``compat_runtime.check_fallback_budget``): "too slow" at once, never the first reading."""
+
+    def check_budget() -> None:
+        compat_runtime.check_fallback_budget(
+            deps.ai, deadline_at, request_id=deps.request_id, reason="injection_rerun",
+            route=compat_runtime.INJECTION_RERUN_SKIPPED_ROUTE,
+        )  # fmt: skip
+
+    check_budget()
     first = TranscriptOut(
         blocks=paper.blocks, detected_language=reading.out.detected_language,
         legibility=reading.out.legibility, readable_reason=reading.out.readable_reason,
@@ -720,6 +729,7 @@ async def masked_rerun(
             if rerun.legibility is not Legibility.poor:
                 explained = ExplainOut.model_validate(rerun.model_dump(exclude=set(_CALL1_FIELDS)))
                 return merge_two_call(first, explained), outcome
+        check_budget()  # the image re-run spent its time; the explain call needs its own
     return await explain_call(
         deps, first, vars, page_count=upload.pages_received, hints=hints,
         deadline_at=deadline_at, masked_ids=hit_ids,
@@ -812,6 +822,17 @@ def resource_hosts(deps: PipelineDeps) -> set[str]:
             if url:
                 hosts.add(scam.host_of(url))
     return {h for h in hosts if h}
+
+
+def set_aside(before: Sequence[RedFlag], after: Sequence[RedFlag]) -> int:
+    """How many verified model flags a check removed: each was counted in ``facts_checked`` and
+    now counts in ``facts_rejected`` too. The quote-less ``[multiple_documents]`` sentinel is no
+    checked fact and never counts."""
+    kept = {id(f) for f in after}
+    return sum(
+        1 for f in before
+        if id(f) not in kept and f.text.strip() != verify.MULTIPLE_DOCUMENTS_SENTINEL
+    )  # fmt: skip
 
 
 def printed_forms(form_numbers: Sequence[str], full_text: str) -> list[str]:
@@ -1103,31 +1124,30 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     repaired = repair_demands(out.demands, paper)  # demands only: red flags are never repaired
     checked = repaired.verify(paper)
     flags_checked = verify.verify_red_flags(out.red_flags, paper)
-    # An agency's anti-fraud line ("USCIS will never ask you to pay with gift cards") quoted as a
-    # payment red flag is boilerplate, not a demand: it neither scores nor shows.
-    flags_checked.flags = [
-        f for f in flags_checked.flags
-        if f.kind is not RedFlagKind.scam_payment_method
-        or not scam.is_anti_fraud_quote(f.source_quote)
-    ]  # fmt: skip
-    # A payment flag whose quote asks for no payment (the SAMPLE footer, an agency's .gov portal)
-    # neither shows nor scores (TAXONOMY §6.1); a sample paper's SAMPLE footer is no part of it —
-    # no flag, step or scam signal rests on it (classify.py, §6.3).
+    # A payment flag whose quote asks for no payment (an agency's anti-fraud line "USCIS will
+    # never ask you to pay with gift cards", the SAMPLE footer, an agency's .gov portal) neither
+    # shows nor scores (TAXONOMY §6.1); a sample paper's SAMPLE footer is no part of it — no flag,
+    # step or scam signal rests on it (classify.py, §6.3). Every verified flag a check sets aside
+    # counts in ``facts_rejected``; a repeat of a kept flag does not.
     flags_checked = scam.screen_model_flags(flags_checked)
     banner = classify.sample_banner_ids(paper) if sample else frozenset[str]()
     if sample:
-        flags_checked.flags = classify.drop_banner_flags(flags_checked.flags, banner)
+        kept_flags = classify.drop_banner_flags(flags_checked.flags, banner)
+        flags_checked.facts_rejected += set_aside(flags_checked.flags, kept_flags)
+        flags_checked.flags = kept_flags
         out = out.model_copy(
             update={"plan_steps": classify.drop_banner_steps(out.plan_steps, paper, banner)}
         )
     if checked.page_edge_crop:
         warnings.append(WarningCode.page_edge_crop)
     summary_ids = verify.verify_summary_span_ids(out.summary_span_ids, paper)
-    # Missing pages are decided from the printed "page N of M", not by the model; a repeated
-    # model flag (same kind and quote) is dropped before it can score twice.
-    flags_checked.flags = transcript.settle_page_flags(
+    # A model ``missing_pages`` flag goes only when the printed "page N of M" markers show every
+    # page arrived (counted as rejected); one stays otherwise.
+    settled = transcript.settle_page_flags(
         flags_checked.flags, paper, pages_received=upload.pages_received
     )
+    flags_checked.flags = settled.flags
+    flags_checked.facts_rejected += settled.rejected
 
     # §11.3 contact scrubber (target-language marker; English marker for ``body_en``).
     names = deps.resources.names()
@@ -1260,15 +1280,19 @@ async def finish_analysis(
     def as_printed(text: str, language: str = target) -> str:
         return prose_dates.as_printed(text, printed, language)
 
-    async def clean(text: str) -> str:
+    async def clean(text: str, *, counted: bool = True) -> str:
         # D-19 masks (SSNs; A-numbers and receipt numbers with "Hide ID numbers") reach model
-        # prose too, not only the transcript and quotes.
+        # prose too, not only the transcript and quotes. ``counted=False``: text another field
+        # repeats (a title its body carries on) is cleaned the same, but counted there.
+        p_stats = stats if counted else PhrasingStats(warnings=stats.warnings)
+        d_stats = date_stats if counted else prose_dates.ProseDateStats()
+        scrub = scrubber if counted else replace(scrubber, contacts_stripped=0, orgs_replaced=0)
         text = paper.mask(text)
-        text = await phrase(scrubber.scrub(text), t=t, language=target, category=category,
-                            rewrite=rewrite, stats=stats, document_type=document_type,
+        text = await phrase(scrub.scrub(text), t=t, language=target, category=category,
+                            rewrite=rewrite, stats=p_stats, document_type=document_type,
                             scam_risk=scam_out.scam_risk)  # fmt: skip
         return as_printed(
-            prose_dates.check_text(text, allowed, t=t, language=target, stats=date_stats)
+            prose_dates.check_text(text, allowed, t=t, language=target, stats=d_stats)
         )
 
     def optional(text: str) -> str | None:
@@ -1286,7 +1310,7 @@ async def finish_analysis(
                             rewrite=rewrite, stats=stats, document_type=document_type,
                             scam_risk=scam_out.scam_risk)  # fmt: skip
         d = d.model_copy(update={"text": text})
-        return d.model_copy(update={
+        d = d.model_copy(update={
             "text": as_printed(prose_dates.check_demand_text(
                 d, allowed, t=t, language=target, stats=date_stats
             )),
@@ -1294,21 +1318,32 @@ async def finish_analysis(
             "documents": [as_printed(x) for x in scrubber.scrub_all(d.documents) if x.strip()],
             "ambiguity_note": await clean(d.ambiguity_note) if d.ambiguity_note else None,
         })  # fmt: skip
+        # A payment whose value became its printed date keeps its printed amount in view.
+        return deadline_rules.keep_carried_amount(d, checked.sources.get(d.id))
 
     # A title cut at the schema cap, a body continuing it, one English body for an English
-    # reader (summary_text) — before the scrubber, the lint and the date check below.
+    # reader (summary_text) — before the scrubber, the lint and the date check below. Each model
+    # sentence counts once: the one English body is cleaned once for both fields, and a title the
+    # body holds is counted with the body.
     out = out.model_copy(update=summary_text.tidy_update(out, target))
-    out.summary_body_en = paper.mask(out.summary_body_en)
-    body_en = await phrase(scrub_en.scrub(out.summary_body_en), t=en, language="en",
-                           category=category, rewrite=rewrite_en, stats=stats,
-                           document_type=document_type, scam_risk=scam_out.scam_risk)  # fmt: skip
-    summary = SummaryCard(
-        title=await clean(out.summary_title), body=await clean(out.summary_body),
-        body_en=as_printed(
+    one_body = base_of(target) == "en" and out.summary_body_en == out.summary_body
+    if one_body:
+        body = body_en = await clean(out.summary_body)
+    else:
+        out.summary_body_en = paper.mask(out.summary_body_en)
+        body_en = await phrase(
+            scrub_en.scrub(out.summary_body_en), t=en, language="en", category=category,
+            rewrite=rewrite_en, stats=stats, document_type=document_type,
+            scam_risk=scam_out.scam_risk,
+        )  # fmt: skip
+    in_body = summary_text.title_in_body(out.summary_title, out.summary_body)
+    title = await clean(out.summary_title, counted=not in_body)
+    if not one_body:
+        body = await clean(out.summary_body)
+        body_en = as_printed(
             prose_dates.check_text(body_en, allowed, t=en, language="en", stats=date_stats), "en"
-        ),
-        span_ids=summary_ids,
-    )  # fmt: skip
+        )
+    summary = SummaryCard(title=title, body=body, body_en=body_en, span_ids=summary_ids)
     final_demands = [await clean_demand(d) for d in demands]
     unverified = [await clean_demand(d) for d in checked.unverified]
     flags: list[RedFlag] = []
@@ -1321,18 +1356,20 @@ async def finish_analysis(
     steps: list[PlanStep] = []
     for step in plan_steps_from(out.plan_steps, paper, demand_ids,
                                 drop_paper_contact_steps=scam_out.is_likely_scam):  # fmt: skip
-        if step.kind is not PlanStepKind.professional and step.demand_id is None:
-            if (kept := optional(step.text)) is None:
-                continue
-            step = step.model_copy(update={"text": kept})
-        text = await clean(step.text)
         # §8.4: a DOJ-accredited representative only where one fits; no copied "Before that date,"
-        # §6.4: on a possible/likely scam no referral sends the reader back to the paper's contact
+        # §6.4: on a possible/likely scam no referral sends the reader back to the paper's contact.
+        # First, so a step it replaces with fixed copy spends no rewrite and counts once.
         text, replaced = phrasing.fit_professional_step(
-            text, category=category, document_type=document_type, demand_id=step.demand_id,
-            t=t, language=target, scam_risk=scam_out.scam_risk,
+            paper.mask(step.text), category=category, document_type=document_type,
+            demand_id=step.demand_id, t=t, language=target, scam_risk=scam_out.scam_risk,
         )  # fmt: skip
         stats.rewrites += int(replaced)
+        if not replaced:
+            if step.kind is not PlanStepKind.professional and step.demand_id is None:
+                if (kept := optional(text)) is None:
+                    continue
+                text = kept
+            text = await clean(text)
         if step.kind is PlanStepKind.professional:
             text = phrasing.ensure_professional(text, category, t, language=target,
                                                 scam_risk=scam_out.scam_risk)  # fmt: skip

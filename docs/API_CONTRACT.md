@@ -63,7 +63,7 @@ Model `ErrorResponse { error: ErrorBody }`
 | `rate_limited` | 429 | Per-install or per-IP-class bucket exceeded (`key_exhausted=false`). `details = {window: "hour"\|"day"\|"minute", limit: int, bucket: "install"\|"ip_class"}` (D-08; `ratelimit.py`). |
 | `quota_exhausted` | 429 | All upstream slots for the tier are unavailable (`key_exhausted=true`). |
 | `internal` | 500 | Unexpected server error. |
-| `model_output_invalid` | 502 | Model output failed schema after the single-call → two-call fallback. On a loopback `openai_compat` endpoint also when less than 120 s of `FAILOVER_DEADLINE_S` is left to start that fallback (`user_message_key` `err.ai_too_slow`; `analysis/compat_runtime.py`). |
+| `model_output_invalid` | 502 | Model output failed schema after the single-call → two-call fallback. On a loopback `openai_compat` endpoint also when less than 120 s of `FAILOVER_DEADLINE_S` is left to start that fallback or the injection re-run (`details.reason` `injection_rerun`; AI_PROMPTS §11.8) (`user_message_key` `err.ai_too_slow`; `analysis/compat_runtime.py`). |
 | `provider_not_configured` | 503 | `AI_PROVIDER=gemini` with no usable slots at boot (only reachable in `ENV=development`). On `openai_compat`: the loopback AI server refuses the connection ("Local AI server is not running.", `Retry-After: 30`), or the endpoint answers `404` for the model ("The AI model is not available on the AI server.", `Retry-After: 60`) (D-32). |
 | `upstream_unavailable` | 503 | Upstream 5xx after bounded retries. On `openai_compat` also a call whose time budget ran out: `user_message_key` is `err.ai_too_slow` when a paper-reading task ran on a loopback endpoint, or `err.ai_busy` (`Retry-After: 60`) when at least a third of the budget went on waiting behind another request; hosted endpoints and other tasks keep `err.upstream_unavailable` (`ai/slow_errors.py`; ARCHITECTURE §6.1). The envelope still carries `retry_after_seconds`, but the app shows no retry countdown for `err.ai_too_slow`, because a retry takes as long again. |
 
@@ -308,7 +308,7 @@ Response `ServerConfig`
 }
 ```
 
-On the local preset (`docs/LOCAL_AI.md` §3.2) the same call returns, among the other fields, `"provider": "openai_compat"`, `"data_use_tier": "local"`, `"models": {"fast": "qwen3.5:4b", "pro": "qwen3.5:4b", "pro_degraded_thinking": "medium"}`, `"features": {"real_documents_allowed": true, "chat": true, "degraded_fallback": false, …}`, `"limits": {"max_pages": 12, "max_pdf_pages": 12, …}`, `"key_slots": {"total": 1, …}`, `"ai_model_label": "Qwen"`, `"ai_vendor_name": null` and the raised `client_timeouts` above.
+On the local preset (`docs/LOCAL_AI.md` §3.2) the same call returns, among the other fields, `"provider": "openai_compat"`, `"data_use_tier": "local"`, `"models": {"fast": "qwen3.5:4b", "pro": "qwen3.5:4b", "pro_degraded_thinking": "medium"}`, `"features": {"real_documents_allowed": true, "chat": true, "degraded_fallback": false, …}`, `"limits": {"max_pages": 2, "max_pdf_pages": 2, …}` (`OPENAI_COMPAT_MAX_IMAGES` defaults to 2 on a loopback endpoint), `"key_slots": {"total": 1, …}`, `"ai_model_label": "Qwen"`, `"ai_vendor_name": null` and the raised `client_timeouts` above.
 
 ### 3.3 `GET /v1/language-packs/{tag}` — tier: none
 
@@ -450,7 +450,7 @@ Response `AnalysisResult`
 | `original_text` | `list[PageText]` | Transcript blocks with bboxes; SSN-like patterns replaced by `***-**-1234`. |
 | `translated_text` | `list[TranslatedPage]` | Full when pages ≤ `translate_full_max_pages`, else partial (`warnings` contains `translation_partial`). |
 | `questions_to_ask` | `list[str]` | ≤ 5 questions for the sender (no contacts). |
-| `verification` | `VerificationSummary { facts_checked: int, facts_rejected: int, contacts_stripped: int, phrasing_rewrites: int, injection_masked: bool, verifier_version: str }` | |
+| `verification` | `VerificationSummary { facts_checked: int, facts_rejected: int, contacts_stripped: int, phrasing_rewrites: int, injection_masked: bool, verifier_version: str }` | Diagnostics; each model fact or sentence counts once. `facts_checked`: model demands, quoted model red flags and dates written in prose. `facts_rejected`: those code set aside — an unverified demand, a flag whose quote fails or that a check drops (anti-fraud or SAMPLE-footer quote, a `missing_pages` flag the printed page markers contradict), an unprinted date in prose; a repeated flag shown once is no rejection. `contacts_stripped` and `phrasing_rewrites` count each removal or rewritten/hedged/dropped sentence once, even where `summary.body` and `body_en` are one English text or the body carries the title's sentence on (AI_PROMPTS §11.2, §11.9). |
 | `safety` | `Safety { emergency: bool, emergency_kinds: list[str], credential_or_payment_request: bool }` | Fixed emergency card when `emergency`. |
 | `disclaimer_kind` | `DisclaimerKind` | Primary, by category. |
 | `disclaimers` | `list[DisclaimerKind]` | Secondary. |

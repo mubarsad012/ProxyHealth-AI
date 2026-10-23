@@ -160,20 +160,108 @@ def test_the_gap_evidence_names_the_marker() -> None:
     assert found == tr.MissingPages("Page 1 of 3", "p1b2", 1, 3, 1)
 
 
-def test_a_model_missing_pages_flag_shows_only_with_a_printed_gap() -> None:
-    footer = "SAMPLE — synthetic document made for demonstration. Not a real letter."
-    misused = [_flag(RedFlagKind.missing_pages, footer, ["p1b2"])]
-    whole = _paper(("Notice", 1), (footer, 1), received=1)
-    assert tr.settle_page_flags(misused, whole, pages_received=1) == []
-    short = _paper(("Page 1 of 2", 1), (footer, 1), received=1)
-    first = _flag(RedFlagKind.missing_pages, footer, ["p1b2"])
+FOOTER = "SAMPLE — synthetic document made for demonstration. Not a real letter."
+
+
+@pytest.mark.parametrize(
+    ("marker", "total"),
+    [
+        ("1 of 3", 3),  # an English footer without the word "Page"
+        ("- 1 of 3 -", 3),
+        ("Page 1 sur 3", 3),
+        ("Trang 1/3", 3),
+        ("第 1 页，共 3 页", 3),
+        ("共 3 页 第 1 页", 3),
+        ("Paj 1 sou 3", 3),
+        ("Страница 1 из 3", 3),
+        ("Seite 1 von 3", 3),
+        ("Hoja 1 de 3", 3),
+        ("Page 1\nof 3", 3),  # "Page 1" and "of 3" on two lines
+        ("Page 1 of 3", 3),
+        ("Página 1 de 3", 3),
+    ],
+)
+def test_page_markers_in_many_forms_are_recognised(marker: str, total: int) -> None:
+    paper = _paper(("Notice about your benefits.", 1), (marker, 1), received=1)
+    marks = tr.page_marks(paper)
+    assert [(m.number, m.total, m.block.id) for m in marks] == [(1, total, "p1b2")]
+    assert tr.missing_pages(paper, 1) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Page\n08/17/2026",  # a table's "Page" header over a date row
+        "Payment 1 of 12 is due.",
+        "Step 1 of 3: sign the form.",
+        "Installment | 1 of 2",  # a "1 of 2" cell under no "Page" header
+        "10/22/2026",
+    ],
+)
+def test_other_numbers_are_no_page_marker(text: str) -> None:
+    assert tr.page_marks(_paper((text, 1), received=1)) == []
+
+
+def test_a_page_cell_under_a_page_header_is_a_marker() -> None:
+    """The I-797C prints "Received Date | Priority Date | Page" over "… | 1 of 1"."""
+    paper = _paper(("Received Date | Priority Date | Page", 1),
+                   ("08/17/2026 | 08/17/2026 | 1 of 1", 1), received=1)  # fmt: skip
+    assert [(m.number, m.total, m.block.id) for m in tr.page_marks(paper)] == [(1, 1, "p1b2")]
+
+
+def test_a_verified_missing_pages_flag_stays_without_a_printed_marker() -> None:
+    """No marker is no evidence either way: the verified model flag stays (one of them), as it
+    did before the marker check, for every provider."""
+    back = "Please see the additional information on the back."
+    paper = _paper(("Notice", 1), (back, 1), received=1)
+    first = _flag(RedFlagKind.missing_pages, back, ["p1b2"])
+    second = _flag(RedFlagKind.missing_pages, "Notice", ["p1b1"])
+    settled = tr.settle_page_flags([first, second], paper, pages_received=1)
+    assert settled == tr.SettledFlags([first], 0)
+
+
+def test_a_printed_gap_keeps_the_flag_citing_the_marker() -> None:
+    short = _paper(("Page 1 of 2", 1), (FOOTER, 1), received=1)
+    first = _flag(RedFlagKind.missing_pages, FOOTER, ["p1b2"])
     marker = _flag(RedFlagKind.missing_pages, "Page 1 of 2", ["p1b1"])
-    assert tr.settle_page_flags([first, marker], short, pages_received=1) == [marker]
+    assert tr.settle_page_flags([first, marker], short, pages_received=1) == tr.SettledFlags(
+        [marker], 0
+    )
 
 
-def test_repeated_model_flags_are_kept_once() -> None:
-    paper = _paper(("Pay with gift cards only.", 1), received=1)
-    pay = _flag(RedFlagKind.scam_payment_method, "Pay with gift cards only.", ["p1b1"])
-    again = _flag(RedFlagKind.scam_payment_method, " pay with  gift cards only. ", ["p1b1"])
-    other = _flag(RedFlagKind.urgency_pressure, "Pay with gift cards only.", ["p1b1"])
-    assert tr.settle_page_flags([pay, again, other], paper, pages_received=1) == [pay, other]
+@pytest.mark.parametrize(
+    ("texts", "received"),
+    [
+        ([("Notice", 1), ("Page 1 of 1", 1)], 1),
+        ([("Notice", 1), ("1 of 1", 1)], 1),
+        ([("Página 1 de 2", 1), ("Página 2 de 2", 2)], 2),
+        ([("Received Date | Priority Date | Page", 1), ("08/17/2026 | 08/17/2026 | 1 of 1", 1),
+          ("Please see the additional information on the back.", 1)], 1),
+    ],
+)  # fmt: skip
+def test_markers_that_account_for_every_page_reject_the_flag(
+    texts: list[tuple[str, int]], received: int
+) -> None:
+    """Positive counter-evidence: every printed marker's total is at most the pages received
+    (and no number is skipped). Each dropped flag counts as a rejected fact."""
+    paper = _paper(*texts, received=received)
+    last = paper.blocks[-1]
+    flags = [
+        _flag(RedFlagKind.missing_pages, last.text, [last.id]),
+        _flag(RedFlagKind.missing_pages, texts[0][0], ["p1b1"]),
+        _flag(RedFlagKind.contradiction, texts[0][0], ["p1b1"]),
+    ]
+    settled = tr.settle_page_flags(flags, paper, pages_received=received)
+    assert settled == tr.SettledFlags([flags[2]], 2)
+
+
+def test_settling_page_flags_never_drops_a_repeat_or_the_sentinel() -> None:
+    """Repeats are ``scam.screen_model_flags``' job (keyed on kind, quote and the sentinel); a
+    second pass keyed on kind and quote alone dropped the ``[multiple_documents]`` sentinel when
+    a plain flag with the same quote came first."""
+    paper = _paper(("Sample County Clinic", 1), ("Sample County Health Department", 2), received=2)
+    office = _flag(RedFlagKind.other, "Sample County Health Department", ["p2b2"])
+    sentinel = office.model_copy(update={"text": "[multiple_documents]"})
+    again = office.model_copy()
+    settled = tr.settle_page_flags([office, sentinel, again], paper, pages_received=2)
+    assert settled.flags == [office, sentinel, again] and settled.rejected == 0

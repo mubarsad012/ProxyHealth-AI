@@ -16,7 +16,8 @@ The model never computes a date: it records ``date_text`` as printed, or ``relat
 
 A printed date on the same demand always wins. Eviction papers never receive an estimate. A
 verified ``amount``/``document_requested``/``action`` demand with a date role gets a ``stated``
-date only from a ``date_text`` printed inside its quote (``resolve_carried``), never an estimate.
+date only from a ``date_text`` printed inside its quote (``resolve_carried``), never an estimate;
+an ``amount`` demand so dated keeps its printed amount in its text (``keep_carried_amount``).
 ``time_text`` is kept only when it sits in the verified quote.
 
 ``DateInfo.localized_line`` is the line the app *adds* under a date (D-26, never a substitute
@@ -708,7 +709,8 @@ def resolve_carried(
     transcript, passes ``verify_span`` as a value of that quote — and parses to exactly one day.
     The printed ``date_text`` then becomes ``value_verbatim``, so every ``{date}`` the reader sees
     (banner, reminder, quick sheet) is the printed date; the kind, quote, ``amount`` and
-    ``documents`` stay. Never an estimate. Otherwise the demand is returned unchanged.
+    ``documents`` stay, and the pipeline keeps a payment's printed amount in its text
+    (``keep_carried_amount``). Never an estimate. Otherwise the demand is returned unchanged.
     """
     if not demand.verified or demand.kind not in DATE_CARRYING_KINDS:
         return demand
@@ -725,6 +727,31 @@ def resolve_carried(
     if dated.date is None or not dated.date.value_iso:
         return demand
     return dated
+
+
+CARRIED_AMOUNT_SEPARATOR = " — "
+
+
+def keep_carried_amount(demand: Demand, source: DemandOut | None) -> Demand:
+    """An ``amount`` demand whose ``value_verbatim`` became its carried date (``resolve_carried``)
+    with the amount as printed back in front of its ``text`` when the text no longer shows it —
+    a phrasing hedge or rewrite took it out, or the model never wrote it. The amount is
+    ``amount_text`` only where it sits in the verified quote (and not in the value). Every other
+    demand is returned unchanged. Run on the final, cleaned text (the pipeline does), so the
+    payment's amount stays on the demand row and in "Hear it" next to its printed date."""
+    if demand.kind is not DemandKind.amount or source is None or not source.amount_text:
+        return demand
+    if demand.date is None or demand.date.kind is not DateKind.stated:
+        return demand
+    printed = source.amount_text.strip()
+    if check_value(printed, demand.source_quote) is not None:
+        return demand  # not printed in the quote: never shown
+    if any(check_value(printed, shown) is None for shown in (demand.value_verbatim, demand.text)):
+        return demand  # still on view
+    text = demand.text.strip()
+    return demand.model_copy(
+        update={"text": f"{printed}{CARRIED_AMOUNT_SEPARATOR}{text}" if text else printed}
+    )
 
 
 def _block_prints_only(
@@ -885,6 +912,7 @@ def context_for(
 
 __all__ = [
     "AMBIGUOUS_DATE_KEY",
+    "CARRIED_AMOUNT_SEPARATOR",
     "DATED_KINDS",
     "DATE_CARRYING_KINDS",
     "DEFAULT_TIME_ZONE",
@@ -905,6 +933,7 @@ __all__ = [
     "federal_holidays",
     "find_rule",
     "is_business_day",
+    "keep_carried_amount",
     "local_today",
     "localize_digits",
     "matching_rules",

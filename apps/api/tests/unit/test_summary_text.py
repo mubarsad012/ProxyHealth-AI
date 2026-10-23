@@ -87,15 +87,36 @@ def test_a_month_the_cap_cut_short_is_dropped_below_the_cap() -> None:
 
 def test_another_languages_short_month_is_an_english_word() -> None:
     """"out" is Portuguese for October; an English title keeps it. A Spanish title still loses
-    its own "ago" (agosto)."""
-    raw = "The landlord says your rent went up and you have until next Friday to move out"
-    assert st.is_cut(raw)
-    assert st.repair_title(raw) == f"{raw}…"
+    its own "ago" (agosto), which one character short of the cap is a month cut short."""
+    raw = "The landlord says your rent went up and you have until Friday to move out of the"
+    assert len(raw) == st.TITLE_CAP and st.is_cut(raw)
+    assert st.repair_title(raw) == (
+        "The landlord says your rent went up and you have until Friday to move out…"
+    )
     spanish = "Su arrendador le pide pagar la renta atrasada del mes pasado antes del 8 de ago"
-    assert st.is_cut(spanish)
+    assert len(spanish) == st.TITLE_CAP - 1
+    assert st.is_cut(spanish, language="es") and not st.is_cut(spanish, language="en")
     assert st.repair_title(spanish, language="es") == (
         "Su arrendador le pide pagar la renta atrasada del mes pasado antes…"
     )
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "USCIS asks for more evidence about your work permit application by Jan 5, 2027",
+        "USCIS asks for more evidence about your work permit application by Jan 15, 2027",
+        "Final hospital bill from Inova: please pay $1,240.00 or call billing by Oct 28",
+        "The landlord says your rent went up and you have until next Friday to move out",
+    ],
+)
+def test_a_whole_title_short_of_the_cap_keeps_its_date_or_amount(title: str) -> None:
+    """A full-size model writes 78-79 character labels without a final period; only a title that
+    reached the cap (strict decoding stops there), or ends on a connector or a month cut short,
+    was cut. A complete trailing date or amount stays, with no "…"."""
+    assert st.TITLE_CAP - 2 <= len(title) < st.TITLE_CAP
+    assert not st.is_cut(title) and st.repair_title(title) == title
+    assert st.join_continuation(title, "to answer the questions.") == "to answer the questions."
 
 
 def test_no_partial_date_or_amount_stays_in_a_cut_title() -> None:
@@ -150,14 +171,23 @@ def test_a_body_that_continues_the_title_gets_it_back() -> None:
 def test_a_body_never_inherits_a_partial_date_from_the_cut_title() -> None:
     """The cut "by October 2" (printed: October 28) stays out of the body too; the body that
     went on with the sentence only gets a capital letter."""
-    title = "This is a bill from Inova Health System. You need to pay $1,240.00 by October 2"
+    title = "This is a bill from Inova Health Systems. You need to pay $1,240.00 by October 2"
     body = "or call Patient Accounts to set up a plan."
-    assert st.is_cut(title) and st.continues(title, body)
+    assert len(title) == st.TITLE_CAP and st.is_cut(title) and st.continues(title, body)
     assert st.join_continuation(title, body) == "Or call Patient Accounts to set up a plan."
     fields = st.tidy(title, body, body, target_language="en")
-    assert fields.title == "This is a bill from Inova Health System. You need to pay…"
+    assert fields.title == "This is a bill from Inova Health Systems. You need to pay…"
     assert "October" not in fields.body and fields.body == fields.body_en
     assert find_mentions(fields.body, "en") == []
+
+
+def test_a_title_the_body_carries_on_is_in_the_body() -> None:
+    """The pipeline counts a title's date or lint fault with the body that holds it (once)."""
+    fields = st.tidy(JURY, JURY_BODY, JURY_BODY, target_language="en")
+    assert st.title_in_body(fields.title, fields.body)
+    assert st.title_in_body("Court date", "Court date: October 7, 2026.")
+    assert not st.title_in_body("Jury summons", "The court sent this.")
+    assert not st.title_in_body("", "The court sent this.")
 
 
 def test_a_title_only_summary_keeps_its_body() -> None:

@@ -607,19 +607,25 @@ async def test_the_clerk_line_drops_the_copied_prefix_and_the_prompts_example(
 async def test_missing_pages_and_repeated_flags_are_settled_in_code(
     app: FastAPI, client: httpx.AsyncClient, settings: Settings
 ) -> None:
-    out = out_of(RFE)
-    quoted = out.blocks[0]
-    out.red_flags = [
-        RedFlagOut(kind=RedFlagKind.missing_pages, text="Pages may be missing.",
-                   source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1),
-        *[RedFlagOut(kind=RedFlagKind.contradiction, text="Two dates disagree.",
-                     source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1)
-          for _ in range(2)],
-    ]  # fmt: skip
-    install(app, settings, analyze_single=lambda kw: out)
-    res = await analyze(client, demo_body(RFE))
-    kinds = [f.kind for f in res.red_flags]
-    assert RedFlagKind.missing_pages not in kinds and kinds.count(RedFlagKind.contradiction) == 1
+    """A verified model ``missing_pages`` flag stays unless the printed page markers account for
+    every page — the I-797C prints "1 of 1" under its "Page" header — and then counts as a
+    rejected fact; the RFE prints no marker, so its flag stays. A repeat shows once, unrejected."""
+    for fid, shown in ((RFE, 1), ("uscis_i797c_receipt_i765", 0)):
+        out = out_of(fid)
+        quoted = out.blocks[0]
+        out.red_flags = [
+            RedFlagOut(kind=RedFlagKind.missing_pages, text="Pages may be missing.",
+                       source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1),
+            *[RedFlagOut(kind=RedFlagKind.contradiction, text="Two dates disagree.",
+                         source_quote=quoted.text.splitlines()[0], span_ids=[quoted.id], page=1)
+              for _ in range(2)],
+        ]  # fmt: skip
+        install(app, settings, analyze_single=functools.partial(_recorded, out))
+        res = await analyze(client, demo_body(fid))
+        kinds = [f.kind for f in res.red_flags]
+        assert kinds.count(RedFlagKind.missing_pages) == shown, fid
+        assert kinds.count(RedFlagKind.contradiction) == 1, fid
+        assert res.verification.facts_rejected == 1 - shown, fid
 
 
 async def test_a_scam_papers_plan_never_points_back_to_the_sender(

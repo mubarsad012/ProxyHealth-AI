@@ -3,15 +3,16 @@
 Pure functions over the model's ``blocks``: block ids are made well-formed and unique (with a
 mapping so later ``span_ids`` still resolve), ``bbox`` is clamped, SSN-like patterns are masked
 everywhere, A-numbers/receipt numbers are masked only when ``hide_id_numbers`` is on, and
-``Quality`` + its warnings are computed. Missing pages are a structural fact decided here, not by
-the model: a printed "Page 1 of 3" with fewer pages received (or a skipped page number) is the
-only evidence (``missing_pages``, ``settle_page_flags``). Nothing here logs or stores text.
+``Quality`` + its warnings are computed. Missing pages are a structural fact checked here: a
+printed "Page 1 of 3" with fewer pages received (or a skipped page number) is evidence of a gap,
+and printed markers that account for every page are evidence against one — the only case in
+which a verified model ``missing_pages`` flag is rejected (``page_marks``, ``missing_pages``,
+``settle_page_flags``). Nothing here logs or stores text.
 """
 
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
@@ -229,14 +230,73 @@ def compute_quality(
 # --- missing pages (AI_PROMPTS §4 ``red_flags`` row; DOCUMENT_TAXONOMY §3 "Page 1 of N") --------
 
 MAX_PRINTED_PAGES = 99
-# "Page 1 of 3", "Page 1/3", "Pg. 2 of 3", "Página 2 de 2", "صفحة 1 من 3", "صفحه ۱ از ۳" — on
-# one line (a table's "Page" header over a "08/17/2026" row is no marker), never a date.
 _SP = r"[ \t ]*"
-_PAGE_OF_RE = re.compile(
-    rf"(?:(?<![^\W\d_])(?:page|pg\.?|p[aá]g(?:ina)?\.?)|صفحة|صفحه){_SP}(\d{{1,3}}){_SP}"
-    rf"(?:of|de|/|من|از){_SP}(\d{{1,3}})(?!\d|/\d)",
-    re.IGNORECASE,
+# The number and its "of N" may sit on two lines ("Page 1" / "of 3"); the page word and the number
+# never do (a table's "Page" header over a "08/17/2026" row is no marker).
+_GAP = r"[ \t ]*(?:\n[ \t ]*)?"
+_PAGE_WORD = (
+    r"(?:(?<![^\W\d_])(?:page|pg\.?|p[aá]g(?:ina)?\.?|paj|trang|seite|hoja|страница|стр\.?)"
+    r"|صفحة|صفحه)"
 )
+_OF = r"(?:of|de|di|sur|sou|von|из|trên|của|/|من|از)"
+_TOTAL = r"(?P<m>\d{1,3})(?!\d|/\d)"  # never a date ("Page 08/17/2026")
+# "Page 1 of 3", "Page 1/3", "Pg. 2 of 3", "Página 2 de 2", "Page 1 sur 3", "Paj 1 sou 3",
+# "Trang 1/3", "Seite 1 von 3", "Страница 1 из 3", "صفحة 1 من 3", "صفحه ۱ از ۳"; Chinese
+# "第 1 页，共 3 页" or "共 3 页 第 1 页".
+_PAGE_OF_RES = (
+    re.compile(rf"{_PAGE_WORD}{_SP}(?P<n>\d{{1,3}}){_GAP}{_OF}{_SP}{_TOTAL}", re.IGNORECASE),
+    re.compile(r"第\s*(?P<n>\d{1,3})\s*[页頁]\s*[，,、/／]?\s*共\s*(?P<m>\d{1,3})\s*[页頁]"),
+    re.compile(r"共\s*(?P<m>\d{1,3})\s*[页頁]\s*[，,、/／]?\s*第\s*(?P<n>\d{1,3})\s*[页頁]"),
+)
+# A footer line that is only "1 of 3" ("- 1 of 3 -", "(1/3)"), or a table cell under a "Page"
+# header cell (the I-797C's "Received Date | Priority Date | Page" over "… | 1 of 1").
+_BARE_RE = re.compile(
+    rf"[-–—(\[]?{_SP}(?P<n>\d{{1,3}}){_SP}{_OF}{_SP}{_TOTAL}{_SP}[-–—)\]]?", re.IGNORECASE
+)
+_PAGE_HEADER_RE = re.compile(rf"{_PAGE_WORD}s?:?|[页頁]", re.IGNORECASE)
+_CELL_SPLIT_RE = re.compile(r"\t|[ \t ]*\|[ \t ]*")
+
+
+@dataclass(frozen=True)
+class PageMark:
+    """One printed "page N of M" marker: its block, the printed text, N and M."""
+
+    block: TextBlock
+    quote: str
+    number: int
+    total: int
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in _CELL_SPLIT_RE.split(line.strip())]
+
+
+def page_marks(transcript: Transcript) -> list[PageMark]:
+    """Every printed page marker of the transcript, in reading order (``1 ≤ N ≤ M ≤ 99``)."""
+    marks: list[PageMark] = []
+
+    def add(block: TextBlock, m: re.Match[str]) -> None:
+        number, total = int(m.group("n")), int(m.group("m"))
+        if 1 <= number <= total <= MAX_PRINTED_PAGES:
+            marks.append(PageMark(block, m.group(0).strip(), number, total))
+
+    for page in transcript.pages:
+        header: list[str] = []
+        for block in page.blocks:
+            for pattern in _PAGE_OF_RES:
+                for found in pattern.finditer(block.text):
+                    add(block, found)
+            for line in block.text.split("\n"):
+                cells = _cells(line)
+                if len(cells) == 1 and (bare := _BARE_RE.fullmatch(cells[0])):
+                    add(block, bare)
+                elif len(cells) > 1 and len(cells) == len(header):
+                    for head, cell in zip(header, cells, strict=True):
+                        if _PAGE_HEADER_RE.fullmatch(head) and (bare := _BARE_RE.fullmatch(cell)):
+                            add(block, bare)
+                if line.strip():
+                    header = cells
+    return marks
 
 
 @dataclass(frozen=True)
@@ -257,56 +317,63 @@ def missing_pages(transcript: Transcript, pages_received: int) -> MissingPages |
     own marker — a page number that never appears ("1 of 3", "3 of 3", "3 of 3"). Text such as
     "see the back" or "there are no missing pages" is no evidence either way.
     """
-    marks: list[tuple[TextBlock, str, int, int]] = []
-    for b in transcript.blocks:
-        for m in _PAGE_OF_RE.finditer(b.text):
-            number, total = int(m.group(1)), int(m.group(2))
-            if 1 <= number <= total <= MAX_PRINTED_PAGES:
-                marks.append((b, m.group(0), number, total))
+    marks = page_marks(transcript)
     if not marks:
         return None
-    total = max(mark[3] for mark in marks)
-    block, quote = next((b, q) for b, q, _, m in marks if m == total)
-    marked_pages = {b.page for b, _, _, _ in marks}
-    numbers = {n for _, _, n, m in marks if m == total}
+    total = max(mark.total for mark in marks)
+    found = next(mark for mark in marks if mark.total == total)
+    marked_pages = {mark.block.page for mark in marks}
+    numbers = {mark.number for mark in marks if mark.total == total}
     every_page_marked = marked_pages >= set(range(1, pages_received + 1))
     if total > pages_received or (every_page_marked and numbers != set(range(1, total + 1))):
-        return MissingPages(quote, block.id, block.page, total, pages_received)
+        return MissingPages(found.quote, found.block.id, found.block.page, total, pages_received)
     return None
 
 
-def _quote_key(quote: str | None) -> str:
-    return " ".join(unicodedata.normalize("NFKC", quote or "").split()).casefold()
+@dataclass(frozen=True)
+class SettledFlags:
+    """``settle_page_flags``' result: the flags that stay and how many were rejected."""
+
+    flags: list[RedFlag]
+    rejected: int
 
 
 def settle_page_flags(
     flags: Sequence[RedFlag], transcript: Transcript, *, pages_received: int
-) -> list[RedFlag]:
-    """Verified model flags once code has decided ``missing_pages``.
+) -> SettledFlags:
+    """Verified model flags once code has checked ``missing_pages`` against the printed markers.
 
-    A flag repeating an earlier one (same kind, same quote) is dropped. ``missing_pages`` flags
-    stay only when ``missing_pages`` finds a printed gap, and then only one: the first citing the
-    marker's block, else the first. (A code flag with fixed text needs a base-pack key first.)
+    A model ``missing_pages`` flag (one, the first citing a gap's marker block, else the first)
+    stays unless the paper proves every page arrived: it prints page markers and
+    ``missing_pages`` finds no gap (the total is at most the pages received and, when every page
+    is marked, no number is skipped). Then every such flag is rejected (counted in
+    ``rejected``: it passed span verification and was counted as checked). Without a recognised
+    marker the verified flag stays, as for any other kind. Other flags — and the quote-less
+    ``[multiple_documents]`` sentinel — pass untouched; repeats were already removed
+    (``scam.screen_model_flags``). (A code flag with fixed text needs a base-pack key first.)
     """
-    out: list[RedFlag] = []
-    seen: set[tuple[RedFlagKind, str]] = set()
-    for f in flags:
-        key = (f.kind, _quote_key(f.source_quote))
-        if key not in seen:
-            seen.add(key)
-            out.append(f)
+    page_flags = [f for f in flags if f.kind is RedFlagKind.missing_pages]
+    if not page_flags:
+        return SettledFlags(list(flags), 0)
     found = missing_pages(transcript, pages_received)
-    page_flags = [f for f in out if f.kind is RedFlagKind.missing_pages]
-    keep = None
-    if found is not None and page_flags:
-        keep = next((f for f in page_flags if found.block_id in f.span_ids), page_flags[0])
-    return [f for f in out if f.kind is not RedFlagKind.missing_pages or f is keep]
+    if found is None and page_marks(transcript):
+        rest = [f for f in flags if f.kind is not RedFlagKind.missing_pages]
+        return SettledFlags(rest, len(page_flags))
+    keep = next(
+        (f for f in page_flags if found is not None and found.block_id in f.span_ids),
+        page_flags[0],
+    )
+    return SettledFlags(
+        [f for f in flags if f.kind is not RedFlagKind.missing_pages or f is keep], 0
+    )
 
 
 __all__ = [
     "BLOCK_ID_RE",
     "MAX_PRINTED_PAGES",
     "MissingPages",
+    "PageMark",
+    "SettledFlags",
     "Transcript",
     "assemble_transcript",
     "clamp_bbox",
@@ -315,5 +382,6 @@ __all__ = [
     "mask_sensitive",
     "mask_ssn",
     "missing_pages",
+    "page_marks",
     "settle_page_flags",
 ]
