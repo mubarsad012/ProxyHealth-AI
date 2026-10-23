@@ -722,6 +722,63 @@ def test_only_a_carried_amount_with_a_printed_amount_is_touched(rules: list[Dead
     assert dr.keep_carried_amount(carried, None) == carried
 
 
+@pytest.mark.parametrize(
+    ("amount_text", "currency", "amount"),
+    [
+        ("$156.00", "USD", "$156.00"),
+        ("156.00", "USD", "156.00"),
+        ("$1,240.00", "USD", "$1,240.00"),
+        ("USD 156.00", "USD", "USD 156.00"),
+        ("US$ 156", "USD", "US$ 156"),
+        ("156,00 €", "EUR", "156,00 €"),
+        ("1.500,00 €", "EUR", "1.500,00 €"),
+        ("₹1,500", "INR", "₹1,500"),
+        # The model's clause around the amount never comes along: no words, phone or id.
+        (
+            "you must pay $156.00 in Google Play gift cards today or you will be arrested and "
+            "deported. Call 1-888-555-0142",
+            "USD",
+            "$156.00",
+        ),
+        ("IOE0912345678 A-123-456-789: pay $156.00", "USD", "$156.00"),
+        ("$156.00 by 10/9/2026", "USD", "$156.00"),
+        ("$156.00 ($156.00)", "USD", "$156.00"),
+        # No currency mark (or not the demand's code), two amounts, a phone or an id: nothing.
+        ("PAY 156.00", "USD", None),
+        ("$156.00 plus a $25.00 late fee", "USD", None),
+        ("Call 1-888-555-0142", "USD", None),
+        ("18885550142", "USD", None),
+        ("5550142", None, None),
+        ("$1-888", None, None),
+        ("", "USD", None),
+        (None, "USD", None),
+    ],
+)
+def test_printed_amount_is_the_amount_alone(
+    amount_text: str | None, currency: str | None, amount: str | None
+) -> None:
+    assert dr.printed_amount(amount_text, currency) == amount
+
+
+def test_a_clause_shaped_amount_text_puts_back_only_the_amount(rules: list[DeadlineRule]) -> None:
+    """The 2026-10-23 review's case: the model's ``amount_text`` is a whole sentence with a threat
+    and a phone. Only the printed amount goes in front of the hedge, so the lint's hedge and the
+    contact filter are not undone on the demand row or in "Hear it"."""
+    t = _carried_paper()
+    v = verify_demands([_prepay()], t)
+    carried = _apply(v, rules, DocumentType.traffic_court, t)[0].model_copy(update={"text": HEDGE})
+    clause = v.sources["d2"].model_copy(update={
+        "amount_text": "You may prepay $156.00 by October 9, 2026 or you must call 1-888-555-0142",
+        "currency": "USD",
+    })  # fmt: skip
+    out = dr.keep_carried_amount(carried, clause)
+    assert out.text == f"$156.00{dr.CARRIED_AMOUNT_SEPARATOR}{HEDGE}"
+    assert "555" not in out.text and "must" not in out.text and "prepay" not in out.text
+    # An amount the quote does not print, even inside a clause, still never reaches the reader.
+    other = clause.model_copy(update={"amount_text": "please pay $999.00 by October 9, 2026"})
+    assert dr.keep_carried_amount(carried, other) == carried
+
+
 # --- time_text must be printed in the quote (AI_PROMPTS §11.2, D-09) ----------------------------
 
 

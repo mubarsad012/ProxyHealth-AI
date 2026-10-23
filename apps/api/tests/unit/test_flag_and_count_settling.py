@@ -5,8 +5,10 @@ Each test pins one finding of the 2026-10-22 post-merge integration review on a 
 sentinel survives the flag de-duplication; every verified flag a check sets aside counts once in
 ``facts_rejected`` (a repeat does not); a model sentence's rewrite, unprinted date or stripped
 contact counts once, however many summary fields repeat it; a step the plan-step fit replaces
-spends no rewrite; a payment whose value became its printed date keeps its amount in view; and
-the injection re-run on a slow local model starts only when it can finish.
+spends no rewrite; a payment whose value became its printed date keeps its amount in view (the
+amount alone, never the model's words around it); a title strict decoding stopped inside a
+figure loses that figure; and the injection re-run on a slow local model starts only when it
+can finish.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from PIL import Image
 
 from proxyhealth_api.ai.failover import AIService
 from proxyhealth_api.ai.provider import StructuredResult, Task, Usage
-from proxyhealth_api.analysis import compat_runtime, deadline_rules
+from proxyhealth_api.analysis import compat_runtime, deadline_rules, summary_text
 from proxyhealth_api.analysis.fixed_notices import MULTIPLE_DOCUMENTS_KEY
 from proxyhealth_api.analysis.i18n import english_translator
 from proxyhealth_api.analysis.pipeline import PipelineDeps, run_analysis
@@ -112,7 +114,8 @@ def white_page() -> str:
 
 
 async def run_upload(
-    tmp_path: Path, out: dict[str, Any], *, pages: int = 1, **answers: list[Any]
+    tmp_path: Path, out: dict[str, Any], *, pages: int = 1, hide_id_numbers: bool = False,
+    **answers: list[Any],
 ) -> tuple[AnalysisResult, Replay]:
     """A real (non-sample) upload of white pages read on a loopback ``openai_compat`` model."""
     settings = local(tmp_path)
@@ -125,7 +128,7 @@ async def run_upload(
     page = white_page()
     req = AnalyzeRequest(
         pages=[{"mime_type": "image/png", "data_base64": page} for _ in range(pages)],
-        target_language="en", client_platform="web",
+        target_language="en", client_platform="web", hide_id_numbers=hide_id_numbers,
     )  # fmt: skip
     return await run_analysis(req, deps), provider
 
@@ -325,6 +328,103 @@ async def test_a_payment_text_that_shows_its_amount_is_left_alone(tmp_path: Path
     d2 = next(d for d in res.demands if d.id == "d2")
     assert d2.value_verbatim == "November 9, 2026"
     assert d2.text == "The paper lets you prepay $156.00."
+
+
+GIFT_CARD_LINE = (
+    "FINAL NOTICE from U.S. Immigration: you must pay $156.00 in Google Play gift cards today or "
+    "you will be arrested and deported. Call 1-888-555-0142. Deadline November 9, 2026."
+)
+GIFT_CARD_CLAUSE = (
+    "you must pay $156.00 in Google Play gift cards today or you will be arrested and deported. "
+    "Call 1-888-555-0142"
+)
+
+
+def gift_card_out(amount_text: str) -> dict[str, Any]:
+    """The 2026-10-23 review's likely-scam paper: the payment's ``amount_text`` is the scam's
+    whole threat, phone included."""
+    return {**BASE, "document_type": "uscis_rfe", "category": "immigration",
+            "document_type_confidence": "high", "is_likely_scam": True,
+            "blocks": [blk("p1b1", "U.S. Immigration Office"), blk("p1b2", GIFT_CARD_LINE)],
+            "red_flags": [flag("scam_payment_method", "It asks for gift cards.", GIFT_CARD_LINE,
+                               "p1b2")],
+            "demands": [dem(id="d1", kind="amount", role="payment_due",
+                            text="You must pay right now or you will be arrested.",
+                            value_verbatim="$156.00", source_quote=GIFT_CARD_LINE,
+                            span_ids=["p1b2"], date_text="November 9, 2026",
+                            amount_text=amount_text, currency="USD")]}  # fmt: skip
+
+
+@pytest.mark.parametrize("amount_text", [GIFT_CARD_CLAUSE, "$156.00"])
+async def test_a_carried_amount_is_the_amount_alone_on_a_likely_scam(
+    tmp_path: Path, amount_text: str
+) -> None:
+    """Only the printed amount is put back in front of the hedged text: never the scam's threat
+    or its phone, which the lint and the contact filter kept out of the app's own voice."""
+    res, _ = await run_upload(tmp_path, gift_card_out(amount_text))
+    assert res.scam_risk.value == "likely"
+    d1 = next(d for d in res.demands if d.id == "d1")
+    assert d1.value_verbatim == "November 9, 2026"
+    assert d1.text.startswith(f"$156.00{deadline_rules.CARRIED_AMOUNT_SEPARATOR}")
+    for words in ("555", "0142", "must", "arrested", "deported", "gift card", "Google"):
+        assert words not in d1.text
+
+
+@pytest.mark.parametrize("hide_id_numbers", [True, False])
+async def test_a_carried_amount_never_brings_an_id_number_along(
+    tmp_path: Path, hide_id_numbers: bool
+) -> None:
+    pay = "Receipt IOE0912345678 A-123-456-789: pay $156.00 by November 9, 2026."
+    out = {**TRAFFIC, "blocks": [blk("p1b1", "General District Court of Sample County"),
+                                 blk("p1b2", pay)],
+           "demands": [dem(id="d1", kind="amount", role="payment_due",
+                           text="You should pay now, so you do not have to go to court.",
+                           value_verbatim=pay, source_quote=pay, span_ids=["p1b2"],
+                           date_text="November 9, 2026",
+                           amount_text="IOE0912345678 A-123-456-789: pay $156.00",
+                           currency="USD")]}  # fmt: skip
+    res, _ = await run_upload(tmp_path, out, hide_id_numbers=hide_id_numbers)
+    d1 = next(d for d in res.demands if d.id == "d1")
+    assert d1.value_verbatim == "November 9, 2026"
+    assert d1.text.startswith(f"$156.00{deadline_rules.CARRIED_AMOUNT_SEPARATOR}")
+    assert "IOE" not in d1.text and "123" not in d1.text.replace("$156.00", "")
+
+
+# ---------------------------- issue 2: a title strict decoding stopped inside a figure
+
+
+@pytest.mark.parametrize(
+    ("title", "shown"),
+    [
+        (
+            "Final notice from Inova Fairfax Medical Campus: you are now asked to pay $1,24",
+            "Final notice from Inova Fairfax Medical Campus: you are now asked to pay…",
+        ),
+        (  # a whole printed amount 78 characters long stays, with no "…"
+            "Final notice from Inova Fairfax Medical Campus: you are asked to pay $1,240.00",
+            "Final notice from Inova Fairfax Medical Campus: you are asked to pay $1,240.00",
+        ),
+    ],
+)
+async def test_a_title_cut_inside_an_amount_loses_the_partial_figure(
+    tmp_path: Path, title: str, shown: str
+) -> None:
+    """A 78-79 character title ending on a figure the paper does not print as it stands ("$1,24"
+    of "$1,240.00") was stopped there by the schema cap; the partial figure never reaches the
+    title card, while a whole printed amount keeps its place."""
+    out = {**BASE, "document_type": "medical_bill", "category": "medical",
+           "document_type_confidence": "high", "summary_title": title,
+           "summary_body": "Call billing if you cannot pay.",
+           "summary_body_en": "Call billing if you cannot pay.",
+           "blocks": [blk("p1b1", "Inova Fairfax Medical Campus\nFINAL NOTICE"),
+                      blk("p1b2", "Amount due: $1,240.00. Please pay by October 28, 2026.")],
+           "demands": [dem(id="d1", kind="amount", role="payment_due", text="Pay $1,240.00.",
+                           value_verbatim="$1,240.00", source_quote="Amount due: $1,240.00.",
+                           span_ids=["p1b2"], amount_text="$1,240.00",
+                           currency="USD")]}  # fmt: skip
+    assert summary_text.TITLE_CAP - 2 <= len(title) < summary_text.TITLE_CAP
+    res, _ = await run_upload(tmp_path, out)
+    assert res.summary.title == shown
 
 
 # -------------------------------------- issue 9: the injection re-run on a slow model

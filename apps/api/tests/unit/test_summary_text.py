@@ -117,6 +117,39 @@ def test_a_whole_title_short_of_the_cap_keeps_its_date_or_amount(title: str) -> 
     assert st.TITLE_CAP - 2 <= len(title) < st.TITLE_CAP
     assert not st.is_cut(title) and st.repair_title(title) == title
     assert st.join_continuation(title, "to answer the questions.") == "to answer the questions."
+    # The paper prints the date or amount the label ends on, so its text changes nothing.
+    assert not st.is_cut(title, printed=BILL_PAPER)
+    assert st.repair_title(title, printed=BILL_PAPER) == title
+
+
+BILL_PAPER = (
+    "Inova Fairfax Medical Campus\nFINAL NOTICE\nAmount due: $1,240.00. Please pay by "
+    "October 28, 2026.\nQuestions about USCIS? Respond by January 5, 2027."
+)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Final hospital bill from Inova Fairfax Hospital: you are now asked to pay $1,24",
+        "Final hospital bill from Inova Fairfax Hospital: you are now asked to pay $1,2",
+        "Final hospital bill from Inova Fairfax Hospital: you are asked to pay $1,240.0",
+    ],
+)
+def test_a_figure_the_cap_cut_short_is_dropped_below_the_cap(title: str) -> None:
+    """Strict decoding can end a title one or two characters short of the cap inside an amount
+    (the next token would not fit). Given the paper's text, a trailing figure the paper does not
+    print as it stands goes, with "…", and a body that carries on does not inherit it."""
+    assert st.TITLE_CAP - 2 <= len(title) < st.TITLE_CAP
+    assert not st.is_cut(title)  # without the paper's text, as before
+    assert st.is_cut(title, printed=BILL_PAPER)
+    fixed = st.repair_title(title, printed=BILL_PAPER)
+    assert fixed.endswith("pay…") and "$1,2" not in fixed
+    body = st.join_continuation(title, "or call billing to set up a plan.", printed=BILL_PAPER)
+    assert body == "Or call billing to set up a plan."
+    fields = st.tidy(title, "Call billing.", "Call billing.", target_language="en",
+                     printed=BILL_PAPER)  # fmt: skip
+    assert fields.title == fixed
 
 
 def test_no_partial_date_or_amount_stays_in_a_cut_title() -> None:

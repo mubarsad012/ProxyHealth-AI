@@ -1018,7 +1018,7 @@ def unreadable_result(
     """§11.1: ``legibility == poor`` → a ``200`` that says "try again"; §11.2–§11.10 skipped."""
     out = classify.unreadable_reading(reading.out)  # TAXONOMY §3.11: unknown / other
     # The summary still gets its shape repairs (summary_text) and the D-19 masks.
-    fixes = summary_text.tidy_update(out, rc.req.target_language)
+    fixes = summary_text.tidy_update(out, rc.req.target_language, printed=paper.full_text)
     out = out.model_copy(update={k: paper.mask(v) for k, v in fixes.items()})
     detected = language_tag(out.detected_language)
     scrubber = contacts_filter.make_scrubber(paper.full_text, rc.deps.resources.names(), rc.t)
@@ -1325,7 +1325,7 @@ async def finish_analysis(
     # reader (summary_text) — before the scrubber, the lint and the date check below. Each model
     # sentence counts once: the one English body is cleaned once for both fields, and a title the
     # body holds is counted with the body.
-    out = out.model_copy(update=summary_text.tidy_update(out, target))
+    out = out.model_copy(update=summary_text.tidy_update(out, target, printed=paper.full_text))
     one_body = base_of(target) == "en" and out.summary_body_en == out.summary_body
     if one_body:
         body = body_en = await clean(out.summary_body)

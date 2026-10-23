@@ -41,7 +41,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from proxyhealth_api.analysis.i18n import Translator
 from proxyhealth_api.analysis.transcript import Transcript
 from proxyhealth_api.analysis.urgency import ANY_DRIVING
-from proxyhealth_api.analysis.verify import ascii_digits, check_value, verify_span
+from proxyhealth_api.analysis.verify import ascii_digits, check_value, normalize, verify_span
 from proxyhealth_api.contracts.analysis import DateInfo, Demand
 from proxyhealth_api.contracts.enums import (
     Confidence,
@@ -731,20 +731,65 @@ def resolve_carried(
 
 CARRIED_AMOUNT_SEPARATOR = " — "
 
+# The amount inside the model's ``amount_text``: one number with a currency sign printed next to
+# it ("$156.00", "US$ 156", "156,00 €"), or the demand's own ISO code ("USD 156.00"). Never the
+# words around it: ``amount_text`` is model output and may hold a whole clause, a phone or an id.
+_CURRENCY_SIGNS = (
+    "$\u00a2-\u00a5\u058f\u060b\u07fe\u07ff\u09f2\u09f3\u09fb\u0af1\u0bf9\u0e3f\u17db\u20a0-\u20c0"
+)
+_CURRENCY_SIGN_RE = re.compile(rf"[A-Z]{{0,2}}[{_CURRENCY_SIGNS}]")
+_AMOUNT_NUMBER = r"\d{1,3}(?:[,.]\d{3})+(?!\d)(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?"
+_MARKED_AMOUNT_RE = re.compile(
+    rf"(?<![\w\-/])(?:(?P<pre>[A-Z]{{0,2}}[{_CURRENCY_SIGNS}]|[A-Z]{{3}})\s?)?"
+    rf"(?P<num>{_AMOUNT_NUMBER})(?!\w|[\-/.,:]\d)"
+    rf"(?:\s?(?P<post>[A-Z]{{0,2}}[{_CURRENCY_SIGNS}]|[A-Z]{{3}})(?!\w))?"
+)
+# A bare number reads as an amount only when it is shaped like one: thousands separators or a
+# whole part of at most six digits (a seven-digit-plus run is a phone or an id, never shown).
+_BARE_AMOUNT_RE = re.compile(r"\d{1,3}(?:[,.]\d{3})+(?:[.,]\d{1,2})?|\d{1,6}(?:[.,]\d{1,2})?")
+
+
+def printed_amount(amount_text: str | None, currency: str | None) -> str | None:
+    """The printed amount in ``amount_text`` and nothing else: the whole text when it is just an
+    amount-shaped number ("156.00"), else the one number that carries a currency sign or the
+    demand's own ``currency`` code next to it ("$156.00" out of "you must pay $156.00 in gift
+    cards … Call 1-888-555-0142"). ``None`` when there is no such number, or two different ones
+    (which one is owed is not for code to pick)."""
+    if not amount_text:
+        return None
+    text = normalize(amount_text)
+    if _BARE_AMOUNT_RE.fullmatch(text):
+        return text
+    code = (currency or "").strip().upper()
+    found: dict[str, str] = {}
+    for m in _MARKED_AMOUNT_RE.finditer(text):
+        pre, post = m.group("pre"), m.group("post")
+        pre_ok = bool(pre) and (bool(_CURRENCY_SIGN_RE.fullmatch(pre)) or pre == code)
+        post_ok = bool(post) and (bool(_CURRENCY_SIGN_RE.fullmatch(post)) or post == code)
+        if not (pre_ok or post_ok):
+            continue
+        start = m.start("pre") if pre_ok else m.start("num")
+        end = m.end("post") if post_ok else m.end("num")
+        span = text[start:end]
+        found.setdefault(ascii_digits(span).replace(" ", ""), span)
+    return next(iter(found.values())) if len(found) == 1 else None
+
 
 def keep_carried_amount(demand: Demand, source: DemandOut | None) -> Demand:
     """An ``amount`` demand whose ``value_verbatim`` became its carried date (``resolve_carried``)
     with the amount as printed back in front of its ``text`` when the text no longer shows it —
-    a phrasing hedge or rewrite took it out, or the model never wrote it. The amount is
-    ``amount_text`` only where it sits in the verified quote (and not in the value). Every other
-    demand is returned unchanged. Run on the final, cleaned text (the pipeline does), so the
-    payment's amount stays on the demand row and in "Hear it" next to its printed date."""
-    if demand.kind is not DemandKind.amount or source is None or not source.amount_text:
+    a phrasing hedge or rewrite took it out, or the model never wrote it. Only the amount itself
+    is put back (``printed_amount``: digits and a currency sign, never the words, phone or id the
+    model's ``amount_text`` may also hold), and only where it sits in the verified quote (and not
+    in the value). Every other demand is returned unchanged. Run on the final, cleaned text (the
+    pipeline does), so the payment's amount stays on the demand row and in "Hear it" next to its
+    printed date, and the lint's hedge and the contact filter are never undone."""
+    if demand.kind is not DemandKind.amount or source is None:
         return demand
     if demand.date is None or demand.date.kind is not DateKind.stated:
         return demand
-    printed = source.amount_text.strip()
-    if check_value(printed, demand.source_quote) is not None:
+    printed = printed_amount(source.amount_text, source.currency)
+    if printed is None or check_value(printed, demand.source_quote) is not None:
         return demand  # not printed in the quote: never shown
     if any(check_value(printed, shown) is None for shown in (demand.value_verbatim, demand.text)):
         return demand  # still on view
