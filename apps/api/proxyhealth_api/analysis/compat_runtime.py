@@ -5,9 +5,11 @@ A local model needs minutes per paper (≈ 34 s to read a page, then ≈ 19 toke
 pipeline steps designed for Gemini's much shorter calls are adjusted here.
 Gemini and the mock never reach these paths, so their behaviour and fixtures are unchanged:
 
-* ``check_fallback_budget`` — the D-06 two-call fallback (transcribe, then explain) only starts
-  on a loopback endpoint when enough of the request's deadline is left for it to finish;
-  otherwise the reader gets an honest "too slow" error at once instead of a doomed minute.
+* ``check_fallback_budget`` — the D-06 two-call fallback (transcribe, then explain), and the
+  §11.8 injection re-run (a second ``analyze_single``, or ``explain``, with the hit blocks
+  masked), only start on a loopback endpoint when enough of the request's deadline is left for
+  them to finish; otherwise the reader gets an honest "too slow" error at once instead of a
+  doomed minute.
 * ``same_language_pages`` — when the paper is already in the reader's language, the lines the
   model copied (or skipped, on a stub) become the transcript's own lines; any passage the model
   translated (a bilingual page) is kept.
@@ -33,7 +35,8 @@ from proxyhealth_api.logging_ import log_event
 from proxyhealth_api.settings import Settings
 
 # One loopback transcribe (≈ 34 s page read + ≈ 500–1,000 tokens) is ≈ 65 s; the explain call
-# must also start before the deadline. With less than this left the fallback cannot finish.
+# must also start before the deadline. With less than this left the fallback cannot finish — nor
+# can the injection re-run, a whole second ``analyze_single`` (or an ``explain`` over the text).
 OPENAI_COMPAT_FALLBACK_MIN_S = 120
 
 # ``same_language_pages`` lines the model's page text up with the transcript, line by line. A
@@ -54,21 +57,32 @@ def _base(tag: str) -> str:
     return tag.split("-")[0].lower()
 
 
+FALLBACK_SKIPPED_ROUTE = "analysis.mode_fallback_skipped"
+INJECTION_RERUN_SKIPPED_ROUTE = "analysis.injection_rerun_skipped"
+
+
 def check_fallback_budget(
-    ai: AIService, deadline_at: datetime, *, request_id: str, reason: str
+    ai: AIService,
+    deadline_at: datetime,
+    *,
+    request_id: str,
+    reason: str,
+    route: str = FALLBACK_SKIPPED_ROUTE,
 ) -> None:
-    """Raise ``502 model_output_invalid`` (``err.ai_too_slow``) instead of starting the two-call
-    fallback on a loopback ``openai_compat`` endpoint with less than
-    ``OPENAI_COMPAT_FALLBACK_MIN_S`` of the request's deadline left. ``reason`` is the
-    ``SchemaFallbackNeeded`` text (fixed by the code: ``incomplete``, ``unparsed``, …)."""
+    """Raise ``502 model_output_invalid`` (``err.ai_too_slow``) instead of starting a second
+    reading — the two-call fallback, or the injection re-run (``route`` =
+    ``INJECTION_RERUN_SKIPPED_ROUTE``) — on a loopback ``openai_compat`` endpoint with less than
+    ``OPENAI_COMPAT_FALLBACK_MIN_S`` of the request's deadline left. ``reason`` is a fixed code
+    string (the ``SchemaFallbackNeeded`` text — ``incomplete``, ``unparsed``, … — or
+    ``injection_rerun``)."""
     settings = ai.settings
     if ai.provider.name is not Provider.openai_compat or not settings.openai_compat_is_loopback:
         return
     if ai.remaining_s(deadline_at) >= OPENAI_COMPAT_FALLBACK_MIN_S:
         return
     log_event(
-        request_id=request_id, route="analysis.mode_fallback_skipped",
-        error_code="fallback_budget", provider=ai.provider.name,
+        request_id=request_id, route=route, error_code="fallback_budget",
+        provider=ai.provider.name,
     )  # fmt: skip
     raise ApiError(
         ErrorCode.model_output_invalid, 502, "The AI could not finish reading this paper in time.",

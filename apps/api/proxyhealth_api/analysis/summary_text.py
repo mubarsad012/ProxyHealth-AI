@@ -6,8 +6,13 @@ of its own except the "…" that marks a cut title:
 
 * ``summary_title`` cut off at the schema cap (``model_out.Str80``: strict JSON-schema decoding
   ends the string there, mid-word or mid-date — "… asking you to pay $1,240.00 by October 2").
-  Only words go: the word the cap split (or a month name it cut short, "Octo"), then trailing
-  tokens with a digit, month names, currency signs and dangling connector words
+  A title is cut when it reached the cap with no final stop, or — one or two characters short —
+  ends on a dangling connector or a month name cut short (``is_cut``); a whole 78-79 character
+  label ending on a date or an amount the paper prints ("… by Jan 5, 2027") is left alone, while
+  one ending on a figure the paper does not print as it stands ("… pay $1,24" for "$1,240.00")
+  is cut (``printed``, the paper's text, given by the pipeline). Only words go: the
+  word the cap split (or a month name it cut short, "Octo"), then trailing tokens with a digit,
+  month names, currency signs and dangling connector words
   (``phrasing.yaml`` ``title_connectors``); "…" is added. No partial date or amount stays on the
   title card, and no whole clause is cut away — the clause after a comma is often the one that
   carries "but" or "unless" ("… from the IRS, but real IRS letters never ask for gift car").
@@ -30,7 +35,7 @@ from functools import lru_cache
 
 from proxyhealth_api.analysis import deadline_rules as dr
 from proxyhealth_api.analysis.phrasing import split_sentences, title_connectors
-from proxyhealth_api.analysis.verify import normalize
+from proxyhealth_api.analysis.verify import ascii_digits, check_value, normalize
 from proxyhealth_api.contracts.model_out import AnalysisModelOut
 
 TITLE_CAP = 80
@@ -56,9 +61,37 @@ def _base(tag: str | None) -> str:
     return tag.split("-")[0].lower() if tag else ""
 
 
-def is_cut(title: str, cap: int = TITLE_CAP) -> bool:
-    """True when the title reached the cap (or two short of it) and ends without a terminator."""
-    return len(title) >= cap - 2 and not title.rstrip().endswith(_TERMINAL)
+def is_cut(
+    title: str, cap: int = TITLE_CAP, *, language: str | None = "en", printed: str | None = None
+) -> bool:
+    """True when the schema cap cut the title off: it ends without a terminator and reached the
+    cap (strict decoding stops exactly there), or — one or two characters short of it — ends on a
+    dangling connector word ("… Virginia, asking you"), a month name cut short ("Octo") or, given
+    the paper's text ``printed``, a figure the paper does not print as it stands ("… pay $1,24"
+    when it prints "$1,240.00": the next token would not fit). A 78-79 character title ending on
+    any other word, or on a date or an amount the paper prints, is whole (a full-size model
+    writes labels without a final period: "… by Jan 5, 2027") and keeps every word."""
+    text = title.rstrip()
+    if not text or text.endswith(_TERMINAL) or len(title) < cap - 2:
+        return False
+    if len(title) >= cap:
+        return True
+    last = text.split()[-1]
+    if printed is not None and _unprinted_figure(last, printed):
+        return True
+    return _fold(last.strip(_TOKEN_EDGES)) in title_connectors(language) or _month_prefix(
+        last, language
+    )
+
+
+def _unprinted_figure(token: str, printed: str) -> bool:
+    """True when ``token`` holds a digit and the paper does not print it as it stands, on token
+    boundaries (``verify.check_value``; digits compared as ASCII): "$1,24" or "$1,2" of a printed
+    "$1,240.00" — a figure the cap cut short. A whole printed "$1,240.00" or "2027" is not."""
+    word = token.strip(_TOKEN_EDGES)
+    if not any(ch.isdigit() for ch in word):
+        return False
+    return check_value(ascii_digits(word), ascii_digits(printed)) is not None
 
 
 def _is_latin(word: str) -> bool:
@@ -83,11 +116,22 @@ def _is_month(word: str, language: str | None) -> bool:
     return not _is_latin(word) or len(word) >= 5
 
 
-def _month_prefix(token: str) -> bool:
-    """A last word the cap may have cut short inside an English month name ("Octo", "Septem")."""
+@lru_cache(maxsize=32)
+def _month_names(language: str | None) -> frozenset[str]:
+    """English month names plus the title language's own (``deadline_rules`` table, folded)."""
+    langs = _month_languages(language)
+    return frozenset(
+        token for token, meanings in dr._TOKEN_MONTHS.items()
+        if any(_base(lang) in langs for lang in meanings)
+    )  # fmt: skip
+
+
+def _month_prefix(token: str, language: str | None = "en") -> bool:
+    """A last word the cap may have cut short inside a month name of English or the title's
+    language ("Octo", "Septem"; Spanish "ago" for "agosto")."""
     word = _fold(token.strip(_TOKEN_EDGES)).rstrip(".")
     return len(word) >= MIN_MONTH_PREFIX and any(
-        m.lower().startswith(word) and m.lower() != word for m in dr.EN_MONTHS
+        m.startswith(word) and m != word for m in _month_names(language)
     )
 
 
@@ -110,7 +154,7 @@ def _trim(title: str, language: str | None, cap: int) -> tuple[list[str], bool]:
     tokens = title.rstrip().split()
     lost = False
     if len(tokens) > 1 and (
-        (len(title) >= cap and title[-1:].isalnum()) or _month_prefix(tokens[-1])
+        (len(title) >= cap and title[-1:].isalnum()) or _month_prefix(tokens[-1], language)
     ):
         tokens.pop()
         lost = True
@@ -121,35 +165,43 @@ def _trim(title: str, language: str | None, cap: int) -> tuple[list[str], bool]:
     return tokens, lost
 
 
-def repair_title(title: str, *, language: str | None = "en", cap: int = TITLE_CAP) -> str:
+def repair_title(
+    title: str, *, language: str | None = "en", cap: int = TITLE_CAP, printed: str | None = None
+) -> str:
     """The title, or — when the schema cap cut it — the title less the word the cap split and
     any trailing digits, month names, currency signs and connector words, plus "…". Only words
     go, never a whole clause. A title with nothing left after that is returned as it came (the
     prose-date check still runs on it)."""
-    if not is_cut(title, cap):
+    if not is_cut(title, cap, language=language, printed=printed):
         return title
     tokens, _ = _trim(title, language, cap)
     kept = " ".join(tokens).rstrip(_TOKEN_EDGES + " ")
     return kept + ELLIPSIS if kept else title
 
 
-def continues(title: str, body: str, *, language: str | None = "en") -> bool:
+def continues(
+    title: str, body: str, *, language: str | None = "en", printed: str | None = None
+) -> bool:
     """True when ``body`` carries on the title's sentence: it starts with a lower-case letter and
     the title was cut or ends on a connector word ("… asking you" + "to appear …")."""
     head = body.lstrip()[:1]
     last = title.split()[-1:] if title.strip() else []
     if not head.islower() or title.rstrip().endswith(_TERMINAL) or not last:
         return False
-    return is_cut(title) or _fold(last[0].strip(_TOKEN_EDGES)) in title_connectors(language)
+    return is_cut(title, language=language, printed=printed) or _fold(
+        last[0].strip(_TOKEN_EDGES)
+    ) in title_connectors(language)
 
 
-def join_continuation(title: str, body: str, *, language: str | None = "en") -> str:
+def join_continuation(
+    title: str, body: str, *, language: str | None = "en", printed: str | None = None
+) -> str:
     """``body`` with the title's words in front when it continues the title's sentence. When
     the cut lost a word, a number or a month there ("… by October 2" for October 28), the body
     does not inherit it: it only gets a capital letter."""
-    if not continues(title, body, language=language):
+    if not continues(title, body, language=language, printed=printed):
         return body
-    if is_cut(title) and _trim(title, language, TITLE_CAP)[1]:
+    if is_cut(title, language=language, printed=printed) and _trim(title, language, TITLE_CAP)[1]:
         rest = body.lstrip()
         return rest[:1].upper() + rest[1:]
     return f"{title.rstrip()} {body.lstrip()}"
@@ -165,6 +217,14 @@ def without_title(title: str, text: str) -> str:
     if sentences and title.strip() and _key(sentences[0]) == _key(title):
         return " ".join(sentences[1:])
     return text
+
+
+def title_in_body(title: str, body: str) -> bool:
+    """True when ``body`` holds the whole (repaired) ``title`` — a body that carries on the
+    title's sentence (``join_continuation``) or copies it. Every date or phrasing fault of the
+    title is then the body's too, so the pipeline counts it once, with the body."""
+    head = _key(title.removesuffix(ELLIPSIS))
+    return bool(head) and head in _key(body)
 
 
 def _english_words(text: str) -> int:
@@ -196,21 +256,28 @@ class SummaryFields:
     body_en: str
 
 
-def tidy(title: str, body: str, body_en: str, *, target_language: str) -> SummaryFields:
+def tidy(
+    title: str, body: str, body_en: str, *, target_language: str, printed: str | None = None
+) -> SummaryFields:
     """Both repairs (module docstring); a non-English reader's ``body_en`` is left as written
-    because its title is in another language."""
-    body = join_continuation(title, body, language=target_language)
+    because its title is in another language. ``printed`` is the paper's text (``is_cut``)."""
+    body = join_continuation(title, body, language=target_language, printed=printed)
     if _base(target_language) == "en":
-        body_en = join_continuation(title, body_en, language="en")
+        body_en = join_continuation(title, body_en, language="en", printed=printed)
         body, body_en = english_bodies(title, body, body_en)
-    return SummaryFields(repair_title(title, language=target_language), body, body_en)
+    title = repair_title(title, language=target_language, printed=printed)
+    return SummaryFields(title, body, body_en)
 
 
-def tidy_update(out: AnalysisModelOut, target_language: str) -> dict[str, str]:
-    """``AnalysisModelOut.model_copy(update=…)`` values for ``summary_title/body/body_en``."""
+def tidy_update(
+    out: AnalysisModelOut, target_language: str, *, printed: str | None = None
+) -> dict[str, str]:
+    """``AnalysisModelOut.model_copy(update=…)`` values for ``summary_title/body/body_en``;
+    ``printed`` is the paper's (masked) text, for a title cut inside a figure (``is_cut``)."""
     fields = tidy(
-        out.summary_title, out.summary_body, out.summary_body_en, target_language=target_language
-    )
+        out.summary_title, out.summary_body, out.summary_body_en,
+        target_language=target_language, printed=printed,
+    )  # fmt: skip
     return {
         "summary_title": fields.title,
         "summary_body": fields.body,
@@ -229,6 +296,7 @@ __all__ = [
     "join_continuation",
     "repair_title",
     "tidy",
+    "title_in_body",
     "tidy_update",
     "without_title",
 ]

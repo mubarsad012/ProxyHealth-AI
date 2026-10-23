@@ -114,7 +114,7 @@ apps/api/
       fixed_notices.py                doc-type → fixed RedFlag cards (jury, EAD receipt, not-a-court-order, …) (D-20)
       disclaimers.py                  category → DisclaimerKind + secondary disclaimers
       tagging.py                      validate model resource_tags; FAST re-tag when empty/invalid
-      compat_runtime.py               `openai_compat` runtime limits: loopback two-call fallback only with ≥ 120 s left, same-language transcript lines, one rewrite per sentence per request (LOCAL_AI.md §5)
+      compat_runtime.py               `openai_compat` runtime limits: loopback two-call fallback and injection re-run only with ≥ 120 s left, same-language transcript lines, one rewrite per sentence per request (LOCAL_AI.md §5)
       troubleshoot_pipeline.py        screenshot flow: contacts filter on steps, credential guard, scam scorer, quote check against screen_text, emergency lexicon over screen_text + user_goal → `TroubleshootResult.safety` (D-14)
       chat_pipeline.py                context compaction (≤ 60k chars), FAST call, grounding check of span ids against original_text, refusal templates, emergency lexicon on question
     packs/
@@ -536,7 +536,7 @@ Sequence: `npx eas-cli@latest build:configure` → `eas build --profile developm
 | `OPENAI_COMPAT_TIMEOUT_S` | (empty) → `300` loopback / `90` hosted | Per call, including its queue wait and its one repair retry; the whole post is bounded, not just each read. Running out is `503 upstream_unavailable` with `user_message_key` `err.ai_too_slow` (paper-reading tasks on a loopback endpoint; hosted endpoints and other tasks keep `err.upstream_unavailable`) or `err.ai_busy` (at least a third of the budget went on waiting for the semaphore); so is a call the request's deadline no longer lets start. The app shows no Retry countdown for `err.ai_too_slow`. |
 | `OPENAI_COMPAT_MAX_OUTPUT_TOKENS` | (empty) → `4096` loopback / `6144` hosted | Cap on top of each task's own `max_output_tokens` (≥ 256). Loopback rule: cap ≤ (`OPENAI_COMPAT_TIMEOUT_S` − page-read s − 30) × the machine's tokens/s, so a runaway reply ends as `incomplete` (two-call path) before the timeout (LOCAL_AI.md §5; `scripts/provider_check.py` warns). |
 | `OPENAI_COMPAT_MAX_IMAGES` | (empty) → `2` loopback / `12` hosted | Page images per call (Groq free: 3; Cerebras free: 2); PDFs are rasterised and count per page. `/v1/config` lowers `limits.max_pages` / `max_pdf_pages` to it. Loopback: a third page outlasts 300 s (LOCAL_AI.md §5). |
-| `OPENAI_COMPAT_CONCURRENCY` | (empty) → `1` loopback / `4` hosted | Parallel calls per process (16 GB RAM: one local call at a time). On `openai_compat`, `/v1/analyze`, `/v1/troubleshoot` and `/v1/chat` cancel their work when the client disconnects (`routers/_cancel.py`), freeing the slot; on loopback the two-call fallback starts only with ≥ 120 s of `FAILOVER_DEADLINE_S` left (`analysis/compat_runtime.py`). |
+| `OPENAI_COMPAT_CONCURRENCY` | (empty) → `1` loopback / `4` hosted | Parallel calls per process (16 GB RAM: one local call at a time). On `openai_compat`, `/v1/analyze`, `/v1/troubleshoot` and `/v1/chat` cancel their work when the client disconnects (`routers/_cancel.py`), freeing the slot; on loopback the two-call fallback and the injection re-run start only with ≥ 120 s of `FAILOVER_DEADLINE_S` left (`analysis/compat_runtime.py`). |
 | `CORS_ORIGINS` | `http://localhost:8081` | Comma list. Add the web host. |
 | `APP_TOKEN` | (empty) | When set, `X-App-Token` is required. |
 | `ADMIN_TOKEN` | (empty) | Enables `/v1/admin/keys`. |
