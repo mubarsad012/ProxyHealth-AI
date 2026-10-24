@@ -320,14 +320,27 @@ async def test_sensitive_tags_on_a_demo_screen_need_code_evidence(
     assert res.resource_tags == [ResourceTag.benefits_navigation]
 
 
-async def test_a_demo_crisis_tag_still_opens_the_emergency_card(
+async def test_a_demo_crisis_tag_is_no_emergency(
     app: FastAPI, client: httpx.AsyncClient, settings: Settings
 ) -> None:
+    # As in the analysis (tagging.model_crisis): a synthetic demo screen's crisis tag is junk.
     out = screen_out(resource_tags=["crisis", "benefits_navigation"])
     install(app, settings, troubleshoot=lambda kw: out)
     res = await post(client, body(demo_sample_id=SCREEN))
+    assert res.safety.emergency is False
+    assert res.resource_tags == [ResourceTag.benefits_navigation]
+
+
+async def test_a_real_screen_crisis_tag_opens_the_emergency_card(
+    app: FastAPI, client: httpx.AsyncClient, settings: Settings,
+    consent_headers: dict[str, str],
+) -> None:
+    # D-14: on a real screen the model's tag backs the lexicon, even written " Crisis".
+    out = screen_out(resource_tags=[" Crisis", "benefits_navigation"])
+    install(app, settings, troubleshoot=lambda kw: out)
+    res = await post(client, body(), headers=consent_headers)
     assert res.safety.emergency is True
-    assert res.resource_tags == [ResourceTag.crisis, ResourceTag.benefits_navigation]
+    assert ResourceTag.crisis in res.resource_tags
 
 
 async def test_a_real_screenshot_keeps_the_model_sensitive_tags(

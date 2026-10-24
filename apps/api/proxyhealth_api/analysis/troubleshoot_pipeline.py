@@ -62,7 +62,6 @@ from proxyhealth_api.contracts.enums import (
     DocumentType,
     ModelQuality,
     RedFlagKind,
-    ResourceTag,
     Severity,
     WarningCode,
 )
@@ -201,7 +200,9 @@ async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> Trou
     emerg = emergency.detect_emergency(
         screen_text, detected_language=None, target_language=target,
         user_texts=[req.user_goal] if req.user_goal else [],
-        model_flag=ResourceTag.crisis.value in out.resource_tags,
+        # The model's crisis tag backs the lexicon on a real screen only (D-14); a demo
+        # screenshot is synthetic and its prompt carries nothing the reader typed.
+        model_flag=tagging.model_crisis(out.resource_tags, sample=sample is not None),
         credential_or_payment_request=asks,
     )  # fmt: skip
     warnings.extend(emerg.warnings)
