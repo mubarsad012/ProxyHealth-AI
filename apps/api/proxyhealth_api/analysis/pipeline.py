@@ -864,12 +864,17 @@ def paper_emergency(
     detected: str,
     target: str,
     model_flag: bool,
+    sample: bool = False,
 ) -> emergency.EmergencyOutcome:
     """§11.7 over the transcript, the model's ``emergency_terms_found`` and ``model_flag`` (the
-    ``tag`` call's emergency hint, or a real upload's model ``crisis`` tag — D-14)."""
+    ``tag`` call's emergency hint, or a real upload's model ``crisis`` tag — D-14). On a known
+    ``sample`` paper only the lexicon over its fixed, synthetic text counts: a small model's
+    emergency terms or hint there are junk (the 2026-10-24 live sweep put a crisis card on the
+    amoxicillin label), as its ``crisis`` tag is (``tagging.model_crisis``)."""
     return emergency.detect_emergency(
         [b.text for b in paper.blocks], detected_language=detected, target_language=target,
-        model_terms=out.emergency_terms_found, model_flag=model_flag,
+        model_terms=() if sample else out.emergency_terms_found,
+        model_flag=model_flag and not sample,
     )  # fmt: skip
 
 
@@ -1210,7 +1215,8 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
     geo = geo_hints(out)
     forms = printed_forms(out.form_numbers, paper.full_text)
     emerg = paper_emergency(paper, out, detected=detected, target=req.target_language,
-                            model_flag=tagging.model_crisis(out.resource_tags, sample=sample))
+                            model_flag=tagging.model_crisis(out.resource_tags, sample=sample),
+                            sample=sample)  # fmt: skip
     tag_call_tags: list[str] | None = None
     tags_now = functools.partial(
         tagging.finalize_tags, out.resource_tags, document_type=document_type,
@@ -1228,7 +1234,7 @@ async def run_analysis(req: AnalyzeRequest, deps: PipelineDeps) -> AnalysisResul
         tag_call_tags = list(tag_out.tags) if tag_out is not None else []
         if tag_out is not None and tag_out.emergency and not emerg.safety.emergency:
             emerg = paper_emergency(paper, out, detected=detected, target=req.target_language,
-                                    model_flag=True)  # fmt: skip
+                                    model_flag=True, sample=sample)  # fmt: skip
     tags = tags_now(emergency=emerg.safety.emergency, tag_call_tags=tag_call_tags).tags
     warnings.extend(emerg.warnings)
     urg = urgency.compute_urgency(

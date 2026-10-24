@@ -226,6 +226,28 @@ async def test_a_samples_junk_crisis_tag_adds_no_crisis_card(tmp_path: Path) -> 
     assert "988" not in preview(result)
 
 
+async def test_a_samples_model_emergency_terms_and_hint_are_no_emergency(tmp_path: Path) -> None:
+    """2026-10-24 live sweep: qwen3.5:4b put a crisis card on the amoxicillin sample label."""
+    texts = ["Sample Street Pharmacy", "Take with food if it upsets your stomach."]
+    tag = TaggingModelOut(tags=["prescription_help"], geo_state=None, geo_county=None,
+                          geo_city=None, geo_zip=None, institutions_as_written=[],
+                          emergency=True)  # fmt: skip
+    out = variant(texts, category=DC.medical, sender=SK.pharmacy, tags=[])
+    out = out.model_copy(update={"emergency_terms_found": ["overdose"]})
+    result, _ = await analyze(tmp_path, out, sample=MEDICAID, tag=tag)
+    assert not result.safety.emergency and result.urgency.level.value != "emergency"
+    assert RT.crisis not in result.resource_tags
+
+
+async def test_a_real_uploads_model_emergency_terms_still_bring_the_card(tmp_path: Path) -> None:
+    """D-14: on a real upload the model's emergency words alone set the emergency (over-trigger)."""
+    texts = ["Sample Street Pharmacy", "Take with food if it upsets your stomach."]
+    out = variant(texts, category=DC.medical, sender=SK.pharmacy, tags=[])
+    out = out.model_copy(update={"emergency_terms_found": ["overdose"]})
+    result, _ = await analyze(tmp_path, out)
+    assert result.safety.emergency and result.urgency.level.value == "emergency"
+
+
 async def test_a_real_uploads_poison_tag_stays_without_an_emergency(tmp_path: Path) -> None:
     """review/e2e2.py: a Tagalog label ("tumawag agad sa Poison Control"), model tag poison."""
     out = variant(["Klinika", "Kung nakalunok ang bata ng gamot na ito, tumawag agad sa Poison "
