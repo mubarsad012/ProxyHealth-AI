@@ -302,33 +302,31 @@ def bill_out(*flags: RedFlagOut, tags: Sequence[str] = ()) -> TroubleshootModelO
 
 
 @pytest.mark.parametrize("demo", [True, False])
-async def test_a_methodless_payment_flag_neither_shows_nor_scores(
-    demo: bool, app: FastAPI, client: httpx.AsyncClient, settings: Settings,
+@pytest.mark.parametrize(
+    "quote",
+    ["请今天用礼品卡支付500美元罚款。", "Hãy trả 500 đô la bằng thẻ quà tặng hôm nay."],
+)  # fmt: skip
+async def test_a_payment_flag_in_a_language_without_method_lists_still_scores(
+    quote: str, demo: bool, app: FastAPI, client: httpx.AsyncClient, settings: Settings,
     consent_headers: dict[str, str],
 ) -> None:
-    # Reviewer follow-up (G1 issue 11 on a screen): the analysis sets aside a payment flag whose
-    # quote names no method on a paper scored none (scam.settle_payment_flags); a screen is scored
-    # with sender_kind unknown, where that flag alone reached likely (payment_and_agency_sender),
-    # showed at high severity and, on a demo screenshot, kept the model's scam_report tag.
-    out = bill_out(red_flag(RedFlagKind.scam_payment_method, BILL_SCREEN[2]),
-                   tags=["scam_report", "benefits_navigation"])  # fmt: skip
+    # The method word lists cover five languages; a gift-card flag quoted in Chinese or
+    # Vietnamese must still show and score, so methodless flags are settled only after scoring,
+    # on a screen scored none (scam.settle_payment_flags, as in the analysis).
+    out = bill_out(red_flag(RedFlagKind.scam_payment_method, quote))
     install(app, settings, troubleshoot=lambda kw: out)
     payload = body(demo_sample_id=SCREEN) if demo else body()
     res = await post(client, payload, headers={} if demo else consent_headers)
-    assert res.red_flags == [] and res.scam_risk == ScamRisk.none and res.scam_reasons == []
-    assert res.is_likely_scam is False
-    if demo:
-        assert res.resource_tags == [ResourceTag.benefits_navigation]
+    assert [f.source_quote for f in res.red_flags if f.text == "Be careful."] == [quote]
+    assert res.scam_risk == ScamRisk.likely and res.resource_tags[0] == ResourceTag.scam_report
 
 
-def test_screen_flags_count_the_methodless_payment_flag_as_dropped() -> None:
+def test_screen_flags_keep_a_methodless_payment_flag_for_the_scorer() -> None:
     corpus = "\n".join(BILL_SCREEN)
     flag = red_flag(RedFlagKind.scam_payment_method, BILL_SCREEN[2])
-    other = red_flag(RedFlagKind.urgency_pressure, BILL_SCREEN[2])
     for sample in (False, True):
-        assert tp.screen_flags([flag, other], corpus, sample=sample) == (
-            [tp.screen_flags([other], corpus)[0][0]], 1
-        ), sample  # fmt: skip
+        kept, dropped = tp.screen_flags([flag], corpus, sample=sample)
+        assert [f.source_quote for f in kept] == [BILL_SCREEN[2]] and dropped == 0, sample
 
 
 @pytest.mark.parametrize(
