@@ -91,16 +91,16 @@ The main building blocks, for the video and the written answers:
 - **AI at runtime:** Google Gemini (paid tier for real papers), or Qwen3.5-4B run locally with Ollama; zero-key sample mode needs neither.
 - **AI used to build it:** Anthropic Claude via Claude Code (section 3).
 
-Size of the repository on 2026-10-22, for reference:
+Size of the repository on 2026-10-24, for reference:
 
 | Item | Count |
 |---|---|
-| Commits | 13 |
-| Tracked files | 852 |
-| Server Python, excluding tests | 24,126 lines |
-| App TypeScript, excluding tests | 28,882 lines |
-| Server tests | 2,433 passing (24 live-only tests skip without keys) |
-| App tests | 552 |
+| Commits | 47 |
+| Tracked files | 871 |
+| Server Python, excluding tests | 27,407 lines |
+| App TypeScript, excluding tests | 28,924 lines |
+| Server tests | 3,403 passing (28 live-only tests skip without keys) |
+| App tests | 566 |
 | Spec documents | 14 |
 
 ---
@@ -119,7 +119,7 @@ The rules require the video to show: the participant names, the app name, the pu
 | 2:45–3:00 | Closing | What you would add in 2.0 (section 6, question 6). |
 
 **How to record on this Mac (nothing to install):**
-1. Switch the API to sample mode for a reliable demo: `scripts/use-local-ai.sh --off`, then `make dev`.
+1. Switch the API to sample mode for a reliable demo: `scripts/use-local-ai.sh --off`, then `make dev`. (The local AI model works, but one paper takes 1½–7½ minutes on this Mac — too slow for a 3-minute video. You can say in the video that it can also read real papers with a model running on your own computer. `scripts/use-local-ai.sh --restore` switches back afterwards.)
 2. Press **Shift-Command-5**, choose "Record Selected Portion" around the browser window, click **Options → Microphone → MacBook Pro Microphone**, then **Record**.
 3. Stop with the stop button in the menu bar. The `.mov` file lands on the Desktop. You can trim it in QuickTime Player (**Edit → Trim**).
 4. Upload to YouTube or Vimeo, set visibility to **Public** (the rules require public, not unlisted), and paste the link into the application.
@@ -188,3 +188,20 @@ The repository is safe to publish: no real keys, passwords or `.env` files anywh
 | Read aloud with an honest "no voice" fallback | works |
 | Remind me (.ics) on sample papers | fixed after the audit (see `docs/DECISIONS.md` §14) |
 | `make smoke` (224 end-to-end API checks) | passes |
+
+### 7.3 Verified with the local AI model (qwen3.5:4b on this Mac, 2026-10-24)
+
+All 17 sample papers in English, plus the Medicaid letter in Spanish and the court notice in Dari, went through the real API with the local model (`AI_PROVIDER=openai_compat`, `local` tier). Every one returned a full result: none timed out, and no fact the server showed was unverified.
+
+| Check (against each sample's expected answer) | Result |
+|---|---|
+| Papers answered | 19 / 19 (81–454 s each; most 160–230 s) |
+| Facts shown with a word-for-word quote that the server verified | 38 shown, 0 rejected |
+| Scam verdict (gift-card letter "likely"; every genuine letter "none") | 19 / 19 |
+| Category, disclaimer | 19 / 19 each |
+| Nearest deadline date | 18 / 19 |
+| Document type | 17 / 19 (the model read the insurance denial as a medical bill and the traffic notice as a general notice) |
+| Urgency level | 16 / 19 before the final fix, which removed the false emergency on the prescription label (re-checked live) |
+
+How this was reached, and what changed in the code, is in `docs/DECISIONS.md` §14 (CL-094 to CL-098 and the entries after them). A small 4-billion-parameter model makes mistakes a larger one does not. The server catches most of them: it checks every quote against the page, computes dates and urgency only in code, and decides scams and emergencies from the page text. Check every answer against the paper.
+
