@@ -884,7 +884,11 @@ def plan_steps_from(
 
     With a possible or likely scam, ``call``/``submit_online``/``mail`` steps aimed at the paper's
     own contact (no DB tag to route them to a checked resource) are dropped (DOCUMENT_TAXONOMY
-    §6.4); ``phrasing.scam_safe_step`` then checks every step's text for a printed contact."""
+    §6.4). ``finish_analysis`` then runs ``phrasing.scam_safe_step`` on the text of each step
+    ``phrasing.fit_professional_step`` did not replace with fixed copy (fixed copy carries no paper
+    contact, so it is not re-checked): first before the optional-prose drop and the lint, so a step
+    it drops or turns into the scam referral spends no rewrite call, and again after them, since a
+    rewrite could add a pointer clause ("call the number on the letter")."""
     out: list[PlanStep] = []
     seen: set[str] = set()
     for step in steps:
@@ -1386,6 +1390,21 @@ async def finish_analysis(
             paper.mask(step.text), category=category, document_type=document_type,
             demand_id=step.demand_id, t=t, language=target, scam_risk=scam_out.scam_risk,
         )  # fmt: skip
+        if scam_paper and not replaced:
+            # §6.4 next, before the optional-prose drop and the lint: a step pointing at a contact
+            # the paper prints is dropped, a professional one becomes the scam referral, so neither
+            # spends a rewrite call and each counts once. Read on the scrubbed text, as the check
+            # after ``clean`` is (uncounted here: ``clean`` counts the scrub of a step that stays).
+            seen = contacts_filter.scrub_text(
+                text, scrubber.allow, marker=scrubber.marker, org_marker=scrubber.org_marker
+            ).text
+            safe = phrasing.scam_safe_step(seen, step.kind, category=category, t=t,
+                                           scam_risk=scam_out.scam_risk)  # fmt: skip
+            if safe is None:
+                stats.rewrites += 1
+                continue
+            if safe != seen:
+                text, replaced = safe, True
         stats.rewrites += int(replaced)
         if not replaced:
             if step.kind is not PlanStepKind.professional and step.demand_id is None:
@@ -1393,7 +1412,8 @@ async def finish_analysis(
                     continue
                 text = kept
             text = await clean(text)
-            # §6.4: on a possible/likely scam no step points at a contact the paper prints.
+            # §6.4 again: a rewrite may have added a pointer clause ("Call the number on the
+            # letter."); on a possible/likely scam no step points at a contact the paper prints.
             safe = phrasing.scam_safe_step(text, step.kind, category=category, t=t,
                                            scam_risk=scam_out.scam_risk)  # fmt: skip
             if safe is None:

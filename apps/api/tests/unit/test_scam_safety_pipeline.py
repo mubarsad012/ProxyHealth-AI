@@ -332,6 +332,38 @@ async def test_no_scam_step_sends_the_reader_to_the_papers_contact(tmp_path: Pat
         assert result.questions_to_ask == [], "no questions for the scammer (§6.4)"
 
 
+async def test_a_scam_step_dropped_or_replaced_spends_no_rewrite_and_counts_once(
+    tmp_path: Path,
+) -> None:
+    """Reviewer follow-up: ``scam_safe_step`` ran only after the lint, so a step it then dropped
+    or replaced had already spent a ``phrasing_rewrite`` call (≈5 s on a local model, one of the
+    request's budget) and been counted. Both steps below fail the lint ("You must pay …") and name
+    the scammer's printed phone: the professional one becomes the scam referral, the one tied to
+    the verified demand goes — before any rewrite, each counted once."""
+    keep = step("s3", "Keep the letter and the envelope.", PlanStepKind.gather)
+    bad = [
+        step("s1", f"You must pay Officer Daniel Sample at {SCAMMER} today.",
+             PlanStepKind.professional),
+        step("s2", f"You must pay the fee by calling {SCAMMER}.", PlanStepKind.verify, "p1b7")
+        .model_copy(update={"demand_id": "d1"}),
+    ]  # fmt: skip
+    referral = en_t()("chat.refer.lawyer_or_accredited_rep")
+    for sample in (None, SCAM):
+        base_out = fixture_out()
+        base_out.plan_steps = [keep]
+        base, _ = await analyze(tmp_path, base_out, sample=sample)
+        out = fixture_out()
+        out.plan_steps = [*bad, keep]
+        result, tasks = await analyze(tmp_path, out, sample=sample)
+        assert result.scam_risk is ScamRisk.likely and base.scam_risk is ScamRisk.likely
+        assert Task.phrasing_rewrite not in tasks, (sample, tasks)
+        assert {s.id: s.text for s in result.plan_steps} == {
+            "s1": referral, "s3": "Keep the letter and the envelope."
+        }, sample  # fmt: skip
+        rewrites = result.verification.phrasing_rewrites
+        assert rewrites == base.verification.phrasing_rewrites + 2, (sample, rewrites)
+
+
 async def test_a_real_papers_steps_keep_their_printed_contact(tmp_path: Path) -> None:
     out = fixture_out("va_pay_or_quit_14d")
     out.plan_steps.append(step("s9", "Call the leasing office at (703) 555-0175 with questions.",

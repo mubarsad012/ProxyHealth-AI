@@ -286,6 +286,72 @@ def test_screen_flags_drop_the_gov_portal_flag_on_any_screen() -> None:
     assert tp.screen_flags(footer, corpus, sample=True) == ([], 1)
 
 
+BILL_SCREEN = [
+    "Sample State Benefits Portal",
+    "Account balance: $45.00",
+    "Make a payment to keep your account active.",
+]  # fmt: skip
+
+
+def bill_out(*flags: RedFlagOut, tags: Sequence[str] = ()) -> TroubleshootModelOut:
+    return screen_out(
+        screen_text=[*BILL_SCREEN, *(f.source_quote for f in flags if f.source_quote)],
+        error_text_quoted=None, steps=[], cautions=[], red_flags=list(flags), scam_signals=[],
+        asks_for_credentials_or_payment=False, resource_tags=list(tags),
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("demo", [True, False])
+async def test_a_methodless_payment_flag_neither_shows_nor_scores(
+    demo: bool, app: FastAPI, client: httpx.AsyncClient, settings: Settings,
+    consent_headers: dict[str, str],
+) -> None:
+    # Reviewer follow-up (G1 issue 11 on a screen): the analysis sets aside a payment flag whose
+    # quote names no method on a paper scored none (scam.settle_payment_flags); a screen is scored
+    # with sender_kind unknown, where that flag alone reached likely (payment_and_agency_sender),
+    # showed at high severity and, on a demo screenshot, kept the model's scam_report tag.
+    out = bill_out(red_flag(RedFlagKind.scam_payment_method, BILL_SCREEN[2]),
+                   tags=["scam_report", "benefits_navigation"])  # fmt: skip
+    install(app, settings, troubleshoot=lambda kw: out)
+    payload = body(demo_sample_id=SCREEN) if demo else body()
+    res = await post(client, payload, headers={} if demo else consent_headers)
+    assert res.red_flags == [] and res.scam_risk == ScamRisk.none and res.scam_reasons == []
+    assert res.is_likely_scam is False
+    if demo:
+        assert res.resource_tags == [ResourceTag.benefits_navigation]
+
+
+def test_screen_flags_count_the_methodless_payment_flag_as_dropped() -> None:
+    corpus = "\n".join(BILL_SCREEN)
+    flag = red_flag(RedFlagKind.scam_payment_method, BILL_SCREEN[2])
+    other = red_flag(RedFlagKind.urgency_pressure, BILL_SCREEN[2])
+    for sample in (False, True):
+        assert tp.screen_flags([flag, other], corpus, sample=sample) == (
+            [tp.screen_flags([other], corpus)[0][0]], 1
+        ), sample  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("quote", "reason"),
+    [("Pay the balance today with Google Play gift cards.", "scam.gift_card"),
+     ("Hand $45.00 in cash to the agent at your door.", None)],
+)  # fmt: skip
+@pytest.mark.parametrize("demo", [True, False])
+async def test_a_payment_flag_naming_a_method_still_shows_and_scores(
+    quote: str, reason: str | None, demo: bool, app: FastAPI, client: httpx.AsyncClient,
+    settings: Settings, consent_headers: dict[str, str],
+) -> None:
+    # A gift card (one of the four methods) or an in-hand payment (cash, an agent) keeps the flag.
+    out = bill_out(red_flag(RedFlagKind.scam_payment_method, quote))
+    install(app, settings, troubleshoot=lambda kw: out)
+    payload = body(demo_sample_id=SCREEN) if demo else body()
+    res = await post(client, payload, headers={} if demo else consent_headers)
+    model = [f for f in res.red_flags if f.text == "Be careful."]
+    assert [f.source_quote for f in model] == [quote]
+    assert res.scam_risk == ScamRisk.likely and res.resource_tags[0] == ResourceTag.scam_report
+    assert reason is None or reason in res.scam_reasons
+
+
 @pytest.mark.parametrize(("demo", "scored"), [(True, False), (False, True)])
 async def test_the_demo_footer_line_is_never_scored(
     demo: bool, scored: bool, app: FastAPI, client: httpx.AsyncClient, settings: Settings,

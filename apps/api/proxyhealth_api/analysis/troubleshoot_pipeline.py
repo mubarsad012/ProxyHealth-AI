@@ -4,7 +4,8 @@ Order: upload validation + redaction (in the thread pool) → one ``troubleshoot
 ``medium``) → quote checks against the model's own ``screen_text`` (``error_text_quoted``, each
 step's ``ui_target_as_written``, red-flag quotes) → the analysis flag screens (a payment flag whose
 quote asks for no payment is dropped, a repeated flag shows once, ``scam.screen_model_flags``; on
-a sample screenshot no flag rests on its SAMPLE footer) → contact scrubber → scam scorer (regexes
+a sample screenshot no flag rests on its SAMPLE footer; a payment flag naming no payment method
+and no in-hand payment is dropped, ``names_a_payment``) → contact scrubber → scam scorer (regexes
 over the screen except a sample's footer, model hints, credential request) → emergency lexicon
 (``screen_text`` + ``user_goal``, plus the model's ``crisis`` tag) → injection detection (flag +
 warning; a screenshot has no block boxes to mask, so no re-run) → phrasing lint (steps, flags,
@@ -127,7 +128,9 @@ def screen_flags(
     payment — anti-fraud boilerplate ("SSA will never ask you to pay with gift cards"), a SAMPLE
     footer, an agency's own ``.gov`` payment portal — is dropped, and a repeated flag (same kind,
     same quote) shows once. On a ``sample`` screenshot a flag of any kind quoting its SAMPLE
-    footer ("Not a real website.") is dropped as well (§6.3, ``demo.fixtures.is_sample_banner``).
+    footer ("Not a real website.") is dropped as well (§6.3, ``demo.fixtures.is_sample_banner``),
+    and on any screen a payment flag whose quote names no payment method and no in-hand payment
+    (``names_a_payment``).
     """
     on_it: list[RedFlag] = []
     dropped = 0
@@ -144,8 +147,27 @@ def screen_flags(
         )
     screened = scam.screen_model_flags(verify.VerifiedRedFlags(flags=on_it))
     dropped += screened.facts_rejected
-    kept = [f for f in screened.flags if not (sample and is_sample_banner(f.source_quote))]
+    kept = [
+        f for f in screened.flags
+        if not (sample and is_sample_banner(f.source_quote)) and names_a_payment(f)
+    ]  # fmt: skip
     return kept, dropped + len(screened.flags) - len(kept)
+
+
+def names_a_payment(flag: RedFlag) -> bool:
+    """False for a ``scam_payment_method`` flag whose quote names none of the four methods
+    (``scam.names_payment_method``) and no payment handed over in cash, by money order or voucher,
+    or to a courier or agent (``scam.yaml`` ``model_payment.in_hand``); True for any other flag.
+
+    The analysis sets such a flag aside on a paper scored ``none`` (``scam.settle_payment_flags``);
+    a screen is scored with ``sender_kind`` unknown, where the flag alone would reach ``likely``
+    (``payment_and_agency_sender``), so troubleshoot drops it before scoring (DOCUMENT_TAXONOMY
+    §6.1, §6.7): it neither shows nor scores, nor backs a sample screenshot's ``scam_report`` tag.
+    """
+    if flag.kind is not RedFlagKind.scam_payment_method:
+        return True
+    cfg = scam.load_config()
+    return scam.names_payment_method(flag.source_quote, cfg) or cfg.names_in_hand(flag.source_quote)
 
 
 async def run_troubleshoot(req: TroubleshootRequest, deps: PipelineDeps) -> TroubleshootResult:
