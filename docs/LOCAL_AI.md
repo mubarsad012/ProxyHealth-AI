@@ -92,7 +92,7 @@ It writes `apps/api/.env` from the preset [`apps/api/.env.local-ai.example`](../
 | `OPENAI_COMPAT_MODEL_LABEL` | `Qwen` | shown as `{model}` in the consent copy |
 | `OPENAI_COMPAT_JSON_MODE` | `json_schema` | Ollama `/v1` takes `response_format` json_schema (§4.4) |
 | `OPENAI_COMPAT_REASONING` | `none` | sends `reasoning_effort: "none"`: Qwen3.5 thinks by default, which multiplies latency (§4.5) |
-| `OPENAI_COMPAT_TIMEOUT_S` / `FAILOVER_DEADLINE_S` | `300` / `310` | a local call can take minutes; the deadline must be at least timeout + 10 (§4.2 rule 5) |
+| `OPENAI_COMPAT_TIMEOUT_S` / `FAILOVER_DEADLINE_S` | `300` / `480` | a local call can take minutes; the deadline must be at least timeout + 10 (§4.2 rule 5), and 480 lets the two-call fallback finish after a reply cut at the output cap (§5) |
 
 - **Before writing,** it asks the API's own `Settings` (boot rules included) whether the server would start with this file. If not, it writes nothing (`--no-check` skips the check). It also warns when one of these variables is set in your shell, because a real environment variable wins over `.env`.
 - **It never overwrites a different `.env` without `--force`.** With `--force` it first moves yours to `apps/api/.env.bak-YYYYmmdd-HHMMSS` (mode 600, git-ignored). A `.env` that equals the preset is never backed up.

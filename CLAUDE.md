@@ -8,7 +8,7 @@ Monorepo. Two apps share one API contract:
 
 ## Toolchain on this Mac
 - Node 24 LTS is at `~/.local/node/bin` (added to `~/.zprofile`). In non-login shells run `export PATH="$HOME/.local/node/bin:$PATH"` first. No Homebrew.
-- No Ollama or LM Studio and no local model are installed (2026-10-04); installing them needs the developer's OK (hard rule 7).
+- Ollama 0.35.1 (`~/Applications/Ollama.app`, server on 127.0.0.1:11434 started by `scripts/setup-local-ai.sh`) and `qwen3.5:4b` (3.3 GB) are installed, with the developer's OK (2026-10-22). Any other model, or LM Studio, still needs the developer's OK (hard rule 7). The developer's `apps/api/.env` selects `openai_compat` on the `local` tier; `scripts/use-local-ai.sh --off` switches back to mock.
 - No Xcode (Command Line Tools only): `npx expo run:ios` and the iOS simulator will NOT work here. Test with `npx expo start --web` / `npx expo export --platform web`, or Expo Go on a phone. Store builds go through EAS (`npx eas-cli@latest build`).
 - Type-check mobile with `cd apps/mobile && npx tsc --noEmit`; lint with `npx expo lint`; tests with `npx jest`.
 - API tests: `apps/api/.venv/bin/pytest apps/api`.
