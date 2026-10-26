@@ -58,6 +58,13 @@ services:
       # that rightmost entry and never trusts entries to its left (DEPLOYMENT §1.2, §1.7).
       - key: TRUSTED_PROXY_HOPS
         value: "1"
+      # The free plan has a tenth of a CPU and sleeps after 15 idle minutes: give a paper room to
+      # finish (waking + a full-size photo + Gemini's reading). /v1/config then tells the app to
+      # wait FAILOVER_DEADLINE_S + UPSTREAM_TIMEOUT_S + 15 s (settings.client_timeouts).
+      - key: FAILOVER_DEADLINE_S
+        value: "240"
+      - key: UPSTREAM_TIMEOUT_S
+        value: "150"
       - key: LOG_LEVEL
         value: info
       # The image ships no .env; this keeps it that way even if one were ever copied in.

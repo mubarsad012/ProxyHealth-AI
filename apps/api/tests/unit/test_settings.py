@@ -309,3 +309,14 @@ def test_scripts_spawned_by_the_suite_inherit_the_opt_out(
     assert run(dict(os.environ)) == "2026-10-04 2026-10-04"
     without = {k: v for k, v in os.environ.items() if k != NO_DOTENV_ENV}
     assert run(without).split()[1] == "2001-01-01"  # control: the opt-out is what hides it
+
+
+def test_gemini_client_waits_cover_the_servers_own_budget(tmp_path: Path) -> None:
+    """The app must not give up while the server is still within FAILOVER_DEADLINE_S + one call
+    (Render free plan, 2026-10-26: the fixed 120 s cut papers the server would have finished)."""
+    keys = '[{"key":"AIzaFAKEFAKEFAKEFAKE","project":"p","billing":true}]'
+    s = make_settings(tmp_path, ai_provider="gemini", gemini_keys=keys,
+                      failover_deadline_s=240, upstream_timeout_s=150)
+    assert s.client_timeouts.analyze_s == 240 + 150 + 15
+    assert s.client_timeouts.chat_s == 240 + 150 + 15
+    assert make_settings(tmp_path).client_timeouts.analyze_s == 120  # mock keeps the defaults

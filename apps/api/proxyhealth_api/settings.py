@@ -579,13 +579,20 @@ class Settings(BaseSettings):
 
     @property
     def client_timeouts(self) -> ClientTimeouts:
-        """§4.6: the app's waits. The fixed defaults, except on ``openai_compat``, where every
+        """§4.6: the app's waits. The fixed defaults on ``mock``; on a model provider every
         model-calling request may take ``FAILOVER_DEADLINE_S`` (the last call starts just before
-        it) + ``OPENAI_COMPAT_TIMEOUT_S`` (that call) + a margin."""
+        it) + that call's own timeout (``OPENAI_COMPAT_TIMEOUT_S``, or ``UPSTREAM_TIMEOUT_S`` for
+        Gemini) + a margin, so the app never gives up while the server is still within its own
+        budget (a host on a small CPU that wakes from sleep, a full-size phone photo)."""
         base = ClientTimeouts()
-        if self.ai_provider != "openai_compat":
+        if self.ai_provider == "mock":
             return base
-        budget = self.failover_deadline_s + self.openai_compat_timeout + CLIENT_TIMEOUT_MARGIN_S
+        call_s = (
+            self.openai_compat_timeout
+            if self.ai_provider == "openai_compat"
+            else self.upstream_timeout_s
+        )
+        budget = self.failover_deadline_s + call_s + CLIENT_TIMEOUT_MARGIN_S
         return ClientTimeouts(
             analyze_s=max(base.analyze_s, budget),
             troubleshoot_s=max(base.troubleshoot_s, budget),
