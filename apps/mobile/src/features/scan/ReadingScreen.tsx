@@ -59,7 +59,7 @@ export function ReadingScreen() {
   const pages = useSession((s) => s.pages);
   const isSample = useSession((s) => Boolean(s.demoSampleId));
   // A local test model takes minutes per page: say so instead of "usually under a minute".
-  const slowTier = useSession((s) => isSlowTier(s.serverConfig?.client_timeouts));
+  const slowTier = useSession((s) => isSlowTier(s.serverConfig?.client_timeouts, s.serverConfig?.provider));
   const { start, status, result } = run;
 
   useEffect(() => {

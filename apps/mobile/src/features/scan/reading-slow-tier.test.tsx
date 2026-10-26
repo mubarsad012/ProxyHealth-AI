@@ -105,6 +105,9 @@ describe('slow tier detection', () => {
     expect(isSlowTier(GEMINI)).toBe(false);
     expect(isSlowTier(null)).toBe(false);
     expect(isSlowTier(undefined)).toBe(false);
+    // A Gemini server on a small sleeping host announces a long budget but is no "slower AI".
+    expect(isSlowTier({ analyze_s: 405 }, 'gemini')).toBe(false);
+    expect(isSlowTier(LOCAL, 'openai_compat')).toBe(true);
   });
 });
 

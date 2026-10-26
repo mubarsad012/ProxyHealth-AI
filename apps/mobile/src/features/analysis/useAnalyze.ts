@@ -43,8 +43,14 @@ export const MIN_ON_SCREEN_MS = 1_500;
  *  a local model announces ≈ 10 minutes, Gemini 2 and a hosted test endpoint ≈ 3.5. */
 export const SLOW_ANALYZE_MS = 300_000;
 
-/** True when the server says one analysis may take minutes (the local test tier). */
-export function isSlowTier(limits: Partial<ClientTimeouts> | null | undefined): boolean {
+/** True when the server says one analysis may take minutes on the local test tier. A Gemini
+ *  server can also announce a long budget (a small host that sleeps), but it is no "slower AI":
+ *  with a `provider` other than `openai_compat` this is false. */
+export function isSlowTier(
+  limits: Partial<ClientTimeouts> | null | undefined,
+  provider?: string | null,
+): boolean {
+  if (provider != null && provider !== 'openai_compat') return false;
   return timeoutFor('analyze', limits) >= SLOW_ANALYZE_MS;
 }
 
@@ -111,7 +117,8 @@ export function useAnalyze(): AnalyzeState & { start(): void; cancel(): void; re
     });
     timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_long' })), TIP_LONG_MS));
     timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_still' })), TIP_STILL_MS));
-    if (isSlowTier(useSession.getState().serverConfig?.client_timeouts)) {
+    const cfg = useSession.getState().serverConfig;
+    if (isSlowTier(cfg?.client_timeouts, cfg?.provider)) {
       timers.current.push(setTimeout(() => mine === runId.current && setState((s) => ({ ...s, tipKey: 'reading.tip_slow' })), TIP_SLOW_MS));
     }
 
