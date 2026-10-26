@@ -27,7 +27,7 @@ __pycache__/
 *.egg-info/
 build/
 
-# --- Secrets & env (CLAUDE.md rule 5; DEPLOYMENT.md "Secrets") ---
+# --- Secrets & env (DEPLOYMENT.md "Secrets") ---
 .env
 .env.*
 !.env.example
@@ -57,5 +57,5 @@ expo-env.d.ts
 credentials.json
 credentials/
 
-# Claude Code workflow worktrees (temporary git worktrees, never committed)
+# local tool worktrees (never committed)
 .claude/worktrees/

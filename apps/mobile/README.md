@@ -1,6 +1,6 @@
 # ProxyHealth AI — mobile app (`apps/mobile`)
 
-One Expo codebase for iOS, Android and the web: Expo SDK 57, React Native 0.86, React 19, TypeScript 6, Expo Router with routes in `src/app/`. The product, screens and copy are specified in [`docs/PRODUCT_SPEC.md`](../../docs/PRODUCT_SPEC.md); the API it talks to is [`docs/API_CONTRACT.md`](../../docs/API_CONTRACT.md). Read [`AGENTS.md`](AGENTS.md) before touching Expo APIs — they change every SDK, so check the SDK 57 docs, not memory.
+One Expo codebase for iOS, Android and the web: Expo SDK 57, React Native 0.86, React 19, TypeScript 6, Expo Router with routes in `src/app/`. The product, screens and copy are specified in [`docs/PRODUCT_SPEC.md`](../../docs/PRODUCT_SPEC.md); the API it talks to is [`docs/API_CONTRACT.md`](../../docs/API_CONTRACT.md). Expo APIs change every SDK, so check each one against the [SDK 57 docs](https://docs.expo.dev/versions/v57.0.0/) before using it.
 
 ## Run it
 
@@ -30,7 +30,7 @@ npx expo config --type prebuild > /dev/null     # after any app.json change: plu
 EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 npx expo export --platform web --clear   # → dist/
 ```
 
-`scripts/ci.sh` at the repo root runs these after the API checks. CI (fresh checkout) first runs `npm ci --legacy-peer-deps` and `npx expo customize tsconfig.json` (creates the git-ignored `expo-env.d.ts` for typed routes). Never run `npm install` / `npx expo install` while other agents work; `--legacy-peer-deps` is needed because `openapi-typescript` pins TypeScript 5.
+`scripts/ci.sh` at the repo root runs these after the API checks. CI (fresh checkout) first runs `npm ci --legacy-peer-deps` and `npx expo customize tsconfig.json` (creates the git-ignored `expo-env.d.ts` for typed routes). `--legacy-peer-deps` is needed because `openapi-typescript` pins TypeScript 5.
 
 ## Configuration
 

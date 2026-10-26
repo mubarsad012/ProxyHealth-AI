@@ -1,0 +1,202 @@
+# ProxyHealth AI — Render Blueprint: one-click public deployment (docs/DEPLOYMENT.md §1.7).
+#
+# Render dashboard → New → Blueprint → connect this GitHub repo → fill GEMINI_KEYS → Apply.
+#
+# The two service names make the public URLs:
+#   proxyhealth-ai      web app + privacy policy (static)   https://proxyhealth-ai.onrender.com
+#   proxyhealth-ai-api  API (Docker, apps/api/Dockerfile)   https://proxyhealth-ai-api.onrender.com
+# If Render adds a suffix because a name is taken (the dashboard then shows e.g.
+# https://proxyhealth-ai-k3x9.onrender.com), update the values that carry these URLs and redeploy
+# both services: CORS_ORIGINS and PRIVACY_POLICY_URL on the API (→ the web URL), and
+# EXPO_PUBLIC_API_URL plus the connect-src origin of Content-Security-Policy-Report-Only on the web
+# app (→ the API URL). The API URL is baked into the web bundle at build time, so the web app
+# needs a rebuild ("Manual Deploy → Clear build cache & deploy") after that change.
+#
+# The free API sleeps after 15 idle minutes; the first request after that takes about a minute
+# while it wakes (open https://proxyhealth-ai-api.onrender.com/health before a demo). The free
+# static site does not sleep.
+#
+# Secrets never live in this file: GEMINI_KEYS is typed into Render's form (sync: false), as a JSON
+# list with one entry per billed Google Cloud project —
+#   [{"key":"<your Gemini API key>","project":"proxyhealth-cac","billing":true}]
+# ("billing": true is your statement that the project has billing attached; ENV=production refuses
+# billing:false slots). INSTALL_HASH_SECRET and ADMIN_TOKEN are random values Render generates;
+# ADMIN_TOKEN (Environment tab) unlocks GET /v1/admin/keys via the X-Admin-Token header.
+
+services:
+  # ---------------------------------------------------------------- API (FastAPI, Docker)
+  - type: web
+    name: proxyhealth-ai-api
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: main
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - apps/api/**
+    # The image's CMD binds uvicorn to ${PORT} (Render injects PORT; the image default is 8080),
+    # one worker, 32 concurrent requests, access log off (DEPLOYMENT §1.2).
+    envVars:
+      - key: ENV
+        value: production
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_KEYS
+        sync: false
+      - key: INSTALL_HASH_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://proxyhealth-ai.onrender.com
+      - key: PRIVACY_POLICY_URL
+        value: https://proxyhealth-ai.onrender.com/privacy
+      # Render's front end appends the client address to X-Forwarded-For; the rate limiter reads
+      # that rightmost entry and never trusts entries to its left (DEPLOYMENT §1.2, §1.7).
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: LOG_LEVEL
+        value: info
+      # The image ships no .env; this keeps it that way even if one were ever copied in.
+      - key: PROXYHEALTH_NO_DOTENV
+        value: "1"
+
+  # ---------------------------------------------------------------- web app (static export)
+  - type: web
+    name: proxyhealth-ai
+    runtime: static
+    branch: main
+    buildFilter:
+      paths:
+        - apps/mobile/**
+        - scripts/web-host-rules.py
+    # DEPLOYMENT §2: EXPO_PUBLIC_* are baked in at export time, always with --clear. Then §2.3's
+    # host-rules step (dist/404.html = the app's "I could not find that page" screen, plus
+    # _redirects, harmless here) and its --check, which fails the build if Expo Router's file
+    # naming for dynamic routes changes. The routes below are what Render itself uses.
+    buildCommand: >-
+      cd apps/mobile
+      && npm ci --legacy-peer-deps
+      && CI=1 npx expo export --platform web --clear
+      && test -f dist/index.html && test -f dist/privacy/index.html
+      && cd ../..
+      && if command -v python3 >/dev/null 2>&1;
+      then python3 scripts/web-host-rules.py apps/mobile/dist --write --check;
+      else echo "python3 not found: skipped dist/404.html (the routes below still apply)";
+      fi
+    staticPublishPath: ./apps/mobile/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: EXPO_PUBLIC_API_URL
+        value: https://proxyhealth-ai-api.onrender.com
+      - key: EXPO_PUBLIC_APP_ENV
+        value: production
+      - key: EXPO_NO_TELEMETRY
+        value: "1"
+    # DEPLOYMENT §2.3: a dynamic route is exported as a file that keeps its brackets
+    # (result/[id].html …), so each needs a rewrite; the address bar keeps /result/<id>. Most
+    # specific first. Then one rewrite per static route (/settings → settings.html), which is a
+    # no-op if Render already serves x.html for /x. Every route in apps/mobile/src/app needs a rule
+    # here (apps/api/tests/unit/test_render_blueprint.py checks it).
+    routes:
+      - type: rewrite
+        source: /papers/member/*
+        destination: "/papers/member/[id].html"
+      - type: rewrite
+        source: /result/*/chat
+        destination: "/result/[id]/chat.html"
+      - type: rewrite
+        source: /result/*/clerk
+        destination: "/result/[id]/clerk.html"
+      - type: rewrite
+        source: /result/*/help
+        destination: "/result/[id]/help.html"
+      - type: rewrite
+        source: /result/*/quicksheet
+        destination: "/result/[id]/quicksheet.html"
+      - type: rewrite
+        source: /result/*/source
+        destination: "/result/[id]/source.html"
+      - type: rewrite
+        source: /result/*
+        destination: "/result/[id].html"
+      - type: rewrite
+        source: /privacy
+        destination: /privacy/index.html
+      - type: rewrite
+        source: /emergency
+        destination: /emergency.html
+      - type: rewrite
+        source: /help
+        destination: /help.html
+      - type: rewrite
+        source: /papers
+        destination: /papers.html
+      # papers/ is also a directory (papers/member/…): cover a host that adds the slash first.
+      - type: rewrite
+        source: /papers/
+        destination: /papers.html
+      - type: rewrite
+        source: /reminders
+        destination: /reminders.html
+      - type: rewrite
+        source: /settings
+        destination: /settings.html
+      - type: rewrite
+        source: /troubleshoot
+        destination: /troubleshoot.html
+      - type: rewrite
+        source: /onboarding/adapting
+        destination: /onboarding/adapting.html
+      - type: rewrite
+        source: /onboarding/consent
+        destination: /onboarding/consent.html
+      - type: rewrite
+        source: /onboarding/language
+        destination: /onboarding/language.html
+      - type: rewrite
+        source: /scan/capture
+        destination: /scan/capture.html
+      - type: rewrite
+        source: /scan/reading
+        destination: /scan/reading.html
+      - type: rewrite
+        source: /scan/review
+        destination: /scan/review.html
+    # DEPLOYMENT §2.2, exact values. The CSP stays Report-Only (walk the demo with the console
+    # open, then rename the header to Content-Security-Policy); connect-src names the API URL.
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+      - path: /*
+        name: Content-Security-Policy-Report-Only
+        value: "default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://proxyhealth-ai-api.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+      - path: /_expo/static/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+      - path: /assets/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+      - path: /privacy/*
+        name: Cache-Control
+        value: "public, max-age=300"

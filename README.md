@@ -1,16 +1,58 @@
 # ProxyHealth AI — Your paper, explained.
 
-One codebase for iOS, Android and the web. Photograph a letter, bill, notice or form; the app reads it, translates it, explains it in three calm cards anchored to the exact words on the page, and points the reader to help a person verified.
+**Photograph an official paper — a medical bill, an immigration notice, an eviction letter — and ProxyHealth AI explains it in your language: what it is, what it asks for, and a step-by-step plan, with every deadline quoted from the paper.**
 
-> **Information, not advice.** ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms. Only a licensed professional — a lawyer (or, for an immigration case, a DOJ-accredited representative), a doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell someone what it means for them.
+**Who it is for:** immigrants and other adults who get official papers in a language they do not read well. The app works in 27 languages, including right-to-left Arabic, Dari, Pashto, Persian, Urdu and Rohingya, and a reader can type the name of any other language. One codebase runs on iPhone, Android and the web.
 
-| | |
+> **Information, not advice.** ProxyHealth AI explains what a paper says. It does not give legal or medical advice, decide eligibility, or fill in forms, and it points the reader to a person who can.
+
+## Try it
+
+**Live demo:** https://proxyhealth-ai.onrender.com (if it seems slow, give the server up to a minute to wake up)
+
+Open it in a phone or desktop browser → pick a language → read the consent screen → **Try a sample paper first** → choose the Medicaid letter. All 18 sample papers are synthetic: made-up names and numbers, watermarked SAMPLE.
+
+## What it does
+
+- **Three calm cards:** *What is this?* · *What is it asking for?* · *Your step-by-step plan*, with an urgency banner (for example "There is a date soon: October 14, 2026").
+- **Every fact is a quote.** Each date, amount and requested document sits next to the exact words on the paper; tap it to see them highlighted on the page.
+- **Ask about this paper:** a chat that answers only from the paper and politely refuses "Will I win?"-style questions.
+- **Show the clerk:** a high-contrast English card to hand to the person at a counter.
+- **Get help nearby:** a vetted database of 101 help resources (national plus Northern Virginia), with a "what to bring" checklist and the date each one was checked.
+- **Stuck on a website? / Is this a scam?** Explains a screenshot, naming the buttons exactly as the screen writes them.
+- **Read aloud, Remind me, Quick sheet** (print or PDF) and a family vault that stays on the device.
+
+## How safety works
+
+- **Quotes are verified in code.** A fact is shown only if its quote matches the words read from the page; anything else is listed under "I saw these but could not confirm them on the page".
+- **Dates and urgency are computed in code,** never by the AI: a date comes only from the paper itself, or from a printed phrase such as "within 30 days" counted from a verified date by a rule with a cited source.
+- **No invented phone numbers or websites.** Contacts come only from the paper itself or from the vetted resource database.
+- **Scam and emergency detection:** demands for gift cards, wire transfers, payment apps or crypto, and arrest or deportation threats, trigger a fixed scam warning (patterns in English, Spanish, Arabic, Dari and Pashto); words about chest pain, overdose or self-harm in 26 languages bring up an emergency card.
+- **Papers are never stored.** The server keeps uploads in memory only and logs no content; saved papers stay on the reader's own device.
+
+## Tech stack
+
+| Part | Languages and tools |
 |---|---|
-| **Status (2026-10-04)** | Phase 1 built and merged (`85e1e68`): API core, Gemini provider with key failover, the full analysis/safety pipeline, resources, fixtures and the mobile app (web walk-through verified end to end in Dari with zero keys). Phase 2A (dev tooling, CI, store docs, artwork; `3eccd27`), 2B (audit and hardening; `95e620f`) and 2C (leftovers plus S5/S11/S16 should-haves; `c948de8`) merged. Phase 3 (branch `phase3-wip`) adds an OpenAI-compatible provider and the `local`/`attested` test tiers so you can [test with your own papers for free on a local AI](#test-with-your-own-papers-for-free-local-ai) (D-32). iOS store submission stays blocked on the iCloud-backup gate (COMPLIANCE_PRIVACY §10.2); Android first. The API test suite passes (`make test`; the live tests skip without keys); ruff and strict mypy are clean; mobile `tsc`, `jest`, `expo lint`, web export and `expo config --type prebuild` are green. |
-| **Try it** | `make dev`, then open <http://localhost:8081>. Zero API keys: `AI_PROVIDER=mock` serves 17 synthetic sample papers and 1 portal screenshot end to end. |
-| **Models** | `MODEL_PRO=gemini-3.8-flash` (document analysis, screenshot help) · `MODEL_FAST=gemini-3.5-flash-lite` (language packs, chat, tagging, rewrites). Env-configurable; `gemini-1.5`/`2.0`/`2.5` and `-latest` IDs are refused at boot. |
-| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). Test builds can instead read them with an open model on your own machine (**local** tier; loopback only, never in production) or, in development only, with a named vendor whose terms say no training (**attested**). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only; typed text (chat questions, a troubleshoot goal) is refused there too, even about a sample, so `features.chat` is off and the app hides the chat box. |
-| **Stores** | Not submitted. Android development build first, iOS after an organization Apple account; see [Store roadmap](#store-roadmap) and [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md). |
+| App (iOS, Android, web) | TypeScript · React Native 0.86 · Expo SDK 57 · Expo Router · zustand · react-native-svg |
+| Server | Python 3.13 · FastAPI · Pydantic v2 · Pillow · pypdfium2 · reportlab |
+| AI at runtime | Google Gemini API reads and explains the papers · optional open model (Qwen3.5-4B) on your own computer via Ollama · a built-in sample mode needs neither |
+| Quality | pytest (3,403 API tests) · Jest + Testing Library (566 app tests) · ruff · mypy (strict) · ESLint · GitHub Actions CI |
+
+## Run it yourself in sample mode (no keys)
+
+Needs macOS or Linux with Python 3.13, Node 24 and `make`. With no `apps/api/.env`, the server runs in **sample mode** (`AI_PROVIDER=mock`): no AI service is contacted and no keys are needed.
+
+```sh
+python3.13 -m venv apps/api/.venv
+apps/api/.venv/bin/pip install -r apps/api/requirements.txt
+(cd apps/mobile && npm ci --legacy-peer-deps)
+make dev        # API on :8000 + the web app on :8081; Ctrl-C stops both
+```
+
+Then open <http://localhost:8081>, pick a language and tap **Try a sample paper first**. More options are in [Quickstart](#quickstart-zero-keys).
+
+---
 
 ## Contents
 
@@ -36,7 +78,14 @@ One codebase for iOS, Android and the web. Photograph a letter, bill, notice or 
 
 ProxyHealth AI is a *paper decoder with a caseworker's manners*. Immigrants and other underserved adults receive hospital bills, USCIS and immigration-court notices, leases and eviction papers, Medicaid and SNAP letters, school forms and IRS notices — often in a language they do not read, with the one date that matters buried on page three. You photograph the paper (or pick a photo or a PDF) and get three cards in your own language: **What is this?**, **What is it asking for?** and **Your step-by-step plan**. Every date, amount, requested document and contact is shown next to the exact words on the page it came from, with a confidence chip; anything the AI saw but could not confirm on the page is listed separately and never drives urgency or reminders.
 
-It is information, not advice, and that is enforced in code rather than in a footer: the model never writes disclaimers, never sets urgency, never computes a date and never emits a phone number, URL or organization name. Boundary sentences are fixed copy chosen by document category (for legal papers: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer can advise you. For an immigration case, a DOJ-accredited representative can too."). The app is for adults 18 and older (a Gemini terms requirement), never asks anyone's immigration status, and never stores a paper, image or transcript on the server. Rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md) §0, §4, §5.
+It is information, not advice, and that is enforced in code rather than in a footer: the model never writes disclaimers, never sets urgency, never computes a date and never emits a phone number, URL or organization name. Boundary sentences are fixed copy chosen by document category (for legal papers: "This is general information about this type of paper, not legal advice about your case. Only a licensed lawyer can advise you. For an immigration case, a DOJ-accredited representative can too."). Only a licensed professional — a lawyer (or, for an immigration case, a DOJ-accredited representative), a doctor, nurse or pharmacist, a housing counselor, or the office that sent the paper — can tell someone what it means for them. The app is for adults 18 and older (a Gemini terms requirement), never asks anyone's immigration status, and never stores a paper, image or transcript on the server. Rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md) §0, §4, §5.
+
+| | |
+|---|---|
+| **Models** | `MODEL_PRO=gemini-3.8-flash` (document analysis, screenshot help) · `MODEL_FAST=gemini-3.5-flash-lite` (language packs, chat, tagging, rewrites). Env-configurable; `gemini-1.5`/`2.0`/`2.5` and `-latest` IDs are refused at boot. |
+| **Real papers** | Sent to Gemini only on the **paid** data-use tier (every key from a distinct Google Cloud project with billing attached). Test builds can instead read them with an open model on your own machine (**local** tier; loopback only, never in production) or, in development only, with a named vendor whose terms say no training (**attested**). On unpaid or mixed key pools the server answers `403 unpaid_tier_real_documents_disabled` and serves sample papers only; typed text (chat questions, a troubleshoot goal) is refused there too, even about a sample, so `features.chat` is off and the app hides the chat box. |
+| **Sample mode** | With zero API keys, `AI_PROVIDER=mock` serves 17 synthetic sample papers and 1 portal screenshot end to end. |
+| **Stores** | Not submitted yet. Android development build first, iOS after an organization Apple account; see [Store roadmap](#store-roadmap) and [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md). |
 
 ## Features
 
@@ -67,7 +116,7 @@ Decision numbers point into [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - Consent that is literally true per tier (paid / unpaid / demo / unknown, plus the `local` and `attested` test-build tiers that name the model or vendor), CI-tested against an approved list. [D-02, D-32]
 
 **Speak the reader's language**
-- Bundled packs `en`, `es`, `prs` (Dari), `ar`, `ps` (Pashto); any typed language gets a generated pack while the screen says *"Adapting system environment to your language..."* (keys required; mock mode shows a pseudo-localized pack). Computer-translated packs are labelled. [D-25]
+- Bundled packs `en`, `es`, `prs` (Dari), `ar`, `ps` (Pashto); any other language gets a generated pack while the screen says *"Adapting system environment to your language..."* (keys required; sample mode shows a pseudo-localized pack). Computer-translated packs are labelled. [D-25]
 - Right-to-left layouts, Bidi-isolated numbers and names, Noto fonts for nine scripts, read-aloud on every paragraph with honest voice fallbacks. [D-26]
 
 **Everywhere, accessibly**
@@ -123,9 +172,12 @@ Decision numbers point into [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Quickstart (zero keys)
 
-Prerequisites on this Mac (already installed — see [`CLAUDE.md`](CLAUDE.md)): Node 24 at `~/.local/node/bin`, the API virtualenv at `apps/api/.venv`, and `apps/mobile/node_modules`. No Xcode, so no iOS simulator: test on web or on a phone with a development build.
+Prerequisites: macOS or Linux, Python 3.13, Node 24 (npm 11) and `make`. There is no iOS simulator step: test on the web, or on a phone with a development build.
 
 ```sh
+python3.13 -m venv apps/api/.venv                              # once
+apps/api/.venv/bin/pip install -r apps/api/requirements.txt    # once
+(cd apps/mobile && npm ci --legacy-peer-deps)                  # once (openapi-typescript pins TypeScript 5)
 make dev                     # API (mock) on :8000 + Expo web on :8081; Ctrl-C stops both
 open http://localhost:8081   # or let Expo open the browser for you
 ```
@@ -171,7 +223,7 @@ GEMINI_KEYS='[{"key":"AIza...","project":"proxyhealth-prod-a","billing":true},{"
 
 ## Test with your own papers for free (local AI)
 
-No budget, but you want to see how the app reads a real letter? Never send it through a free Gemini key: Google may train on it and people may read it (D-01). Instead, run an open vision model, **Qwen3.5-4B**, on this Mac with **Ollama**. The API then sends the paper to `127.0.0.1`, not to an AI company. The full guide is [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) (disk math, safety checks, speed, quality, troubleshooting); the decision is D-32 and the research is [`docs/research/free-ai-providers.md`](docs/research/free-ai-providers.md).
+No budget, but you want to see how the app reads a real letter? Never send it through a free Gemini key: Google may train on it and people may read it (D-01). Instead, run an open vision model, **Qwen3.5-4B**, on your own computer with **Ollama**. The API then sends the paper to `127.0.0.1`, not to an AI company. The full guide is [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) (disk math, safety checks, speed, quality, troubleshooting); the decision is D-32 and the research is [`docs/research/free-ai-providers.md`](docs/research/free-ai-providers.md).
 
 ```sh
 make local-ai-setup ARGS=--dry-run   # read the plan: nothing is downloaded or changed
@@ -184,8 +236,8 @@ make dev                             # the app at http://localhost:8081, data us
 - **What changes.** `apps/api/.env` gets `AI_PROVIDER=openai_compat`, `OPENAI_COMPAT_BASE_URL=http://127.0.0.1:11434/v1`, `OPENAI_COMPAT_DATA_TIER=local` and `OPENAI_COMPAT_MODEL_LABEL=Qwen` (preset: `apps/api/.env.local-ai.example`). `GET /v1/config` then reports `data_use_tier: "local"`; the consent screen shows "Test build — AI on our server", names the model, and offers "I understand, continue".
 - **What the server enforces.** `local` boots only when the model endpoint is a loopback address (`127.0.0.0/8`, `::1`, `localhost`) and never with an Ollama `:cloud` model; `ENV=production` refuses the provider entirely. Any hosted OpenAI-compatible endpoint runs on `unpaid` by default (sample papers only, real papers get a 403). The `attested` tier, for a vendor whose API terms you attest say "no training", boots only in `ENV=development` and refuses denylisted hosts.
 - **Your part.** Use only your own papers, or papers from someone who said yes. Black out ID numbers with **Hide parts**. Run the Ollama disk check once (`docs/LOCAL_AI.md` §4) and note it in [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §9. No tunnels (`expo start --tunnel`) with a real paper, and never copy one into `apps/api/data/fixtures/`.
-- **Expect** about 1–4 minutes per paper on this fanless M4 Air (an estimate), so the API tells the app to wait longer (`client_timeouts` in `GET /v1/config`). A 4B model is weaker than `gemini-3.8-flash`: check every answer against the paper, and have a native speaker check Dari, Pashto and Haitian Creole output.
-- **Nobody installs Ollama or a model for you.** Agents and CI never run these scripts; `make dev`, `make test`, `make smoke` and `make ci` never call them.
+- **Expect** a few minutes per paper on a fanless laptop (about 1½–7½ minutes each, most about 3, on a MacBook Air M4), so the API tells the app to wait longer (`client_timeouts` in `GET /v1/config`). A 4B model is weaker than `gemini-3.8-flash`: check every answer against the paper, and have a native speaker check Dari, Pashto and Haitian Creole output.
+- **Nothing downloads on its own.** These scripts run only when you start them; `make dev`, `make test`, `make smoke` and `make ci` never call them.
 - **Switch back** with `scripts/use-local-ai.sh --off` (mock, zero keys) or `--restore` (your previous `.env`), then restart `make dev`.
 - **Hosted second opinions** (Groq, Cloudflare Workers AI, Alibaba Model Studio International, …) use the same provider; which ones may see your own papers and which are synthetic-samples-only (Chinese-hosted services, with one documented Alibaba exception) is in `docs/LOCAL_AI.md` §8 and D-32.
 
@@ -246,14 +298,14 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 |---|---|
 | `make dev` | `scripts/dev.sh`: mock API on :8000 + Expo web on :8081, CORS for both localhost spellings; a trap stops both. |
 | `make api` / `make web` | Either half alone. |
-| `make smoke` | `scripts/smoke.sh`: boots the mock API on a free port with a throw-away `VAR_DIR`, runs `apps/api/scripts/smoke.py` (stdlib only: health, config, `en` pack, all samples × recorded languages through `/v1/analyze`, the screenshot through `/v1/troubleshoot`, grounded chat + outcome refusal, resources, 12 rules, LTR and RTL quick-sheet PDFs, feedback, sample PNGs; no `[contact removed`; D-09 fields on every demand; urgency vs BUILD_PLAN Appendix D), always stops the server. |
+| `make smoke` | `scripts/smoke.sh`: boots the mock API on a free port with a throw-away `VAR_DIR`, runs `apps/api/scripts/smoke.py` (stdlib only: health, config, `en` pack, all samples × recorded languages through `/v1/analyze`, the screenshot through `/v1/troubleshoot`, grounded chat + outcome refusal, resources, 12 rules, LTR and RTL quick-sheet PDFs, feedback, sample PNGs; no `[contact removed`; D-09 fields on every demand; expected urgency per sample), always stops the server. |
 | `make test` | API pytest, ruff, strict mypy, mobile `tsc`, `jest`, `expo lint`. |
 | `make ci` / `scripts/ci.sh` | The full CI list in order, stopping at the first failure (see [Testing](#testing)); `CI_FROM=<step>` resumes, `CI_ONLY=<step>` runs one. |
 | `make export-web` | `npx expo export --platform web --clear` → `apps/mobile/dist` (includes `dist/privacy/index.html`). |
 | `make host-rules` | After `make export-web`: `scripts/web-host-rules.py` writes `dist/_redirects` + `dist/404.html` so Netlify / Cloudflare Pages serve `/result/<id>` and `/papers/member/<id>` (EAS Hosting needs nothing; `--vercel` prints the `vercel.json` rewrites, `--verify <url>` checks a deploy — [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §2.3). |
-| `make types` / `make types-check` | `scripts/gen-types.sh`: regenerate / verify `apps/api/openapi.json` and `apps/mobile/src/api/schema.d.ts` (regeneration is the contract owner's job). |
+| `make types` / `make types-check` | `scripts/gen-types.sh`: regenerate / verify `apps/api/openapi.json` and `apps/mobile/src/api/schema.d.ts`. |
 | `make sync` / `make sync-check` | `apps/api/scripts/sync_to_mobile.py` (packs, languages, fixtures, fonts, national fallbacks into the app). |
-| `make local-ai-setup` | `scripts/setup-local-ai.sh`: Ollama + `qwen3.5:4b` on this Mac, asking y/N before each download (`ARGS=--dry-run` shows the plan). Run it yourself; agents and CI never do. |
+| `make local-ai-setup` | `scripts/setup-local-ai.sh`: Ollama + `qwen3.5:4b` on your computer, asking y/N before each download (`ARGS=--dry-run` shows the plan). Runs only when you start it; CI never does. |
 | `scripts/use-local-ai.sh` | Writes `apps/api/.env` for the `local` tier from `apps/api/.env.local-ai.example` (backs up a different `.env`; `--off`, `--restore`, `--dry-run`). |
 | `make local-ai-check` | `apps/api/scripts/provider_check.py`: one sample paper through the real pipeline with the configured provider (schema fit, verified facts, time, JSON mode). |
 | `apps/api/.venv/bin/ruff check apps/api` | Lint. |
@@ -264,8 +316,6 @@ Parsed by pydantic-settings from `apps/api/.env` (then a `.env` in the working d
 | `apps/api/.venv/bin/python scripts/make_artwork.py` | Redraws the app icon, adaptive icon, splash, favicon and notification glyph. |
 | `npx eas-cli@latest build --profile development --platform android` | Android development build ([`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §3). |
 
-Parallel-agent rule: never run `npm install`, `npx expo install` or `pip install` while other agents work ([`CLAUDE.md`](CLAUDE.md)).
-
 ---
 
 ## Repository layout
@@ -273,7 +323,6 @@ Parallel-agent rule: never run `npm install`, `npx expo install` or `pip install
 ```
 ProxyHealth/
   Makefile  scripts/{dev,smoke,gen-types,ci,setup-local-ai,use-local-ai}.sh · make_artwork.py  .github/workflows/ci.yml
-  CLAUDE.md                 agent rules for this machine
   docs/                     the specification set (below) + research/
   apps/api/                 Python 3.13 · FastAPI · google-genai · in memory only
     proxyhealth_api/        main, settings, errors, middleware, ratelimit, logging_, deps
@@ -322,26 +371,26 @@ Base URL `EXPO_PUBLIC_API_URL`; `/health` plus versioned routes under `/v1`; JSO
 
 ## Docs index
 
-Read in this order: [`CLAUDE.md`](CLAUDE.md) → DECISIONS → API_CONTRACT → ARCHITECTURE → the documents for your task. When code and docs disagree, fix one and say which.
+Start with DECISIONS → API_CONTRACT → ARCHITECTURE, then the documents for the area you are working on. When code and docs disagree, fix one and say which.
 
 | Document | What it holds |
 |---|---|
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Product stance, decisions D-01…D-32, rejected ideas, open questions, brand, the append-only change log (§14). |
 | [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | Every endpoint, model, enum and error, with examples. |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Directory trees, module internals, ownership map, dev/CI/deploy, env vars, invariants. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Directory trees, module internals, dev/CI/deploy, env vars, invariants. |
 | [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | Personas, journeys, screens S0–S19, copy (Appendix A), demo, acceptance criteria. |
 | [`docs/AI_PROMPTS.md`](docs/AI_PROMPTS.md) | Prompt text, placeholders, model-output schemas, validators. |
 | [`docs/DOCUMENT_TAXONOMY.md`](docs/DOCUMENT_TAXONOMY.md) | Every document type: fields, deadlines, pitfalls, fixed notices, prepare items. |
 | [`docs/RESOURCE_DB.md`](docs/RESOURCE_DB.md) | Resource YAML schema, seed, matcher scoring, link-health and re-verification. |
 | [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) | Tier matrix, consent and notice copy, store declarations, permission strings, HBNR/UPL posture, the CI-tested `privacy_claims`. |
-| [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) | Work packages, ownership, milestones, verification commands, definition of done. |
+| [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) | Milestones, verification commands, definition of done. |
 | [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | The three-minute zero-key demo and the keyed, samples-only variant. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Cloud Run API and demo service, web hosting with exact headers, EAS profiles, secrets, release checklist. |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Paid-tier billing setup, local-AI and attested test-build steps, key rotation, quota, quarterly resource re-verification, incidents/breach steps, device and store evidence. |
-| [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) | Test with your own papers for free: Ollama + Qwen on this Mac, the `local` tier, safety checks, speed, hosted options. |
+| [`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) | Test with your own papers for free: Ollama + Qwen on your own computer, the `local` tier, safety checks, speed, hosted options. |
 | [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md) | App Store and Google Play copy and declarations, screenshot list, blockers. |
 | [`docs/research/`](docs/research/) | `gemini.md`, `expo.md`, `compliance.md`, `resources.md`, `free-ai-providers.md` (the facts the decisions rest on) and the three candidate specs in `specs/`. |
-| [`apps/mobile/README.md`](apps/mobile/README.md) · [`apps/mobile/AGENTS.md`](apps/mobile/AGENTS.md) | Mobile-app commands and Expo rules (verify every Expo API against the SDK 57 docs). |
+| [`apps/mobile/README.md`](apps/mobile/README.md) | Mobile-app commands (verify every Expo API against the SDK 57 docs). |
 
 ---
 
@@ -350,11 +399,11 @@ Read in this order: [`CLAUDE.md`](CLAUDE.md) → DECISIONS → API_CONTRACT → 
 | Phase | Deliverable | Gate |
 |---|---|---|
 | 1 · Zero-key end to end (done) | API in mock mode + web app + every screen; 18 samples with goldens | `make test`, `make smoke`, `scripts/ci.sh` green |
-| 2 · Integration (now) | demo rehearsal on web in `en` and `prs`; privacy page; store docs; CI | [BUILD_PLAN](docs/BUILD_PLAN.md) §6 checklist |
-| 3 · Live Gemini, samples only | billed keys from distinct projects (Q1); live golden gate | no invented contact; precision baseline recorded |
+| 2 · Integration | demo rehearsal on web in `en` and `prs`; privacy page; store docs; CI | [BUILD_PLAN](docs/BUILD_PLAN.md) §6 checklist |
+| 3 · Live Gemini, samples only | billed keys from distinct projects; live golden gate | no invented contact; precision baseline recorded |
 | 4 · Android development build | `npx eas-cli@latest build --profile development --platform android` | camera, masks, notifications channel, RTL restart, TalkBack, 200 % text ([RUNBOOK](docs/RUNBOOK.md) §7.1) |
-| 5 · iOS development build | organization Apple account (Q2); vault iCloud-backup exclusion verified (Q16) | VoiceOver, AX5 text, privacy manifest accepted |
-| 6 · Hardening | SDK 58 upgrade; counsel review (Q3); named language reviewers (Q6) | COMPLIANCE_PRIVACY §18 ticked |
+| 5 · iOS development build | organization Apple account; vault iCloud-backup exclusion verified | VoiceOver, AX5 text, privacy manifest accepted |
+| 6 · Hardening | SDK 58 upgrade; legal review; named native-speaker language reviewers | COMPLIANCE_PRIVACY §18 ticked |
 | 7 · Store preparation | [`docs/STORE_LISTING.md`](docs/STORE_LISTING.md): title "ProxyHealth AI: Your paper, explained", Reference / Tools (not Medical), 18+, nutrition label and Data safety, Health apps declaration, Notes for Review, fixture-only screenshots | every compliance.md §1 checklist item answered; production API answers `data_use_tier: paid` |
 | 8 · Submit | `eas build --profile production --platform all` → `eas submit`; web via `eas deploy --prod` | [DEPLOYMENT](docs/DEPLOYMENT.md) §5 release checklist |
 
@@ -362,7 +411,7 @@ Read in this order: [`CLAUDE.md`](CLAUDE.md) → DECISIONS → API_CONTRACT → 
 
 ## Contributing and testing
 
-Hard rules (from [`CLAUDE.md`](CLAUDE.md)): no installs while other agents run; write only the files your work package owns ([`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) Appendix A); never touch `apps/mobile/ios/` or `apps/mobile/android/`; never persist or log user content; contacts only from the paper or the vetted DB; secrets only in `.env`; everything must work with zero keys. Cross-package needs are one appended line in `docs/DECISIONS.md` §14.
+Project rules: never create or edit `apps/mobile/ios/` or `apps/mobile/android/` (native config goes in `app.json` and config plugins); never persist or log user content; contacts only from the paper or the vetted DB; secrets only in `.env` (commit `.env.example`); every feature must work with zero keys (`AI_PROVIDER=mock`). Decisions and their change log live in [`docs/DECISIONS.md`](docs/DECISIONS.md) §14.
 
 ### Testing
 
@@ -388,11 +437,9 @@ Hard rules (from [`CLAUDE.md`](CLAUDE.md)): no installs while other agents run; 
 
 ## Open questions and license
 
-Questions only the user can answer: [`docs/DECISIONS.md`](docs/DECISIONS.md) §12 (Q1 billing owner, Q2 developer accounts, Q3 counsel, Q4 bundle id and web host, Q5 pilot geography, Q6–Q7 language reviewers, Q8 per-device budget, Q9 web positioning, Q10 Interactions API, Q11 hosting) and [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) §19 (Q15 operator identity for the privacy policy, Q16 iOS backup exclusion, Q17 label stance, Q18–Q25, Q26 approving the local-AI install, Q27 a hosted second opinion). Until Q1 is answered, keyed runs use sample papers only.
+Open product questions — who owns the paid Gemini billing, developer accounts, legal review, the bundle id and web host, pilot geography, native-speaker language reviewers, per-device budget and hosting — are tracked in [`docs/DECISIONS.md`](docs/DECISIONS.md) §12 and [`docs/COMPLIANCE_PRIVACY.md`](docs/COMPLIANCE_PRIVACY.md) §19. Until a billed key pool is in place, keyed runs use sample papers only.
 
-**License:** not chosen yet — the owner adds a root `LICENSE` (for example MIT in their own name). `apps/mobile/LICENSE` is the MIT notice from Expo's template and covers only that template code. Every open-source package, font, asset and service the app uses — and the AI tools used to build it — is listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-
-**Congressional App Challenge:** rules, deadline, the honest AI-usage disclosure, the demo-video plan and the submission checklist are in [`docs/CONGRESSIONAL_APP_CHALLENGE.md`](docs/CONGRESSIONAL_APP_CHALLENGE.md).
+**License:** not chosen yet — the owner adds a root `LICENSE` (for example MIT in their own name). `apps/mobile/LICENSE` is the MIT notice from Expo's template and covers only that template code. Every open-source package, font, asset and service the app uses is listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ---
 

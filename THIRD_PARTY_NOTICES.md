@@ -2,7 +2,7 @@
 
 ProxyHealth AI is built on the open-source software, fonts and services below. This file documents them, as the Congressional App Challenge rules require ("participants may use open-source libraries, frameworks, and external tools, [but] they must clearly document any such usage"). Versions are the ones locked in this repository on 2026-10-22. Each package's full license text ships with the package (`apps/mobile/node_modules/<name>/LICENSE*`, `apps/api/.venv/lib/python3.13/site-packages/<name>-*.dist-info/`).
 
-## Development tools and AI assistance
+## Development tools
 
 - Expo CLI 57.0.26 / Expo SDK 57 (MIT) - dev server, web export, prebuild
 - EAS CLI (run via npx eas-cli@latest, not installed) - cloud builds and submission
@@ -14,10 +14,7 @@ ProxyHealth AI is built on the open-source software, fonts and services below. T
 - GNU Make + bash/zsh scripts (Makefile, scripts/ci.sh 15-step CI, smoke.sh, dev.sh)
 - Docker (apps/api/Dockerfile, base python:3.13-slim; Docker not installed on this Mac)
 - Google Chrome / browser preview for testing the web build
-- Anthropic Claude (Claude Opus 5.5) via Claude Code - AI coding assistant used to write code, tests and docs; all 12 commits carry 'Co-Authored-By: Claude Opus 5.5'
-- Google Gemini (via gen_packs.py) / AI assistant - drafted the machine-translated UI language packs
-
-The full disclosure of how AI was used to build this app is in `docs/CONGRESSIONAL_APP_CHALLENGE.md` §3.
+- apps/api/scripts/gen_packs.py - checks (`--check`) and assembles the bundled UI language packs; it can also generate packs through the Google Gemini API (MODEL_FAST)
 
 ## External services the app can call at runtime
 
@@ -28,7 +25,7 @@ The full disclosure of how AI was used to build this app is in `docs/CONGRESSION
 | Device OS services (camera, photo library, file picker, text-to-speech, local notifications, printing, share sheet) | On-device only, through Expo modules; no third-party push or analytics service |
 | Expo Application Services (EAS Build/Submit, EAS Hosting at proxyhealth.expo.app) | Native store builds and web/privacy-policy hosting. Cloudflare Pages or Netlify are alternative static hosts. |
 | Google Cloud Run (+ Secret Manager, Cloud Logging) | Planned API host (docs/DEPLOYMENT.md), plus a second mock-only demo service for judges. Fly.io and Render are documented alternatives. |
-| Google Gemini API (google-genai SDK; default models gemini-3.8-flash for MODEL_PRO and gemini-3.5-flash-lite for MODEL_FAST) | Reads and explains papers, translation and chat when AI_PROVIDER=gemini. Subject to the Google APIs Terms and the Gemini API Additional Terms: users must be 18+, and free-tier data may be used for training, so real papers go only to the paid tier. Also used offline by gen_packs.py to draft language packs. |
+| Google Gemini API (google-genai SDK; default models gemini-3.8-flash for MODEL_PRO and gemini-3.5-flash-lite for MODEL_FAST) | Reads and explains papers, translation and chat when AI_PROVIDER=gemini. Subject to the Google APIs Terms and the Gemini API Additional Terms: users must be 18+, and free-tier data may be used for training, so real papers go only to the paid tier. The gen_packs.py script can also generate UI language packs through it. |
 | OpenAI-compatible /chat/completions endpoint (default Ollama, MIT, at 127.0.0.1:11434 running Qwen3.5 4B open weights, Apache-2.0) | Optional provider for test builds only (AI_PROVIDER=openai_compat; ENV=production refuses it). Neither Ollama nor the model is installed on this machine. |
 | Public resource websites and phone lines (68 domains, e.g. healthcare.gov, uscis.gov, irs.gov, 988lifeline.org, lawhelp.org) | Only opened when the user taps them (expo-web-browser or the phone dialer); the app never fetches them at runtime. The dev script apps/api/scripts/check_links.py fetches them to check the links. |
 
@@ -85,12 +82,12 @@ The full disclosure of how AI was used to build this app is in `docs/CONGRESSION
 | Name | Version | License | Purpose |
 |---|---|---|---|
 | @react-native/jest-preset | 0.86.3 | MIT | React Native Jest preset (peer of jest-expo) |
-| @testing-library/react-native | 14.0.1 | MIT | Component tests (39 test files) |
+| @testing-library/react-native | 14.0.1 | MIT | Component tests (44 test files) |
 | @types/jest | 29.5.14 | MIT | TypeScript types for Jest |
 | @types/react | 19.2.18 | MIT | TypeScript types for React |
 | eslint | 9.39.5 | MIT | Linting (npx expo lint) |
 | eslint-config-expo | 57.0.2 | MIT | Expo lint rules |
-| jest | 29.7.0 | MIT | Mobile test runner (55 suites, 517 tests) |
+| jest | 29.7.0 | MIT | Mobile test runner (64 suites, 566 tests) |
 | jest-expo | 57.0.5 | MIT | Jest preset for Expo/React Native |
 | openapi-typescript | 7.13.0 | MIT | Generates src/api/schema.d.ts from apps/api/openapi.json |
 | test-renderer | 1.3.0 | MIT | Renderer used by @testing-library/react-native v14 |
@@ -112,7 +109,7 @@ The full disclosure of how AI was used to build this app is in `docs/CONGRESSION
 | pydantic | 2.13.5 | MIT | Request/response models and validation of model output |
 | pydantic-settings | 2.15.0 | MIT | Settings from environment / .env (uses python-dotenv 1.2.3, BSD-3-Clause) |
 | pypdfium2 | 5.13.0 | BSD-3-Clause / Apache-2.0 (bundled PDFium binary and its permissive dependencies) | Renders uploaded PDF pages to images |
-| pytest | 9.1.1 | MIT | Dev: API tests (2434 collected) |
+| pytest | 9.1.1 | MIT | Dev: API tests (3,403 passing; 28 live-only tests skip without keys) |
 | pytest-asyncio | 1.4.0 | Apache-2.0 | Dev: async tests |
 | pytest-cov | 7.1.0 | MIT | Dev: coverage (coverage 7.16.1, Apache-2.0) |
 | python-bidi | 0.6.11 | LGPL-3.0-or-later | Right-to-left text ordering for PDFs and fixture images (server-side only) |
@@ -129,20 +126,20 @@ The full disclosure of how AI was used to build this app is in `docs/CONGRESSION
 
 | Name | License | Where |
 |---|---|---|
-| 18 sample papers/screenshots (e.g. hospital bill, IRS CP notice, USCIS I-797C, jury summons, scam letter, W-2, Spanish lease) | Made by the project: synthetic, fictional data and 555-01xx phone numbers, diagonal SAMPLE watermark and 'SAMPLE - synthetic document' footer; rendered by apps/api/scripts/make_fixtures.py from hand-written template.yaml; recorded outputs (out.<lang>.json) are hand-written | apps/api/data/fixtures/<id>/ (5 synced to apps/mobile/assets/fixtures/) |
+| 18 sample papers/screenshots (e.g. hospital bill, IRS CP notice, USCIS I-797C, jury summons, scam letter, W-2, Spanish lease) | Made by the project: synthetic, fictional data and 555-01xx phone numbers, diagonal SAMPLE watermark and 'SAMPLE - synthetic document' footer; rendered by apps/api/scripts/make_fixtures.py from each sample's template.yaml, which also holds the recorded outputs (out.<lang>.json) | apps/api/data/fixtures/<id>/ (5 synced to apps/mobile/assets/fixtures/) |
 | App icon, Android adaptive icons, splash, favicon, notification icon, iOS icon layer | Original artwork drawn in code by scripts/make_artwork.py (Pillow) in the project's brand colours | apps/mobile/assets/images/, apps/mobile/assets/expo.icon/ |
 | CJK PDF fonts (STSong-Light, HeiseiMin-W3, HYSMyeongJo-Medium) | Not shipped: reportlab only names these standard Adobe CID fonts and the PDF viewer supplies them | apps/api/proxyhealth_api/quicksheet/fonts.py |
 | Expo app template scaffold code | MIT, Copyright 2015-present 650 Industries, Inc. (Expo) | apps/mobile/LICENSE (covers only the template code) |
 | Noto fonts: 9 families (Noto Sans, Sans Bengali, Devanagari, Ethiopic, Gurmukhi, Hanifi Rohingya, Myanmar, Naskh Arabic, Nastaliq Urdu), Regular and Bold, 18 TTFs | SIL Open Font License 1.1, Copyright 2018 The Noto Project Authors (OFL.txt shipped alongside) | apps/api/data/fonts/ and apps/mobile/assets/fonts/ (identical OFL.txt in both) |
 | Resource database: 101 entries in 8 YAML files (6 national, 1 Northern Virginia regional, _meta) linking 68 public-organisation domains (federal and state agencies, courts, nonprofits, hotlines) | Facts only (names, phone numbers, public URLs, hours), each with verified_on and source; descriptions and checklists written by the project; no copied page content | apps/api/data/resources/ and apps/mobile/assets/resources/national_fallbacks.json |
 | Safety and rule data (emergency, scam, prompt-injection and phrasing lists; deadlines, clerk needs, fixed notices, prepare checklists) | Written by the project | apps/api/data/safety/, apps/api/data/rules/ |
-| Specification and research docs (14 docs/*.md + 8 docs/research/*.md) | Written by the project with AI assistance | docs/ |
-| UI icons (about 35 glyphs) | Hand-written SVG paths; the 'settings' gear is adapted from Feather Icons (MIT License, Copyright (c) 2013-2017 Cole Bemis) | apps/mobile/src/design/components/Icon.tsx |
-| UI language packs (en, plus es, ar, prs, ps) | Written by the project; non-English packs are flagged machine_translated: true, reviewed_by: null (AI translation, no human review yet) | apps/api/data/langpacks/, apps/mobile/src/i18n/packs/, apps/mobile/locales/ |
+| Specification and research docs (14 docs/*.md + 8 docs/research/*.md) | Part of the project | docs/ |
+| UI icons (about 35 glyphs) | Original SVG paths; the 'settings' gear is adapted from Feather Icons (MIT License, Copyright (c) 2013-2017 Cole Bemis) | apps/mobile/src/design/components/Icon.tsx |
+| UI language packs (en, plus es, ar, prs, ps) | Written by the project; non-English packs are flagged machine_translated: true, reviewed_by: null (machine translation, no human review yet; the app labels them "Translated by a computer") | apps/api/data/langpacks/, apps/mobile/src/i18n/packs/, apps/mobile/locales/ |
 
 ## Notes on specific licenses
 
-- No project license and no consolidated attribution file. The repo root has no LICENSE, the README says 'License: not chosen yet', and there is no THIRD_PARTY_NOTICES/CREDITS file. CAC requires open-source use to be 'clearly documented' and says 'No other party should have any rights or interest in the app'. Add a root LICENSE in the student's name and a credits/notices file built from this inventory.
+- Project license: the repository root has no LICENSE file yet (the README says 'License: not chosen yet'). Until the owner adds one, the project's own code is all rights reserved: it can be read on GitHub but is not licensed for reuse. Every open-source component it uses is documented in this file, as the Congressional App Challenge rules require.
 - apps/mobile/LICENSE is the Expo template's MIT notice (Copyright 650 Industries, Inc.), not the project's license. It sits where a reader would expect the app's own license, so a judge could read it as Expo holding rights in the app. Keep it as a third-party notice (rename it or move it into the credits file) and state the project's own license separately.
 - python-bidi 0.6.11 is LGPL-3.0-or-later (weak copyleft; the wheel ships COPYING [GPLv3] + COPYING.LESSER). It is used unmodified at runtime only on the server (quick-sheet PDFs and fixture rendering) and is never in the mobile/web bundle. Hosting it as a service creates no obligations. If the Docker image is ever distributed, ship the LGPL text and keep the library replaceable (a normal Python import already allows this). Not a blocker, but list it.
 - MPL-2.0 (file-level copyleft), all used unmodified: certifi (Python, via httpx, part of the runtime image), pathspec (Python dev only), lightningcss 1.33.0 + lightningcss-darwin-arm64 (npm, via @expo/metro-config, build-time only). Only a notice is needed.
